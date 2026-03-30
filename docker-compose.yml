@@ -1,0 +1,106 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Zikra — Docker Compose
+#
+# Copy .env.example to .env and fill in your values before running.
+#
+# .env.example:
+# ─────────────────────────────────────────────────────────────────────────────
+# # PostgreSQL
+# POSTGRES_USER=zikra
+# POSTGRES_PASSWORD=changeme_strong_password
+# POSTGRES_DB=zikra
+#
+# # n8n Basic Auth
+# N8N_BASIC_AUTH_ACTIVE=true
+# N8N_BASIC_AUTH_USER=admin
+# N8N_BASIC_AUTH_PASSWORD=changeme_strong_password
+#
+# # n8n public URL (must end with /)
+# WEBHOOK_URL=https://n8n.yourdomain.com/
+# N8N_HOST=n8n.yourdomain.com
+# N8N_PROTOCOL=https
+# N8N_PORT=5678
+#
+# # Optional: encryption key for n8n credentials storage
+# N8N_ENCRYPTION_KEY=change_this_to_a_random_32char_string
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL with pgvector ───────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: zikra_postgres
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-zikra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB:       ${POSTGRES_DB:-zikra}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-zikra} -d ${POSTGRES_DB:-zikra}
+      interval: 10s
+      timeout:  5s
+      retries:  5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── n8n workflow engine ────────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: zikra_n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database backend
+      DB_TYPE:                  postgresdb
+      DB_POSTGRESDB_HOST:       postgres
+      DB_POSTGRESDB_PORT:       5432
+      DB_POSTGRESDB_DATABASE:   ${POSTGRES_DB:-zikra}
+      DB_POSTGRESDB_USER:       ${POSTGRES_USER:-zikra}
+      DB_POSTGRESDB_PASSWORD:   ${POSTGRES_PASSWORD:-changeme}
+      DB_POSTGRESDB_SCHEMA:     public
+
+      # Basic auth
+      N8N_BASIC_AUTH_ACTIVE:    ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER:      ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD:  ${N8N_BASIC_AUTH_PASSWORD:-changeme}
+
+      # Public URL and host
+      WEBHOOK_URL:     ${WEBHOOK_URL:-http://localhost:5678/}
+      N8N_HOST:        ${N8N_HOST:-localhost}
+      N8N_PROTOCOL:    ${N8N_PROTOCOL:-http}
+      N8N_PORT:        ${N8N_PORT:-5678}
+
+      # Security
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-please_change_this_key}
+
+      # Performance
+      EXECUTIONS_PROCESS: main
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: 168      # 7 days in hours
+
+      # Misc
+      GENERIC_TIMEZONE: UTC
+      N8N_LOG_LEVEL:    warn
+      N8N_METRICS:      "false"
+
+    volumes:
+      - n8n_data:/home/node/.n8n
+    ports:
+      - "5678:5678"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  n8n_data:
+    driver: local

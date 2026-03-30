@@ -1,0 +1,226 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration 001 — Initial Zikra Schema
+-- Wrapped in a transaction. Safe to run multiple times (idempotent).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+BEGIN;
+
+-- Migration version tracking
+CREATE TABLE IF NOT EXISTS zikra.migrations (
+    version     integer     NOT NULL PRIMARY KEY,
+    description text,
+    ran_at      timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE zikra.migrations IS
+    'Tracks which schema migrations have been applied';
+
+-- Guard: skip if already applied
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM zikra.migrations WHERE version = 1) THEN
+        RAISE NOTICE 'Migration 001 already applied — skipping.';
+    END IF;
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Extensions
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Schema
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE SCHEMA IF NOT EXISTS zikra;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- zikra.memories
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS zikra.memories (
+    id                  uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+    project             text        NOT NULL,
+    module              text,
+    memory_type         text        NOT NULL DEFAULT 'conversation',
+    title               text        NOT NULL,
+    content_md          text,
+    tags                text[],
+    embedding           vector(1536),
+    resolution          text,
+    resolved            boolean     DEFAULT false,
+    status              text        DEFAULT 'active',
+    confidence          float       DEFAULT 1.0,
+    searchable          boolean     DEFAULT true,
+    pending_review      boolean     DEFAULT false,
+    access_count        integer     DEFAULT 0,
+    version             integer     DEFAULT 1,
+    source_file         text,
+    created_by          text,
+    created_at          timestamptz DEFAULT now(),
+    updated_at          timestamptz DEFAULT now(),
+
+    CONSTRAINT memories_type_check CHECK (
+        memory_type IN (
+            'decision', 'conversation', 'error', 'schema',
+            'prompt', 'requirement', 'context'
+        )
+    ),
+    CONSTRAINT memories_status_check CHECK (
+        status IN ('active', 'archived', 'deprecated')
+    ),
+    CONSTRAINT memories_confidence_check CHECK (
+        confidence >= 0.0 AND confidence <= 1.0
+    ),
+    CONSTRAINT memories_unique_title_type UNIQUE (title, memory_type)
+);
+
+COMMENT ON TABLE  zikra.memories                IS 'Core persistent memory store for all AI agent sessions';
+COMMENT ON COLUMN zikra.memories.project        IS 'Project namespace (e.g. veltisai, molten8, global)';
+COMMENT ON COLUMN zikra.memories.memory_type    IS 'decision|conversation|error|schema|prompt|requirement|context';
+COMMENT ON COLUMN zikra.memories.embedding      IS 'OpenAI text-embedding-3-small 1536-dim vector for semantic search';
+COMMENT ON COLUMN zikra.memories.confidence     IS 'Decay score 0.0-1.0; weekly cron reduces by type-specific half-life';
+COMMENT ON COLUMN zikra.memories.access_count   IS 'Incremented each time this memory appears in search results';
+
+CREATE INDEX IF NOT EXISTS memories_fts_idx
+    ON zikra.memories
+    USING GIN (
+        to_tsvector('english',
+            coalesce(title, '') || ' ' || coalesce(content_md, '')
+        )
+    );
+
+CREATE INDEX IF NOT EXISTS memories_tags_idx
+    ON zikra.memories USING GIN (tags);
+
+CREATE INDEX IF NOT EXISTS memories_project_type_idx
+    ON zikra.memories (project, memory_type);
+
+CREATE INDEX IF NOT EXISTS memories_searchable_idx
+    ON zikra.memories (project, status, searchable)
+    WHERE status = 'active' AND searchable = true;
+
+CREATE INDEX IF NOT EXISTS memories_embedding_idx
+    ON zikra.memories
+    USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 100);
+
+CREATE OR REPLACE FUNCTION zikra.set_updated_at()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE TRIGGER memories_updated_at
+    BEFORE UPDATE ON zikra.memories
+    FOR EACH ROW EXECUTE FUNCTION zikra.set_updated_at();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- zikra.access_tokens
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS zikra.access_tokens (
+    id          uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+    token       text        NOT NULL UNIQUE,
+    label       text,
+    role        text        NOT NULL DEFAULT 'reader',
+    active      boolean     DEFAULT true,
+    created_at  timestamptz DEFAULT now(),
+    last_used   timestamptz,
+
+    CONSTRAINT token_role_check CHECK (
+        role IN ('reader', 'writer', 'admin')
+    )
+);
+
+COMMENT ON TABLE  zikra.access_tokens      IS 'Bearer tokens for authenticating agent and user API requests';
+COMMENT ON COLUMN zikra.access_tokens.role IS 'reader=search only, writer=read+write, admin=full access including tokens';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- zikra.token_projects
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS zikra.token_projects (
+    token_id    uuid    NOT NULL REFERENCES zikra.access_tokens(id) ON DELETE CASCADE,
+    project     text    NOT NULL,
+    PRIMARY KEY (token_id, project)
+);
+
+COMMENT ON TABLE zikra.token_projects IS
+    'Restricts which projects a token can access. '
+    'No rows for a token = token may access all projects.';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- zikra.prompt_runs
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS zikra.prompt_runs (
+    id                      uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+    project                 text        NOT NULL,
+    prompt_name             text        NOT NULL,
+    runner                  text,
+    status                  text        DEFAULT 'pending',
+    output_summary          text,
+    tokens_input            integer     DEFAULT 0,
+    tokens_output           integer     DEFAULT 0,
+    tokens_cache_read       integer     DEFAULT 0,
+    tokens_cache_creation   integer     DEFAULT 0,
+    started_at              timestamptz DEFAULT now(),
+    completed_at            timestamptz,
+
+    CONSTRAINT prompt_runs_status_check CHECK (
+        status IN ('pending', 'running', 'success', 'failed')
+    )
+);
+
+COMMENT ON TABLE zikra.prompt_runs IS
+    'Execution log for named prompts retrieved and run by agents';
+
+CREATE INDEX IF NOT EXISTS prompt_runs_project_idx
+    ON zikra.prompt_runs (project, prompt_name);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- zikra.active_runs
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS zikra.active_runs (
+    id                      uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+    project                 text        NOT NULL,
+    runner                  text        NOT NULL,
+    session_id              text,
+    status                  text        DEFAULT 'success',
+    output_summary          text,
+    tokens_input            integer     DEFAULT 0,
+    tokens_output           integer     DEFAULT 0,
+    tokens_cache_read       integer     DEFAULT 0,
+    tokens_cache_creation   integer     DEFAULT 0,
+    prompt_run_id           uuid        REFERENCES zikra.prompt_runs(id) ON DELETE SET NULL,
+    started_at              timestamptz DEFAULT now(),
+    ended_at                timestamptz,
+
+    CONSTRAINT active_runs_status_check CHECK (
+        status IN ('running', 'success', 'failed', 'interrupted')
+    )
+);
+
+COMMENT ON TABLE zikra.active_runs IS
+    'Real-time session log written by Stop hooks and zikra_watcher.py daemon';
+
+CREATE INDEX IF NOT EXISTS active_runs_project_runner_idx
+    ON zikra.active_runs (project, runner, started_at DESC);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Record migration
+-- ─────────────────────────────────────────────────────────────────────────────
+
+INSERT INTO zikra.migrations (version, description)
+VALUES (1, 'Initial schema: memories, access_tokens, token_projects, prompt_runs, active_runs')
+ON CONFLICT (version) DO NOTHING;
+
+COMMIT;
