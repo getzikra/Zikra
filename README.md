@@ -88,6 +88,14 @@ curl -fsSL https://zikra.dev/install.sh | bash -s -- --full
 
 Same API. Same commands. Same JSON shapes. Upgrade is just changing a URL.
 
+## Accessing Zikra from anywhere
+
+Zikra Full runs on your server and is already accessible
+to your whole team at the webhook URL in your `.env` file.
+
+For remote access without a public server, see
+[Zikra Lite + Cloudflare Tunnel](https://github.com/getzikra/zikra-lite#sharing-zikra-with-your-team) in the zikra-lite repo.
+
 ## License
 
 MIT — see [LICENSE](LICENSE)
