@@ -1,0 +1,2430 @@
+{
+  "name": "Zikra MCP Router",
+  "nodes": [
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r0",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "save_memory"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r1",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "search"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r2",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "get_prompt"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r3",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "log_error"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r4",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "log_run"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r5",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "get_schema"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r6",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "debug_protocol"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r7",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "sync_claudemd"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r8",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "save_requirement"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r9",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "promote_requirement"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r10",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "list_requirements"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "r11",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "create_token"
+                  }
+                ]
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "version": 2,
+                  "leftValue": "",
+                  "caseSensitive": false,
+                  "typeValidation": "strict"
+                },
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "id": "gm-rule",
+                    "operator": {
+                      "name": "filter.operator.equals",
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "leftValue": "={{ $(\"Command Normaliser\").first().json.body.command }}",
+                    "rightValue": "get_memory"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "1223f49c-85f4-410c-b5ae-96db90ad9560",
+      "name": "Route Command",
+      "type": "n8n-nodes-base.switch",
+      "position": [
+        688,
+        -304
+      ],
+      "typeVersion": 3
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO zikra.memories (project, module, memory_type, title, content_md, tags, resolution, created_by)\nVALUES (\n    '{{ ($('Zikra Webhook').first().json.body.project || \"\").replace(/'/g, \"''\") }}',\n    {{ $('Zikra Webhook').first().json.body.module ? \"'\" + $('Zikra Webhook').first().json.body.module.replace(/'/g, \"''\") + \"'\" : \"NULL\" }},\n    '{{ ($('Zikra Webhook').first().json.body.memory_type || \"conversation\").replace(/'/g, \"''\") }}',\n    '{{ ($('Zikra Webhook').first().json.body.title || \"\").replace(/'/g, \"''\") }}',\n    '{{ ($('Zikra Webhook').first().json.body.content_md || $('Zikra Webhook').first().json.body.content || \"\").replace(/'/g, \"''\") }}',\n    '{{ Array.isArray($('Zikra Webhook').first().json.body.tags) && $('Zikra Webhook').first().json.body.tags.length > 0 ? \"{\" + $('Zikra Webhook').first().json.body.tags.join(\",\") + \"}\" : \"{}\" }}'::TEXT[],\n    {{ $('Zikra Webhook').first().json.body.resolution ? \"'\" + $('Zikra Webhook').first().json.body.resolution.replace(/'/g, \"''\") + \"'\" : \"NULL\" }},\n    {{ $('Zikra Webhook').first().json.body.created_by ? \"'\" + $('Zikra Webhook').first().json.body.created_by.replace(/'/g, \"''\") + \"'\" : \"NULL\" }}\n)\nON CONFLICT (title, memory_type) DO NOTHING\nRETURNING id;",
+        "options": {}
+      },
+      "id": "b487c47a-5fff-4c79-96fb-400a48439d4e",
+      "name": "SM Insert",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1440,
+        -992
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://sys_litellm:4000/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sk-1234567890abcdef"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\":\"text-embedding-3-small\",\"input\":\"{{ $('Zikra Webhook').first().json.body.title + ' ' + $('Zikra Webhook').first().json.body.content }}\"}",
+        "options": {}
+      },
+      "id": "3a9c0cb4-d0b7-4a0f-a8b9-efc5476f54c3",
+      "name": "SM Embed",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1664,
+        -992
+      ],
+      "typeVersion": 4.2,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE zikra.memories\nSET embedding = '{{ \"[\"+$json.data[0].embedding.join(\",\")+\"]\" }}'::vector\nWHERE id = '{{ $(\"SM Lookup ID\").first().json.id }}'::uuid\nRETURNING id;",
+        "options": {}
+      },
+      "id": "076cb3de-8eca-4d32-9bd1-1f2c5b8aca02",
+      "name": "SM Update Embed",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1888,
+        -992
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\":\"saved\",\"id\":\"{{ $('SM Lookup ID').first().json.id }}\",\"embedded\":false,\"_use_command\":\"save_memory\"}",
+        "options": {}
+      },
+      "id": "9cc2e271-fa68-4554-b639-ad8a696067ca",
+      "name": "SM Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        2112,
+        -992
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://sys_litellm:4000/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sk-1234567890abcdef"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\":\"text-embedding-3-small\",\"input\":\"{{ $(\"Zikra Webhook\").first().json.body.query }}\"}",
+        "options": {}
+      },
+      "id": "c1e98fab-150d-4e19-b5e8-ad262e0ec474",
+      "name": "SR Embed",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1248,
+        -800
+      ],
+      "typeVersion": 4.2,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    id,\n    title,\n    LEFT(content_md, 500) AS snippet,\n    memory_type,\n    project,\n    module,\n    ROUND((\n        0.7 * (1 - (embedding <=> '[{{ $(\"SR Embed\").first().json.data[0].embedding.join(\",\") }}]'::vector))\n        +\n        0.3 * ts_rank_cd(\n            to_tsvector('english', coalesce(title,'') || ' ' || coalesce(content_md,'')),\n            plainto_tsquery('english', '{{ $(\"Zikra Webhook\").first().json.body.query.replace(/\\'/g,\"''\") }}')\n        )\n    )::numeric, 4) AS score,\n    created_at\nFROM zikra.memories\nWHERE searchable = true\n  AND embedding IS NOT NULL\n  AND (\n    '{{ $(\"Auth Lookup\").first().json.role }}' = 'owner'\n    OR project = '{{ $(\"Zikra Webhook\").first().json.body.project }}'\n    OR project = 'global'\n  )\nORDER BY score DESC\nLIMIT {{ $(\"Zikra Webhook\").first().json.body.max_results || 5 }};",
+        "options": {}
+      },
+      "id": "3a9eba22-63cc-4529-9239-59b3956ffead",
+      "name": "SR Search",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1440,
+        -800
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// SR Format v2 — hybrid search + tiered snippets + token budget\nconst items = $input.all();\nconst body = $('Zikra Webhook').first().json.body;\n\n// Token budget: caller can pass max_tokens, default 1500\nconst TOKEN_BUDGET = body.max_tokens || 1500;\n// Rough chars-per-token estimate for English text\nconst CHARS_PER_TOKEN = 4;\nconst CHAR_BUDGET = TOKEN_BUDGET * CHARS_PER_TOKEN;\n\n// Tiered snippet lengths by rank position\nconst SNIPPET_LENGTHS = [500, 300, 200, 150, 150];\n\nlet results = [];\nlet totalChars = 0;\n\nfor (let i = 0; i < items.length; i++) {\n    const item = items[i];\n    if (item.json.error) continue;\n\n    // Tiered truncation — top result gets most context\n    const maxLen = SNIPPET_LENGTHS[i] || 150;\n    const fullSnippet = item.json.snippet || item.json.content_snippet || '';\n    const snippet = fullSnippet.substring(0, maxLen);\n\n    // Enforce token budget — stop adding results once exceeded\n    const entryChars = (item.json.title || '').length + snippet.length;\n    if (totalChars + entryChars > CHAR_BUDGET && results.length > 0) break;\n    totalChars += entryChars;\n\n    results.push({\n        id: item.json.id,\n        title: item.json.title,\n        snippet: snippet,\n        memory_type: item.json.memory_type,\n        project: item.json.project,\n        module: item.json.module,\n        score: item.json.score,\n        created_at: item.json.created_at\n    });\n}\n\nreturn [{\n    json: {\n        results,\n        count: results.length,\n        mode: 'hybrid',\n        token_budget_used: Math.round(totalChars / CHARS_PER_TOKEN)\n    }\n}];\n"
+      },
+      "id": "3a12fa87-7497-48fd-9122-4f73b0389989",
+      "name": "SR Format",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1664,
+        -800
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ results: $json.results, count: $json.count, mode: $json.mode, token_budget_used: $json.token_budget_used, _use_command: \"search\" }) }}",
+        "options": {}
+      },
+      "id": "57e2dddf-9207-476a-ae60-d294db5d8469",
+      "name": "SR Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1888,
+        -800
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH upd AS (\n    UPDATE zikra.memories\n    SET access_count = access_count + 1\n    WHERE memory_type = 'prompt'\n      AND (\n        (\n          LOWER(title) = LOWER('{{ ($(\"Zikra Webhook\").first().json.body.prompt_name||\"\").replace(/'/g,\"''\") }}')\n          AND '{{ $(\"Zikra Webhook\").first().json.body.prompt_name||\"\" }}' != ''\n        )\n        OR\n        (id::text = '{{ $(\"Zikra Webhook\").first().json.body.prompt_id||\"\" }}' AND '{{ $(\"Zikra Webhook\").first().json.body.prompt_id||\"\" }}' != '')\n      )\n    RETURNING id, title, content_md, project, access_count\n)\nSELECT * FROM upd LIMIT 1;",
+        "options": {}
+      },
+      "id": "971f2bb6-cbca-4aae-81f9-d65170ee7768",
+      "name": "GP Query",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1280,
+        -480
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ id: $json.id, title: $json.title, project: $json.project, access_count: $json.access_count, content_md: $json.content_md, _use_command: \"get_prompt\" }) }}",
+        "options": {}
+      },
+      "id": "409b2aa3-8560-4af7-b036-48f1320f0a1d",
+      "name": "GP Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1504,
+        -480
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO zikra.memories (project, module, memory_type, title, content_md, tags, resolved)\nVALUES (\n    '{{ $(\"Zikra Webhook\").first().json.body.project }}',\n    {{ $(\"Zikra Webhook\").first().json.body.module ? \"'\" + $(\"Zikra Webhook\").first().json.body.module + \"'\" : \"NULL\" }},\n    'error',\n    '{{ ($(\"Zikra Webhook\").first().json.body.title||\"\").replace(/'/g,\"''\") }}',\n    '{{ ($(\"Zikra Webhook\").first().json.body.content||\"\").replace(/'/g,\"''\") }}',\n    '{{ \"{\" + ($(\"Zikra Webhook\").first().json.body.tags||[]).join(\",\") + \"}\" }}'::TEXT[],\n    false\n)\nRETURNING id;",
+        "options": {}
+      },
+      "id": "714d67ea-5e96-49a8-8008-30ffc25b7fbd",
+      "name": "LE Insert",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1280,
+        -288
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://sys_litellm:4000/v1/embeddings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sk-1234567890abcdef"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\":\"text-embedding-3-small\",\"input\":\"{{ $('Zikra Webhook').first().json.body.title + ' ' + $('Zikra Webhook').first().json.body.content }}\"}",
+        "options": {}
+      },
+      "id": "67e567d3-b19c-425d-8f3e-b06c271d63cb",
+      "name": "LE Embed",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        1504,
+        -288
+      ],
+      "typeVersion": 4.2,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE zikra.memories\nSET embedding = '{{ \"[\"+$json.data[0].embedding.join(\",\")+\"]\" }}'::vector\nWHERE id = '{{ $(\"LE Insert\").first().json.id }}'::uuid\nRETURNING id;",
+        "options": {}
+      },
+      "id": "be0b601f-a39c-4124-8886-1c60364c61c6",
+      "name": "LE Update Embed",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1728,
+        -288
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\":\"logged\",\"id\":\"{{ $('LE Insert').first().json.id }}\",\"_use_command\":\"log_error\"}",
+        "options": {}
+      },
+      "id": "f082fdf1-b544-4ef0-a26e-830a64861aeb",
+      "name": "LE Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1952,
+        -288
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH active AS (\n    DELETE FROM zikra.active_runs\n    WHERE runner = '{{ $(\"Zikra Webhook\").first().json.body.runner || \"unknown\" }}'\n    RETURNING prompt_id, prompt_name\n)\nINSERT INTO zikra.prompt_runs\n    (prompt_id, session_id, status, output_summary, errors, files_modified,\n     tokens_input, tokens_output, tokens_cache_read, tokens_cache_creation,\n     cost_usd, runner)\nSELECT\n    COALESCE(\n        active.prompt_id,\n        {{ ($(\"Zikra Webhook\").first().json.body.prompt_id && $(\"Zikra Webhook\").first().json.body.prompt_id.match(/^[0-9a-f-]{36}$/i)) ? \"'\" + $(\"Zikra Webhook\").first().json.body.prompt_id + \"'::uuid\" : \"NULL\" }}\n    ),\n    '{{ $(\"Zikra Webhook\").first().json.body.session_id||\"\" }}',\n    '{{ $(\"Zikra Webhook\").first().json.body.status||\"success\" }}',\n    '{{ ($(\"Zikra Webhook\").first().json.body.output_summary||\"\").replace(/'/g,\"''\") }}',\n    '{{ \"{\" + ($(\"Zikra Webhook\").first().json.body.errors||[]).join(\",\") + \"}\" }}'::TEXT[],\n    '{{ \"{\" + ($(\"Zikra Webhook\").first().json.body.files_modified||[]).join(\",\") + \"}\" }}'::TEXT[],\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_input != null ? $(\"Zikra Webhook\").first().json.body.tokens_input : \"NULL\" }},\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_output != null ? $(\"Zikra Webhook\").first().json.body.tokens_output : \"NULL\" }},\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_cache_read != null ? $(\"Zikra Webhook\").first().json.body.tokens_cache_read : \"NULL\" }},\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_cache_creation != null ? $(\"Zikra Webhook\").first().json.body.tokens_cache_creation : \"NULL\" }},\n    {{ $(\"Zikra Webhook\").first().json.body.cost_usd != null ? $(\"Zikra Webhook\").first().json.body.cost_usd : \"NULL\" }},\n    '{{ $(\"Zikra Webhook\").first().json.body.runner || \"unknown\" }}'\nFROM (SELECT NULL::uuid AS prompt_id, NULL::text AS prompt_name) AS fallback\nLEFT JOIN active ON true\nRETURNING id;",
+        "options": {}
+      },
+      "id": "c20bc731-5927-49b2-8bbb-1378941a01d1",
+      "name": "LR Insert",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1520,
+        -112
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: \"logged\", id: $json.id || null, _use_command: \"log_run\" }) }}",
+        "options": {}
+      },
+      "id": "499504dc-ec07-4ebe-8c66-302809bf2f64",
+      "name": "LR Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1744,
+        -112
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT content_md, title, version, source_file, module\nFROM zikra.memories\nWHERE memory_type = 'schema'\n  AND project = '{{ $(\"Zikra Webhook\").first().json.body.project }}'\n  {{ $(\"Zikra Webhook\").first().json.body.module ? \"AND module = '\"+$(\"Zikra Webhook\").first().json.body.module+\"'\" : \"\" }}\nORDER BY version DESC LIMIT 1;",
+        "options": {}
+      },
+      "id": "8aa38bfa-5dc6-4c5c-8fc3-6288605dbdd0",
+      "name": "GS Query",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1728,
+        48
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"content_md\":{{ JSON.stringify($json.content_md) }},\"title\":\"{{ $json.title }}\",\"version\":{{ $json.version }},\"module\":\"{{ $json.module }}\",\"_use_command\":\"get_schema\"}",
+        "options": {}
+      },
+      "id": "f76eccd7-234e-4592-9050-c13331274013",
+      "name": "GS Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1952,
+        48
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH upd AS (\n    UPDATE zikra.memories\n    SET access_count = access_count + 1\n    WHERE memory_type = 'prompt' AND title = 'debug_protocol'\n    RETURNING id, title, content_md, access_count\n)\nSELECT * FROM upd LIMIT 1;",
+        "options": {}
+      },
+      "id": "eb415898-fd54-4b30-bad9-33bca1415c5c",
+      "name": "DP Query",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1440,
+        192
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ title: $json.title, access_count: $json.access_count, content_md: $json.content_md }) }}",
+        "options": {}
+      },
+      "id": "9e5da453-5e19-46b5-b18f-67b2ae0499e3",
+      "name": "DP Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1648,
+        192
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH errors_cte AS (\n    SELECT json_agg(json_build_object(\n        'title',title,'snippet',LEFT(content_md,200),'created_at',created_at::text\n    ) ORDER BY created_at DESC) AS data\n    FROM (SELECT title,content_md,created_at FROM zikra.memories\n          WHERE project='{{ $(\"Zikra Webhook\").first().json.body.project }}'\n            AND memory_type='error' AND resolved=false\n          ORDER BY created_at DESC LIMIT 3) e\n),\nschema_cte AS (\n    SELECT content_md FROM zikra.memories\n    WHERE memory_type='schema' AND project='{{ $(\"Zikra Webhook\").first().json.body.project }}'\n    {{ $(\"Zikra Webhook\").first().json.body.module ? \"AND module='\"+$(\"Zikra Webhook\").first().json.body.module+\"'\" : \"\" }}\n    ORDER BY version DESC LIMIT 1\n),\nprompts_cte AS (\n    SELECT json_agg(json_build_object(\n        'title',title,'snippet',LEFT(content_md,200)\n    ) ORDER BY access_count DESC) AS data\n    FROM (SELECT title,content_md,access_count FROM zikra.memories\n          WHERE memory_type='prompt'\n            AND (project='{{ $(\"Zikra Webhook\").first().json.body.project }}' OR project='global')\n          ORDER BY access_count DESC LIMIT 5) p\n),\ndecisions_cte AS (\n    SELECT json_agg(json_build_object(\n        'title',title,'snippet',LEFT(content_md,200)\n    ) ORDER BY created_at DESC) AS data\n    FROM (SELECT title,content_md,created_at FROM zikra.memories\n          WHERE memory_type='decision'\n            AND (project='{{ $(\"Zikra Webhook\").first().json.body.project }}' OR project='global')\n          ORDER BY created_at DESC LIMIT 3) d\n)\nSELECT\n    (SELECT data FROM errors_cte)               AS errors,\n    (SELECT content_md FROM schema_cte LIMIT 1) AS schema_content,\n    (SELECT data FROM prompts_cte)              AS prompts,\n    (SELECT data FROM decisions_cte)            AS decisions;",
+        "options": {}
+      },
+      "id": "cc928fea-f58d-4135-928c-7d41f8c8e83c",
+      "name": "SC Query",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1584,
+        352
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst row = $input.first().json;\nconst wb  = $('Zikra Webhook').first().json.body;\nconst project = wb.project || 'unknown';\nconst mod     = wb.module  || 'core';\nconst errors    = row.errors    || [];\nconst prompts   = row.prompts   || [];\nconst decisions = row.decisions || [];\nconst schema    = row.schema_content || '';\n\nconst errSec = errors.length\n  ? errors.map(e=>`### ${e.title}\\n${e.snippet}\\n_${e.created_at}_`).join('\\n\\n')\n  : '_No unresolved errors_';\nconst decSec = decisions.length\n  ? decisions.map(d=>`### ${d.title}\\n${d.snippet}`).join('\\n\\n')\n  : '_No recent decisions_';\nconst prmSec = prompts.length\n  ? prompts.map(p=>`- **${p.title}**: ${p.snippet}`).join('\\n')\n  : '_None_';\n\nconst claudemd = `# Project: ${project}\n# Cortex: https://n8n.veltisai.com/webhook/cortex\n# Module: ${mod}\n\n## Recent Unresolved Errors\n${errSec}\n\n## Current Schema (${mod})\n${schema || '_No schema found_'}\n\n## Active Decisions\n${decSec}\n\n## Top Prompts\n${prmSec}\n\n## Debug Protocol\n1. Read exact error — do not paraphrase\n2. Search cortex: cortex search <error>\n3. Check known resolutions\n4. Fix or escalate\n5. Log to cortex: cortex log_error\n`;\nreturn [{json:{claudemd,project,module:mod}}];\n"
+      },
+      "id": "fbb21c88-037a-499b-86df-c376e1821efa",
+      "name": "SC Assemble",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1856,
+        352
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"claudemd\":{{ JSON.stringify($json.claudemd) }},\"project\":\"{{ $json.project }}\",\"module\":\"{{ $json.module }}\",\"_use_command\":\"sync_claudemd\"}",
+        "options": {}
+      },
+      "id": "c667e1e2-3895-478f-b313-277f73591495",
+      "name": "SC Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        2048,
+        352
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  error: \"Unknown or missing command: \" + $(\"Command Normaliser\").first().json.body._raw_command,\n  _received_command: $(\"Command Normaliser\").first().json.body._raw_command || $(\"Zikra Webhook\").first().json.body.command,\n  _use_command: \"unknown — see commands list above\",\n  hint: \"Send a POST request with a JSON body containing a 'command' field and a Bearer token in the Authorization header.\",\n  system: \"Zikra — AI persistent memory system. Webhook: https://n8n.veltisai.com/webhook/zikra\",\n  projects: [\"veltisai\", \"molten8\", \"zikra\", \"global\"],\n  commands: {\n    search: { description: \"Search memories by keyword\", aliases: [\"find\",\"query\",\"recall\",\"lookup\",\"search_memory\",\"retrieve\",\"remember\"] },\n    save_memory: { description: \"Save a decision, note, or context\", aliases: [\"save\",\"store\",\"write_memory\",\"add_memory\",\"write\"] },\n    get_prompt: { description: \"Fetch a named prompt\", aliases: [\"run_prompt\",\"fetch_prompt\",\"load_prompt\",\"execute_prompt\"] },\n    get_memory: { description: \"Fetch full content of one memory by exact title or UUID\" },\n    log_run: { description: \"Log session end\", aliases: [\"log_session\",\"end_session\",\"finish_run\",\"log_completion\"] },\n    log_error: { description: \"Log a bug\", aliases: [\"log_bug\",\"report_error\",\"save_error\",\"log_failure\"] },\n    sync_claudemd: { description: \"Sync CLAUDE.md\", aliases: [\"sync\",\"claudemd\"] },\n    debug_protocol: { description: \"Debug unresolved errors\", aliases: [\"debug\",\"dp\"] },\n    get_schema: { description: \"Get DB schema\", aliases: [\"schema\",\"get_db\"] },\n    save_requirement: { description: \"Submit a requirement for review\" },\n    list_requirements: { description: \"List pending requirements\" },\n    promote_requirement: { description: \"Promote requirement to prompt (owner only)\" },\n    create_token: { description: \"Create access token (owner only)\" }\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "4a9c128f-c37f-4677-bbc3-f89096e48a33",
+      "name": "Fallback Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1520,
+        1472
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO zikra.active_runs (runner, prompt_id, prompt_name)\nVALUES (\n    '{{ $('Zikra Webhook').first().json.body.runner || \"unknown\" }}',\n    '{{ $('GP Query').first().json.id }}',\n    '{{ $('GP Query').first().json.title }}'\n)\nON CONFLICT (runner) DO UPDATE SET\n    prompt_id   = EXCLUDED.prompt_id,\n    prompt_name = EXCLUDED.prompt_name,\n    started_at  = now();",
+        "options": {}
+      },
+      "id": "a4f7722a-d614-45b6-98a5-82b9daa798ce",
+      "name": "Execute a SQL query",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1728,
+        -480
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT at.token, at.person_name, \n  '{{ $json.body.project || \"global\" }}' AS project,\n  tp.role\nFROM zikra.access_tokens at\nJOIN zikra.token_projects tp ON tp.token_id = at.id\nWHERE at.token = COALESCE(\n  NULLIF('{{ ($json.headers.authorization || $json.headers.Authorization || \"\").replace(\"Bearer \", \"\") }}', ''),\n  NULLIF('{{ $json.body.zikra_token || \"\" }}', '')\n)\n  AND at.active = true\n  AND (\n    tp.project = '{{ $json.body.project || \"global\" }}'\n    OR tp.role = 'owner'\n  )\nLIMIT 1",
+        "options": {}
+      },
+      "id": "node-auth-lookup",
+      "name": "Auth Lookup",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        16,
+        -96
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 1,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "auth-check",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              },
+              "leftValue": "={{ $json.token }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-if-auth",
+      "name": "IF Auth",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        240,
+        -96
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "{\"error\": \"Unauthorized\", \"code\": 401}",
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "node-401",
+      "name": "401 Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        288,
+        160
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE zikra.access_tokens SET last_used = now() WHERE token = '{{ $(\"Zikra Webhook\").first().json.headers.authorization.replace(\"Bearer \", \"\") }}'",
+        "options": {}
+      },
+      "id": "node-last-used",
+      "name": "Update Last Used",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        448,
+        -112
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const role = $('Auth Lookup').first().json.role;\nconst mtype = $(\"Zikra Webhook\").first().json.body.memory_type || 'conversation';\nif (!role) {\n  return [{json:{error:'access denied', code:403}}];\n}\nif (role === 'viewer') {\n  return [{json:{error:'viewers cannot write memories', code:403}}];\n}\nif (role === 'contributor' && !['requirement','conversation'].includes(mtype)) {\n  return [{json:{error:'contributors can only save requirements or conversations', code:403}}];\n}\nreturn $input.all();"
+      },
+      "id": "node-role-gate",
+      "name": "Role Gate",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1248,
+        -992
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO zikra.memories (project, memory_type, title, content_md, created_by, pending_review, searchable)\nVALUES (\n    '{{ $(\"Auth Lookup\").first().json.project }}',\n    'requirement',\n    '{{ ($(\"Zikra Webhook\").first().json.body.title||\"\").replace(/'/g, \"''\") }}',\n    '{{ ($(\"Zikra Webhook\").first().json.body.content_md||\"\").replace(/'/g, \"''\") }}',\n    '{{ $(\"Auth Lookup\").first().json.person_name }}',\n    true,\n    true\n) RETURNING id",
+        "options": {}
+      },
+      "id": "node-save-req",
+      "name": "Save Requirement",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1712,
+        512
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify({status:\"saved\",type:\"requirement\",id:$json.id,pending_review:true}) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "node-save-req-respond",
+      "name": "SR Req Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1984,
+        512
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "jsCode": "const role = $('Auth Lookup').first().json.role;\nif (role !== 'owner') return [{json:{error:'owner only', code:403}}];\nreturn $input.all();"
+      },
+      "id": "node-promote-gate",
+      "name": "Promote Owner Gate",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1600,
+        672
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE zikra.memories\nSET memory_type = 'prompt', pending_review = false, updated_at = now()\nWHERE id = '{{ $(\"Zikra Webhook\").first().json.body.requirement_id }}'::uuid\n  AND memory_type = 'requirement'\nRETURNING id, title",
+        "options": {}
+      },
+      "id": "node-promote-req",
+      "name": "Promote Requirement",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1840,
+        672
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify({status:\"promoted\",id:$json.id,title:$json.title}) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "node-promote-respond",
+      "name": "Promote Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        2080,
+        672
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, title, LEFT(content_md, 300) AS snippet,\n       created_by, created_at, project\nFROM zikra.memories\nWHERE memory_type = 'requirement'\n  AND pending_review = true\n  AND (\n    '{{ $(\"Auth Lookup\").first().json.role }}' = 'owner'\n    OR project = '{{ $(\"Auth Lookup\").first().json.project }}'\n  )\nORDER BY created_at DESC\nLIMIT 20",
+        "options": {}
+      },
+      "id": "node-list-req",
+      "name": "List Requirements",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1568,
+        864
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\nreturn [{json:{count: rows.length, requirements: rows}}];"
+      },
+      "id": "node-list-req-respond",
+      "name": "LR Req Respond",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1792,
+        864
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "node-list-req-resp2",
+      "name": "LR Req Resp2",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        2064,
+        864
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "jsCode": "const role = $('Auth Lookup').first().json.role;\nif (role !== 'owner') return [{json:{error:'owner only', code:403}}];\nreturn $input.all();"
+      },
+      "id": "node-create-token-gate",
+      "name": "Create Token Gate",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1568,
+        1056
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH new_token AS (\n  INSERT INTO zikra.access_tokens (token, project, person_name)\n  VALUES (\n    LOWER(LEFT(REGEXP_REPLACE('{{ ($(\"Zikra Webhook\").first().json.body.project||\"global\").replace(/[^a-z0-9]/gi,\"\") }}', '[^a-z0-9]', '', 'g'), 4))\n    || '-' || SUBSTRING(MD5(RANDOM()::text), 1, 8),\n    '{{ $(\"Zikra Webhook\").first().json.body.project || \"global\" }}',\n    '{{ ($(\"Zikra Webhook\").first().json.body.person_name||\"\").replace(/'/g, \"''\") }}'\n  )\n  RETURNING id, token, project, person_name\n), new_tp AS (\n  INSERT INTO zikra.token_projects (token_id, project, role)\n  SELECT id, project, '{{ $(\"Zikra Webhook\").first().json.body.role || \"contributor\" }}'\n  FROM new_token\n  RETURNING token_id\n)\nSELECT t.token, t.project, t.person_name FROM new_token t",
+        "options": {}
+      },
+      "id": "node-create-token",
+      "name": "Create Token",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1776,
+        1056
+      ],
+      "typeVersion": 2.6,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "node-create-token-respond",
+      "name": "CT Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1968,
+        1056
+      ],
+      "typeVersion": 1.4
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH upd AS (\n    UPDATE zikra.memories\n    SET access_count = access_count + 1\n    WHERE (\n        id = '{{ ($(\"Zikra Webhook\").first().json.body.id||\"00000000-0000-0000-0000-000000000000\").replace(/'/g,\"''\") }}'::uuid\n        OR LOWER(title) = LOWER('{{ ($(\"Zikra Webhook\").first().json.body.title||\"\").replace(/'/g,\"''\") }}')\n    )\n    RETURNING id, title, content_md, memory_type, project, module, created_at, access_count, tags\n)\nSELECT * FROM upd LIMIT 1;",
+        "options": {}
+      },
+      "id": "db9bde7c-98ce-467b-9999-c457b965213b",
+      "name": "GM Query",
+      "type": "n8n-nodes-base.postgres",
+      "position": [
+        1568,
+        1248
+      ],
+      "typeVersion": 2.5,
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify(Object.assign({}, $json, { _use_command: \"get_memory\" })) }}",
+        "options": {}
+      },
+      "id": "2dc47312-add1-491e-9659-5713da6b0f76",
+      "name": "GM Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        1776,
+        1232
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "path": "zikra"
+      },
+      "id": "zikra-mcp-trigger-001",
+      "name": "Zikra MCP Trigger",
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "position": [
+        -608,
+        272
+      ],
+      "webhookId": "72412a4b-36c9-488a-abf7-e35d72d47936",
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search Zikra for memories, decisions, prompts, and errors. Always search before starting work to load relevant context.\n\nUse command: search. Aliases accepted: find, query, recall, lookup, search_memory, retrieve, remember.\nDo NOT use get_memory for broad searches — use this tool.\n\nRequired fields:\n- query (string): what to search for\n- project (string): project name\n\nOptional:\n- max_results (integer, default 5)\n- max_tokens (integer, default 1500): token budget for results",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"search\",\"query\":\"{query}\",\"project\":\"{project}\",\"max_results\":{max_results},\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "query",
+              "description": "The search query string",
+              "type": "string"
+            },
+            {
+              "name": "project",
+              "description": "Project name to search within",
+              "type": "string"
+            },
+            {
+              "name": "max_results",
+              "description": "Maximum number of results (default: 5)",
+              "type": "number"
+            },
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-search",
+      "name": "zikra_search",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        -1312,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Save a memory to Zikra. Use to record decisions, completed work, or important context.\n\nUse command: save_memory. Aliases accepted: save, store, write_memory, add_memory, write, remember.\n\nRequired fields:\n- title (string): short descriptive title\n- content_md (string): full content in markdown\n- project (string): project name\n- memory_type (string): decision | conversation | error | schema | prompt\n\nOptional:\n- module (string)\n- tags (array of strings)\n- created_by (string)",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"save_memory\",\"title\":\"{title}\",\"content_md\":\"{content_md}\",\"project\":\"{project}\",\"memory_type\":\"{memory_type}\",\"created_by\":\"{created_by}\",\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "title",
+              "description": "Memory title",
+              "type": "string"
+            },
+            {
+              "name": "content_md",
+              "description": "Memory content in markdown",
+              "type": "string"
+            },
+            {
+              "name": "project",
+              "description": "Project name",
+              "type": "string"
+            },
+            {
+              "name": "memory_type",
+              "description": "Type: decision, error, conversation, prompt, schema",
+              "type": "string"
+            },
+            {
+              "name": "created_by",
+              "description": "Who created this memory (e.g. hostname)",
+              "type": "string"
+            },
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-save-memory",
+      "name": "zikra_save_memory",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        -1104,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Fetch a named prompt from Zikra and execute its steps. Use when asked to 'run prompt: <name>'.\n\nUse command: get_prompt. Aliases accepted: run_prompt, fetch_prompt, load_prompt, execute_prompt.\n\nRequired fields:\n- prompt_name (string): exact prompt name, e.g. 'g:sync_zikra'\n- project (string): project name\n- runner (string): hostname of the machine running this",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"get_prompt\",\"prompt_name\":\"{prompt_name}\",\"project\":\"{project}\",\"runner\":\"{runner}\",\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "prompt_name",
+              "description": "Name of the prompt to fetch (e.g. g:my_prompt)",
+              "type": "string"
+            },
+            {
+              "name": "project",
+              "description": "Project name",
+              "type": "string"
+            },
+            {
+              "name": "runner",
+              "description": "Hostname or identifier of the runner",
+              "type": "string"
+            },
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-get-prompt",
+      "name": "zikra_get_prompt",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        -896,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Log the end of a work session or prompt run. Call this at the end of every named prompt execution.\n\nRequired fields:\n- output_summary (string): 1-2 sentences describing what was accomplished\n- project (string): one of veltisai, molten8, zikra, global\n- runner (string): your hostname or identifier\n- status (string): \"success\" or \"error\"\n\nOptional:\n- session_id (string): session UUID if available\n- prompt_id (string): UUID of the prompt that was run\n\nReturns: {status: \"logged\", id: uuid}\n\nIMPORTANT: If you called zikra_get_prompt earlier in this session, pass the returned id as prompt_id in this log_run call. This links the run to the prompt in Zikra for tracking.\n\nExample with prompt linkage:\n- output_summary: \"Implemented token passthrough for all 11 MCP tool nodes.\"\n- project: \"zikra\"\n- runner: \"veltisai\"\n- status: \"success\"\n- prompt_id: \"b5317765-cfe8-4292-b4a5-915fd73d2b6c\"\n- zikra_token: \"velt-xxxxxxxx\"",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"log_run\",\"output_summary\":\"{output_summary}\",\"project\":\"{project}\",\"runner\":\"{runner}\",\"status\":\"{status}\",\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "output_summary",
+              "description": "Concise 2-sentence summary of what was done",
+              "type": "string"
+            },
+            {
+              "name": "project",
+              "description": "Project name",
+              "type": "string"
+            },
+            {
+              "name": "runner",
+              "description": "Hostname or identifier",
+              "type": "string"
+            },
+            {
+              "name": "status",
+              "description": "success or error",
+              "type": "string"
+            },
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-log-run",
+      "name": "zikra_log_run",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        -720,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Log a bug or unexpected failure to Zikra so it can be tracked and resolved.\n\nRequired fields:\n- title (string): short description of the error, e.g. \"Login button not rendering on mobile\"\n- content_md (string): full details — what happened, what was expected, stack trace if available\n- project (string): one of veltisai, molten8, zikra, global\n\nReturns: {status: \"logged\", id: uuid}",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"log_error\",\"title\":\"{title}\",\"content_md\":\"{content_md}\",\"project\":\"{project}\",\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "title",
+              "description": "Short error title",
+              "type": "string"
+            },
+            {
+              "name": "content_md",
+              "description": "Error context and details",
+              "type": "string"
+            },
+            {
+              "name": "project",
+              "description": "Project name",
+              "type": "string"
+            },
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-log-error",
+      "name": "zikra_log_error",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        -560,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Submit a new feature requirement or change request for owner review.\nUse when you want to propose something new — the owner (Mukarram) will review and promote it to a prompt.\n\nRequired fields:\n- title (string): short requirement title, e.g. \"Add dark mode toggle to dashboard\"\n- content_md (string): full requirement description — what, why, acceptance criteria\n\nProject and created_by are set automatically from your token.\nRequirements are pending until promoted. Use zikra_list_requirements to see pending items.\n\nReturns: {status: \"saved\", type: \"requirement\", id: uuid, pending_review: true}",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"save_requirement\",\"title\":\"{title}\",\"content_md\":\"{content_md}\",\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "title",
+              "description": "Requirement title",
+              "type": "string"
+            },
+            {
+              "name": "content_md",
+              "description": "Full requirement description in markdown",
+              "type": "string"
+            },
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-save-requirement",
+      "name": "zikra_save_requirement",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        -368,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "List all pending requirements waiting for owner review.\nNo parameters needed — results are scoped to your project automatically.\n\nUse this to:\n- See what requirements have been submitted\n- Check if your requirement was saved\n- Review pending items before a planning session\n\nReturns: {count: number, requirements: [{id, title, snippet, created_by, created_at}]}",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"list_requirements\",\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-list-requirements",
+      "name": "zikra_list_requirements",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        -208,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Fetch the full content of a specific memory by title or UUID.\nUse when a search result shows a relevant memory but you need the complete content.\n\nUse command: get_memory. Aliases accepted: fetch_memory, read_memory, load_memory.\nUse this ONLY for fetching one specific memory by exact title or UUID.\nFor broad searches use zikra_search instead.\n\nRequired fields:\n- title (string): exact memory title OR uuid",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"get_memory\",\"title\":\"{title}\",\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "title",
+              "description": "Memory title or UUID to fetch",
+              "type": "string"
+            },
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-get-memory",
+      "name": "zikra_get_memory",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        -32,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Fetch the current database or module schema for a project. Use when working on backend code, migrations, or anything requiring knowledge of table structure.\n\nRequired fields:\n- project (string): one of veltisai, molten8, zikra, global\n\nOptional:\n- module (string): specific module name to filter schema, e.g. \"auth\", \"payments\"\n\nReturns: {content_md, title, version, module} — the schema in markdown format",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"get_schema\",\"project\":\"{project}\",\"module\":\"{module}\",\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "project",
+              "description": "Project name: veltisai, molten8, zikra, or global",
+              "type": "string"
+            },
+            {
+              "name": "module",
+              "description": "Optional module name to filter schema",
+              "type": "string"
+            },
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-get-schema",
+      "name": "zikra_get_schema",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        144,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Promote a pending requirement to a prompt (owner only). Use after reviewing a requirement submitted by a collaborator.\n\nRequired fields:\n- requirement_id (string): the UUID of the requirement to promote (get this from zikra_list_requirements)\n\nWhat happens:\n- The requirement memory_type changes from 'requirement' to 'prompt'\n- It becomes available via zikra_get_prompt\n- pending_review is set to false\n\nReturns: {status: \"promoted\", id, title}",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"promote_requirement\",\"requirement_id\":\"{requirement_id}\",\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "requirement_id",
+              "description": "UUID of the requirement to promote (from zikra_list_requirements)",
+              "type": "string"
+            },
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-promote-requirement",
+      "name": "zikra_promote_requirement",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        304,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Create a new Zikra access token for a team member (owner only).\n\nRequired fields:\n- person_name (string): the person's name, e.g. \"Alice\"\n- project (string): which project to scope the token to: veltisai, molten8, zikra, or global\n- role (string): one of owner, collaborator, guest\n- persona (string): one of architect, developer, requirements_engineer\n\nRoles:\n- owner: full access, can promote requirements and create tokens\n- collaborator: can save memories, submit requirements, log runs\n- guest: read-only search access\n\nPersonas are used to track who does what work. Always set persona.\n\nReturns: {id, token, project, role, person_name, persona}",
+        "method": "POST",
+        "url": "https://n8n.veltisai.com/webhook/zikra",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "parametersHeaders": {
+          "values": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"command\":\"create_token\",\"person_name\":\"{person_name}\",\"project\":\"{project}\",\"role\":\"{role}\",\"persona\":\"{persona}\",\"zikra_token\":\"{zikra_token}\"}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "person_name",
+              "description": "Name of the person to create token for",
+              "type": "string"
+            },
+            {
+              "name": "project",
+              "description": "Project scope: veltisai, molten8, zikra, or global",
+              "type": "string"
+            },
+            {
+              "name": "role",
+              "description": "Role: owner, collaborator, or guest",
+              "type": "string"
+            },
+            {
+              "name": "persona",
+              "description": "Persona: architect, developer, or requirements_engineer",
+              "type": "string"
+            },
+            {
+              "name": "zikra_token",
+              "description": "Your personal Zikra bearer token (e.g. velt-xxxxxxxx). Required for identity tracking.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "zikra-tool-create-token",
+      "name": "zikra_create_token",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "position": [
+        448,
+        704
+      ],
+      "typeVersion": 1.1,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zikra-cortex-auth",
+          "name": "Zikra Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zikra",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "5c5a93fe-585a-4f13-bc86-6de6d580d195",
+      "name": "Zikra Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        -240,
+        -96
+      ],
+      "webhookId": "e7395cc0-21b6-4d78-b402-5bdc5a219b8d",
+      "typeVersion": 2.1
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first();\nif (input.json && input.json.id) {\n  return [{ json: { id: input.json.id, source: 'insert' } }];\n}\n// No id means conflict was ignored or insert failed — signal lookup needed\nconst b = $('Zikra Webhook').first().json.body;\nreturn [{ json: {\n  id: null,\n  _title: b.title || '',\n  _memory_type: b.memory_type || 'conversation',\n  source: 'lookup_needed'\n} }];\n"
+      },
+      "id": "sm-insert-fallback-001",
+      "name": "SM Insert Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        -992
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.id\n  ? \"SELECT '\" + $json.id + \"'::uuid AS id\"\n  : \"SELECT id FROM zikra.memories WHERE title = '\" + ($json._title||'').replace(/'/g,\"''\") + \"' AND memory_type = '\" + ($json._memory_type||'conversation').replace(/'/g,\"''\") + \"' LIMIT 1\" }}",
+        "options": {}
+      },
+      "id": "sm-lookup-id-001",
+      "name": "SM Lookup ID",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1664,
+        -992
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "3KgZ9BsuvocoS5XV",
+          "name": "Zikra DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ALIASES = {\n  // search aliases\n  find:           'search',\n  query:          'search',\n  recall:         'search',\n  lookup:         'search',\n  search_memory:  'search',\n  find_memory:    'search',\n  retrieve:       'search',\n  remember:       'search',\n\n  // save_memory aliases\n  save:           'save_memory',\n  store:          'save_memory',\n  write_memory:   'save_memory',\n  add_memory:     'save_memory',\n  write:          'save_memory',\n\n  // get_prompt aliases\n  run_prompt:     'get_prompt',\n  fetch_prompt:   'get_prompt',\n  load_prompt:    'get_prompt',\n  execute_prompt: 'get_prompt',\n  get_prompt:     'get_prompt',\n\n  // get_memory aliases\n  fetch_memory:   'get_memory',\n  read_memory:    'get_memory',\n  load_memory:    'get_memory',\n\n  // log_run aliases\n  log_session:    'log_run',\n  end_session:    'log_run',\n  finish_run:     'log_run',\n  log_completion: 'log_run',\n\n  // log_error aliases\n  log_bug:        'log_error',\n  report_error:   'log_error',\n  save_error:     'log_error',\n  log_failure:    'log_error',\n\n  // sync_claudemd aliases\n  sync:           'sync_claudemd',\n  claudemd:       'sync_claudemd',\n\n  // debug_protocol aliases\n  debug:          'debug_protocol',\n  dp:             'debug_protocol',\n\n  // get_schema aliases\n  schema:         'get_schema',\n  get_db:         'get_schema',\n};\n\nconst item = $input.first();\nconst body = item.json.body || {};\nconst raw = (body.command || '').toLowerCase().trim();\nconst canonical = ALIASES[raw] || raw;\n\n// Mutate body.command to canonical form\nbody.command = canonical;\n\n// Attach metadata for downstream response hints\nbody._raw_command = raw;\nbody._canonical_command = canonical;\nbody._was_alias = (raw !== canonical);\n\nreturn [item];\n"
+      },
+      "id": "cmd-normaliser-001",
+      "name": "Command Normaliser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        -96
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Route Command": {
+      "main": [
+        [
+          {
+            "node": "Role Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SR Embed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GP Query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LE Insert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "LR Insert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GS Query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "DP Query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SC Query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Requirement",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Promote Owner Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "List Requirements",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Token Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GM Query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fallback Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SM Insert": {
+      "main": [
+        [
+          {
+            "node": "SM Insert Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SM Embed": {
+      "main": [
+        [
+          {
+            "node": "SM Update Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SM Update Embed": {
+      "main": [
+        [
+          {
+            "node": "SM Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SR Embed": {
+      "main": [
+        [
+          {
+            "node": "SR Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SR Search": {
+      "main": [
+        [
+          {
+            "node": "SR Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SR Format": {
+      "main": [
+        [
+          {
+            "node": "SR Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GP Query": {
+      "main": [
+        [
+          {
+            "node": "GP Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LE Insert": {
+      "main": [
+        [
+          {
+            "node": "LE Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LE Embed": {
+      "main": [
+        [
+          {
+            "node": "LE Update Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LE Update Embed": {
+      "main": [
+        [
+          {
+            "node": "LE Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LR Insert": {
+      "main": [
+        [
+          {
+            "node": "LR Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GS Query": {
+      "main": [
+        [
+          {
+            "node": "GS Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DP Query": {
+      "main": [
+        [
+          {
+            "node": "DP Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SC Query": {
+      "main": [
+        [
+          {
+            "node": "SC Assemble",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SC Assemble": {
+      "main": [
+        [
+          {
+            "node": "SC Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GP Respond": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Lookup": {
+      "main": [
+        [
+          {
+            "node": "IF Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Auth": {
+      "main": [
+        [
+          {
+            "node": "Update Last Used",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "401 Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Last Used": {
+      "main": [
+        [
+          {
+            "node": "Route Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Role Gate": {
+      "main": [
+        [
+          {
+            "node": "SM Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Requirement": {
+      "main": [
+        [
+          {
+            "node": "SR Req Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Promote Owner Gate": {
+      "main": [
+        [
+          {
+            "node": "Promote Requirement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Promote Requirement": {
+      "main": [
+        [
+          {
+            "node": "Promote Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Requirements": {
+      "main": [
+        [
+          {
+            "node": "LR Req Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LR Req Respond": {
+      "main": [
+        [
+          {
+            "node": "LR Req Resp2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Token Gate": {
+      "main": [
+        [
+          {
+            "node": "Create Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Token": {
+      "main": [
+        [
+          {
+            "node": "CT Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GM Query": {
+      "main": [
+        [
+          {
+            "node": "GM Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_search": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          },
+          {
+            "node": "Zikra MCP Trigger1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_save_memory": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_get_prompt": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_log_run": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_log_error": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_save_requirement": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_list_requirements": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_get_memory": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_get_schema": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_promote_requirement": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "zikra_create_token": {
+      "ai_tool": [
+        [
+          {
+            "node": "Zikra MCP Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zikra Webhook": {
+      "main": [
+        [
+          {
+            "node": "Command Normaliser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SM Insert Fallback": {
+      "main": [
+        [
+          {
+            "node": "SM Lookup ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SM Lookup ID": {
+      "main": [
+        [
+          {
+            "node": "SM Embed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Command Normaliser": {
+      "main": [
+        [
+          {
+            "node": "Auth Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "timezone": "America/New_York",
+    "binaryMode": "separate",
+    "callerPolicy": "workflowsFromSameOwner",
+    "timeSavedMode": "fixed",
+    "availableInMCP": true,
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "timeSavedPerExecution": 1,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none"
+  },
+  "versionId": "8d81def8-0082-4d07-8e1e-4c9327aa3575",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8c98d8859100509aa5e3df6c295b794d8866c6e9aedd3536f7a2f7b79a400307"
+  },
+  "id": "2Hz5Q88xRttYZU0X",
+  "tags": []
+}
