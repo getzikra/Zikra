@@ -1,95 +1,96 @@
 # g:install_zikra
-# First time install on any machine
 
-You are installing Zikra. Follow every step in order.
-Do not skip any step. Do not ask questions until told to.
+Install Zikra persistent memory on this machine. Follow every step in order.
 
-## Step 1 — Fetch latest install scripts from GitHub
+## Step 1 — Check prerequisites
 
-curl -fsSL https://raw.githubusercontent.com/getzikra/zikra/main/hooks/zikra_autolog.sh -o /tmp/zikra_autolog.sh
-curl -fsSL https://raw.githubusercontent.com/getzikra/zikra/main/context/CLAUDE.md -o /tmp/CLAUDE.md
+```bash
+which git curl python3 docker docker-compose
+```
 
-## Step 2 — Ask the user these 3 questions
+If any are missing, install them before continuing.
 
-1. Which version are you installing?
-   - (A) Zikra Lite — no Docker, no Postgres, pip install
-   - (B) Zikra Full — n8n + Postgres + Docker
+## Step 2 — Clone the repo
 
-2. What is your ZIKRA_TOKEN?
-   (This is your personal Bearer token for auth)
+```bash
+git clone https://github.com/getzikra/zikra.git ~/zikra
+cd ~/zikra
+```
 
-3. What is your Zikra server URL?
-   - Lite default: http://localhost:7723
-   - Full default: https://n8n.yourserver.com/webhook/zikra
+## Step 3 — Configure environment
 
-## Step 3 — Install hooks
+```bash
+cp .env.example .env
+```
 
-mkdir -p ~/.claude
-cp /tmp/zikra_autolog.sh ~/.claude/zikra_autolog.sh
-chmod +x ~/.claude/zikra_autolog.sh
-cp /tmp/CLAUDE.md ~/.claude/CLAUDE.md
+Edit `.env` and fill in:
+- `POSTGRES_PASSWORD` — strong random password
+- `N8N_BASIC_AUTH_PASSWORD` — strong random password
+- `OPENAI_API_KEY` — your OpenAI key (required for semantic search)
+- `ZIKRA_TOKEN` — a secret token you choose (e.g. `openssl rand -hex 32`)
+- `WEBHOOK_URL` — your public n8n URL (e.g. `https://n8n.yourdomain.com/`)
 
-## Step 4 — Write MCP config to ~/.claude/settings.json
+## Step 4 — Start the stack
 
-Write the following to ~/.claude/settings.json using the
-URL and token the user provided in Step 2:
+```bash
+docker-compose up -d
+```
 
-{
-  "mcpServers": {
-    "zikra": {
-      "url": "<USER_URL>/mcp/sse",
-      "env": {
-        "ZIKRA_TOKEN": "<USER_TOKEN>"
-      }
-    }
-  },
-  "hooks": {
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/zikra_autolog.sh"
-          }
-        ]
-      }
-    ]
-  }
-}
+Wait for both containers to be healthy:
+```bash
+docker-compose ps
+```
 
-## Step 5 — Install the correct backend
+Both `zikra_postgres` and `zikra_n8n` should show `healthy` or `Up`.
 
-If user chose Lite:
-  pip install zikra-lite --break-system-packages
-  echo "OPENAI_API_KEY=<ask user>" >> ~/.zikra.env
-  echo "ZIKRA_TOKEN=<user token>" >> ~/.zikra.env
-  echo "ZIKRA_PORT=7723" >> ~/.zikra.env
+## Step 5 — Import the Zikra workflow into n8n
 
-If user chose Full:
-  echo "Zikra Full requires Docker. Run: docker compose up -d"
-  echo "Then import workflow from zikra/workflow/zikra_mcp_router.json into n8n"
+1. Open n8n at `http://localhost:5678` (or your public URL)
+2. Log in with your `N8N_BASIC_AUTH_USER` / `N8N_BASIC_AUTH_PASSWORD`
+3. Go to **Workflows → Import from file**
+4. Select `workflow/zikra_mcp_router.json`
+5. Click **Activate** to enable the workflow
 
-## Step 6 — Test the connection
+## Step 6 — Install Claude Code hooks
 
-Run a test search to confirm Zikra is reachable:
+```bash
+bash install.sh
+```
 
-curl -s -X POST <USER_URL>/webhook/zikra \
-  -H "Authorization: Bearer <USER_TOKEN>" \
+The installer will:
+- Copy `hooks/zikra_autolog.sh` to `~/.claude/hooks/`
+- Copy `context/CLAUDE.md` to `~/.claude/CLAUDE.md` (or append to existing)
+- Set your `ZIKRA_TOKEN` and webhook URL in both files
+- Make the hook executable
+
+## Step 7 — Verify
+
+```bash
+curl -s -X POST "http://localhost:5678/webhook/zikra" \
+  -H "Authorization: Bearer YOUR_ZIKRA_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"search","query":"test","project":"global","max_results":1}'
+  -H "User-Agent: curl/7.81.0" \
+  -d '{"command":"search","query":"test","project":"global"}'
+```
 
-If response contains results or empty array: SUCCESS
-If response contains error or connection refused: FAIL — report the error
+Expected response: `{"results":[],"count":0,...}`
 
-## Step 7 — Confirm to user
+## Step 8 — Save this install to memory
 
-Print:
-  Zikra installed successfully.
-  Version: <lite or full>
-  Server: <url>
-  Hooks: ~/.claude/zikra_autolog.sh
-  MCP config: ~/.claude/settings.json
-  
-  Start a new Claude Code session to activate the hooks.
-  Next session just say: run g:sync_zikra
+```bash
+curl -s -X POST "http://localhost:5678/webhook/zikra" \
+  -H "Authorization: Bearer YOUR_ZIKRA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: curl/7.81.0" \
+  -d '{
+    "command":     "save_memory",
+    "project":     "zikra",
+    "memory_type": "decision",
+    "title":       "zikra installed on '"$(hostname -s)"'",
+    "content_md":  "Zikra installed and verified working. Webhook: http://localhost:5678/webhook/zikra",
+    "tags":        null,
+    "created_by":  "'"$(hostname -s)"'"
+  }'
+```
+
+Installation complete.
