@@ -128,10 +128,11 @@ function getActiveTodo() {
 
 try {
   // Read stdin payload (may be empty or absent)
+  // Avoid /dev/stdin — not available on Windows; use process.stdin fd directly.
   let payload = null;
   try {
     if (!process.stdin.isTTY) {
-      const raw = fs.readFileSync('/dev/stdin', 'utf8').trim();
+      const raw = fs.readFileSync(process.stdin.fd, 'utf8').trim();
       if (raw) payload = JSON.parse(raw);
     }
   } catch { /* no stdin or not JSON — fine */ }

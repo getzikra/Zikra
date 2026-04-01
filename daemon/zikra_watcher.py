@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-zikra_watcher.py v6.4
+zikra_watcher.py v7
 Session capture daemon for Zikra persistent memory.
 
 Polls Claude Code transcript JSONL files for mtime changes.
 After DEBOUNCE seconds of stability, fires a log_run to the Zikra webhook.
 Also handles short ad-hoc sessions (stable 2s, age < DEBOUNCE).
 
+Works on: WSL, native Linux, macOS.
 Uses only Python stdlib — no dependencies required.
 """
 
@@ -14,6 +15,8 @@ import os
 import json
 import time
 import glob
+import platform
+import socket
 import urllib.request
 import urllib.error
 import sys
@@ -25,9 +28,13 @@ DEFAULT_PROJECT  = "DEFAULT_PROJECT_PLACEHOLDER"
 DEBOUNCE         = 30          # seconds of mtime stability before firing
 POLL_INTERVAL    = 5           # seconds between polls
 TRANSCRIPT_GLOB  = os.path.expanduser("~/.claude/projects/**/*.jsonl")
-PROMPT_ID_FILE   = "/tmp/zikra_prompt_id"
-BOOT_MARKER      = "/tmp/zikra_watcher_boot"
+
+# ── Portable temp paths — use ~/.claude/ to avoid /tmp assumptions ────────────
+_ZIKRA_STATE_DIR = os.path.expanduser("~/.claude")
+PROMPT_ID_FILE   = os.path.join(_ZIKRA_STATE_DIR, ".zikra_prompt_id")
+BOOT_MARKER      = os.path.join(_ZIKRA_STATE_DIR, ".zikra_boot")
 LOG_PREFIX       = "[zikra_watcher]"
+
 
 # ── Boot marker ───────────────────────────────────────────────────────────────
 try:
@@ -35,6 +42,15 @@ try:
         _f.write(str(time.time()))
 except OSError:
     pass
+
+
+# ── Portable hostname ─────────────────────────────────────────────────────────
+def get_hostname() -> str:
+    """Return short hostname — works on Linux, macOS, and Windows."""
+    try:
+        return socket.gethostname().split(".")[0]
+    except Exception:
+        return os.environ.get("HOSTNAME", os.environ.get("COMPUTERNAME", "unknown"))
 
 
 # ── Zikra POST ────────────────────────────────────────────────────────────────
@@ -54,7 +70,6 @@ def zikra_post(payload: dict) -> bool:
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
-            # HTTP 200 with empty body counts as success — don't JSONDecodeError
             _ = resp.read()
             return resp.status == 200
     except Exception as exc:
@@ -158,11 +173,13 @@ def _log(msg: str) -> None:
 # ── Main poll loop ────────────────────────────────────────────────────────────
 
 def main() -> None:
+    runner = get_hostname()
+
     # path → {"mtime": float, "stable_since": float, "fired": bool}
     seen: dict = {}
 
     _log(f"started — watching {TRANSCRIPT_GLOB}")
-    _log(f"debounce={DEBOUNCE}s  poll={POLL_INTERVAL}s")
+    _log(f"debounce={DEBOUNCE}s  poll={POLL_INTERVAL}s  runner={runner}")
 
     while True:
         time.sleep(POLL_INTERVAL)
@@ -216,11 +233,6 @@ def main() -> None:
 
             info      = extract_session_info(path)
             prompt_id = consume_prompt_id()
-            runner    = ""
-            try:
-                runner = os.uname().nodename.split(".")[0]
-            except Exception:
-                runner = os.environ.get("HOSTNAME", "unknown")
 
             output_summary = (
                 info["last_assistant"][:250]

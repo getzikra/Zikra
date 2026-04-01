@@ -1,18 +1,45 @@
 #!/usr/bin/env bash
-# zikra_autolog.sh v7
+# zikra_autolog.sh v8
 # Claude Code hook handler for Stop and PreCompact events.
 # Saves session diary and pre-compact summaries to Zikra persistent memory.
 #
 # Invoked automatically by Claude Code hooks — never run manually.
+# Works on: WSL, native Linux, macOS, Git Bash / MSYS on Windows.
 
 ZIKRA_URL="ZIKRA_URL_PLACEHOLDER"
 ZIKRA_TOKEN="ZIKRA_TOKEN_PLACEHOLDER"
 DEFAULT_PROJECT="DEFAULT_PROJECT_PLACEHOLDER"
 
-HOSTNAME_SHORT="$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo "unknown")"
-SENTINEL="/tmp/zikra_last_diary"
+# ── Environment detection ─────────────────────────────────────────────────────
+detect_shell_env() {
+    if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+        echo "windows_bash"
+    elif grep -qi microsoft /proc/version 2>/dev/null; then
+        echo "wsl"
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "mac"
+    else
+        echo "linux"
+    fi
+}
 
-# ── Read hook payload from stdin ─────────────────────────────────────────────
+SHELL_ENV=$(detect_shell_env)
+
+# ── Portable temp dir — /tmp works on WSL/Linux/Mac; fall back to ~/.claude ──
+if [[ -d /tmp && -w /tmp ]]; then
+    ZIKRA_TMP="/tmp"
+else
+    ZIKRA_TMP="${HOME}/.claude"
+fi
+SENTINEL="${ZIKRA_TMP}/.zikra_sentinel"
+
+# ── Portable hostname — hostname -s not available on all Linux distros ────────
+HOSTNAME_SHORT="$(hostname -s 2>/dev/null)" \
+    || HOSTNAME_SHORT="$(hostname 2>/dev/null | cut -d. -f1)" \
+    || HOSTNAME_SHORT="${HOSTNAME:-unknown}"
+HOSTNAME_SHORT="${HOSTNAME_SHORT:-unknown}"
+
+# ── Read hook payload from stdin ──────────────────────────────────────────────
 PAYLOAD="$(cat 2>/dev/null || echo '{}')"
 
 HOOK_EVENT="$(printf '%s' "$PAYLOAD" | python3 -c \
@@ -31,6 +58,24 @@ zikra_post() {
     -H "User-Agent: curl/7.81.0" \
     --connect-timeout 15 \
     -d "$1" > /dev/null 2>&1
+}
+
+# ── Notify helper — stdout only, works everywhere ────────────────────────────
+zikra_notify() {
+    echo "[Zikra] $1" >/dev/null 2>&1
+}
+
+# ── Clipboard helper — cross-platform ────────────────────────────────────────
+copy_to_clipboard() {
+    if command -v clip.exe &>/dev/null; then
+        echo "$1" | clip.exe
+    elif command -v xclip &>/dev/null; then
+        echo "$1" | xclip -selection clipboard
+    elif command -v xsel &>/dev/null; then
+        echo "$1" | xsel --clipboard --input
+    elif command -v pbcopy &>/dev/null; then
+        echo "$1" | pbcopy
+    fi
 }
 
 # ── PreCompact handler ────────────────────────────────────────────────────────
@@ -117,6 +162,7 @@ print(json.dumps({
 }))" "$TITLE" "$DIARY" "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" 2>/dev/null)"
 
   [[ -n "$BODY" ]] && zikra_post "$BODY"
+  zikra_notify "Session logged"
 ) &
 disown
 

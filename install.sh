@@ -21,6 +21,10 @@ PROFILE_NAME="${PROFILE#--}"
 
 # ── Detect OS ───────────────────────────────────────────────────────────────
 OS="$(uname -s)"
+IS_WSL=false
+if [[ "$OS" == "Linux" ]] && grep -qi microsoft /proc/version 2>/dev/null; then
+    IS_WSL=true
+fi
 
 # ── Banner ──────────────────────────────────────────────────────────────────
 echo ""
@@ -216,8 +220,8 @@ with open(settings_path, "w") as f:
 print("  ✓ statusLine wired in settings.json")
 PYEOF
 
-  # Install systemd service on Linux
-  if [[ "$OS" == "Linux" ]]; then
+  # Install systemd service on native Linux only
+  if [[ "$OS" == "Linux" && "$IS_WSL" == false ]]; then
     PYTHON_BIN="$(which python3)"
     SERVICE_DIR="$HOME/.config/systemd/user"
     SERVICE_FILE="$SERVICE_DIR/zikra-watcher.service"
@@ -241,6 +245,10 @@ EOF
     systemctl --user enable zikra-watcher 2>/dev/null || true
     systemctl --user start  zikra-watcher 2>/dev/null || true
     echo "  ✓ systemd user service installed (zikra-watcher)"
+  elif [[ "$IS_WSL" == true ]]; then
+    echo "  ~ WSL detected: systemd skipped."
+    echo "    To auto-start the watcher, add this to ~/.bashrc or ~/.zshrc:"
+    echo "    nohup python3 ~/.claude/zikra_watcher.py >~/.claude/watcher.log 2>&1 &"
   else
     echo "  ~ macOS detected: systemd skipped."
     echo "    To auto-start the watcher, add a launchd plist for:"
