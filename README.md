@@ -1,22 +1,28 @@
-# zikra
+# Zikra 🚀
 
-> AI persistent memory and project management for developer teams.
+> Enterprise-grade AI persistent memory and project management for developer teams.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![n8n](https://img.shields.io/badge/n8n-FF6D5A?style=flat&logo=n8n&logoColor=white)](https://n8n.io/)
 
 Self-hosted · Agent-agnostic · PostgreSQL + pgvector · n8n
 
 ```
-zikra 17 runs · 847 memories │ you@yourserver │ Sonnet 4.6 │ ~/project (main) │ 387K/200K ████░░░░░░ 45%
+zikra 17 runs · 847 memories │ you@team-server │ Sonnet 4.6 │ ~/project (main) │ 387K/200K ████░░░░░░ 45%
 ```
 
-Zikra gives every AI agent on every machine a shared long-term memory —
-decisions, errors, schemas, and prompts — searchable, persistent, cross-machine.
+Zikra gives every AI agent on every machine a shared long-term memory — decisions, errors, schemas, and prompts — searchable, persistent, and synced across your entire organization.
 
 ## What it solves
 
-- Claude forgets everything between sessions → Zikra remembers forever
-- Different machines have no shared context → Zikra syncs across all of them
-- Gemini, Codex, Claude all work in silos → Zikra is agent-agnostic
-- Teams have no shared AI memory → Zikra has multi-user token access
+- **The Amnesia Problem:** Claude forgets everything between sessions → Zikra remembers forever.
+- **The Fragmentation Problem:** Different machines have no shared context → Zikra syncs across all of them via our robust n8n backend.
+- **The Silo Problem:** Gemini, Codex, Claude all work in silos → Zikra is agent-agnostic.
+- **The Team Barrier:** Teams have no shared AI memory → Zikra has multi-user token access and RBAC.
+
+## Solo Developer?
+If you just want a single-player version that runs on your laptop with no dependencies, check out **[Zikra-Lite](https://github.com/YOUR_GITHUB_USERNAME/Zikra-Lite)** (Python + SQLite).
 
 ## Install
 
@@ -49,10 +55,10 @@ curl -fsSL https://zikra.dev/install.sh | bash -s -- --full
 
 ## Requirements
 
-- PostgreSQL with pgvector extension
-- n8n (self-hosted)
+- PostgreSQL with `pgvector` extension
+- n8n (self-hosted or cloud)
 - curl and python3 on every machine
-- node (for --full statusline only)
+- node (for `--full` statusline only)
 
 ## Documentation
 
