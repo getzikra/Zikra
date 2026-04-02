@@ -52,6 +52,9 @@ function getGitBranch(dir) {
 
 function getModelLabel(model) {
   if (!model) return 'Claude';
+  // Claude Code sends model as an object {id: "..."} — extract the string
+  if (typeof model === 'object') model = model.id || '';
+  if (!model) return 'Claude';
   // claude-sonnet-4-6 → Sonnet 4.6
   // claude-opus-4-6   → Opus 4.6
   // claude-haiku-4-5  → Haiku 4.5
