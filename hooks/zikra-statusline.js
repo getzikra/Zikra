@@ -77,55 +77,68 @@ function getModelLabel(model) {
 }
 
 function tokenBar(payload) {
-  try {
-    if (!payload || !payload.usage) return '';
-    const used = payload.usage.input_tokens || 0;
-    const max  = payload.usage.context_window || 200000;
-    if (!used || !max) return '';
-    const pct         = used / max;
-    const TOTAL_BLOCKS = 8;
-    const filled      = Math.round(pct * TOTAL_BLOCKS);
-    const empty       = TOTAL_BLOCKS - filled;
+  const ctx = payload && payload.context_window;
+  if (!ctx) return '';
+  const pct = (ctx.used_percentage || 0) / 100;
+  if (pct === 0) return '';
 
-    let fillColor;
-    let showSkull = false;
-    if      (pct < 0.65) { fillColor = GREEN; }
-    else if (pct < 0.85) { fillColor = YELLOW; showSkull = true; }
-    else                 { fillColor = RED;    showSkull = true; }
+  const BLOCKS = 8;
+  const filled = Math.round(pct * BLOCKS);
+  const empty  = BLOCKS - filled;
 
-    const bar        = fillColor + '█'.repeat(Math.max(0, filled)) + DIM + '░'.repeat(Math.max(0, empty)) + RESET;
-    const skull      = showSkull ? '💀 ' : '';
-    const pctDisplay = Math.round(pct * 100);
-    const pctColor   = pct >= 0.85 ? RED : pct >= 0.65 ? YELLOW : GREEN;
+  let color, skull = false;
+  if      (pct < 0.65) { color = GREEN; }
+  else if (pct < 0.85) { color = YELLOW; skull = true; }
+  else                 { color = RED;    skull = true; }
 
-    return ` ${W}${skull}${formatTokens(used)}/${formatTokens(max)}${RESET} ${bar} ${pctColor}${pctDisplay}%${RESET}`;
-  } catch { return ''; }
+  const bar      = color + '█'.repeat(Math.max(0, filled)) + DIM + '░'.repeat(Math.max(0, empty)) + RESET;
+  const pctColor = pct >= 0.85 ? RED : pct >= 0.65 ? YELLOW : GREEN;
+  const icon     = skull ? '💀 ' : '   ';
+
+  return ` ${W}${icon}${Math.round(pct * 100)}%${RESET} ${bar} ${pctColor}${Math.round(pct * 100)}%${RESET}`;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-try {
-  let payload = null;
+// Read stdin asynchronously with a 200ms deadline.
+// fs.readFileSync(process.stdin.fd) blocks when Claude Code keeps the pipe open,
+// preventing the status bar from ever rendering.
+const chunks = [];
+let rendered  = false;
+
+function render(payload) {
+  if (rendered) return;
+  rendered = true;
   try {
-    if (!process.stdin.isTTY) {
-      const raw = fs.readFileSync(process.stdin.fd, 'utf8').trim();
-      if (raw) payload = JSON.parse(raw);
-    }
-  } catch { /* no stdin or not JSON — fine */ }
+    const { runs, memories, lastSaved, project } = getStats();
+    const age   = formatAge(lastSaved);
+    const model = getModelLabel(payload && (payload.model || payload.model_id));
+    const bar   = tokenBar(payload);
 
-  const { runs, memories, lastSaved, project } = getStats();
-  const age   = formatAge(lastSaved);
-  const model = getModelLabel(payload && (payload.model || payload.model_id));
-  const bar   = tokenBar(payload);
+    const line =
+      `${R}Zikra${RESET} ${D}(${age})${RESET} ${G}│${RESET} ` +
+      `${R}${runs}${RESET}${G} runs · ${RESET}${R}${memories}${RESET}${G} memories${RESET} ${G}│${RESET} ` +
+      `${W}${project}${RESET} ${G}│${RESET} ` +
+      `${W}${model}${RESET}` +
+      (bar ? ` ${G}│${RESET}` + bar : '');
 
-  const line =
-    `${R}Zikra${RESET} ${D}(${age})${RESET} ${G}│${RESET} ` +
-    `${R}${runs}${RESET}${G} runs · ${RESET}${R}${memories}${RESET}${G} memories${RESET} ${G}│${RESET} ` +
-    `${W}${project}${RESET} ${G}│${RESET} ` +
-    `${W}${model}${RESET}` +
-    (bar ? ` ${G}│${RESET}` + bar : '');
+    process.stdout.write(line + '\n');
+  } catch { /* silent fail */ }
+}
 
-  process.stdout.write(line + '\n');
+try {
+  const timer = setTimeout(() => { process.stdin.destroy(); render(null); }, 200);
+
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', chunk => chunks.push(chunk));
+  process.stdin.on('end', () => {
+    clearTimeout(timer);
+    let p = null;
+    try { p = JSON.parse(chunks.join('').trim()); } catch {}
+    render(p);
+  });
+  process.stdin.on('error', () => { clearTimeout(timer); render(null); });
+  process.stdin.resume();
 } catch {
-  // Silent fail — never break the Claude Code prompt
+  render(null);
 }
