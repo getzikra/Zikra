@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use Zikra in your work or research, please cite it using this metadata."
+type: software
+title: "Zikra — Persistent Memory for AI Coding Agents"
+abstract: "Zikra is a self-hosted, MCP-native persistent memory server for AI coding agents. It provides a shared memory pool that Claude Code, Cursor, Gemini CLI, and other AI tools can read and write across sessions and machines. Built on PostgreSQL + pgvector + n8n."
+authors:
+  - name: "Zikra Contributors"
+version: "0.1.0"
+license: MIT
+repository-code: "https://github.com/getzikra/zikra"
+url: "https://zikra.dev"
+keywords:
+  - claude-code
+  - mcp
+  - mcp-server
+  - persistent-memory
+  - ai-agents
+  - n8n
+  - postgresql
+  - pgvector
+  - self-hosted
+  - llm-memory

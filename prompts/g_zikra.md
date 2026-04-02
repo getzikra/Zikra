@@ -290,18 +290,18 @@ curl -fsSL $ZIKRA_RAW/hooks/zikra-statusline.js \
 chmod +x ~/.claude/hooks/zikra-statusline.js
 
 # Patch placeholders
-if [ "$OS_TYPE" = "Darwin" ]; then
+if [ "$OS" = "Darwin" ]; then
   sed -i '' "s|ZIKRA_URL_PLACEHOLDER|$ZIKRA_URL|g" ~/.claude/hooks/zikra-statusline.js
   sed -i '' "s|ZIKRA_TOKEN_PLACEHOLDER|$MY_TOKEN|g" ~/.claude/hooks/zikra-statusline.js
-  sed -i '' "s|DEFAULT_PROJECT_PLACEHOLDER|$USER_PROJECT|g" ~/.claude/hooks/zikra-statusline.js
+  sed -i '' "s|DEFAULT_PROJECT_PLACEHOLDER|$ZIKRA_PROJECT|g" ~/.claude/hooks/zikra-statusline.js
 else
   sed -i "s|ZIKRA_URL_PLACEHOLDER|$ZIKRA_URL|g" ~/.claude/hooks/zikra-statusline.js
   sed -i "s|ZIKRA_TOKEN_PLACEHOLDER|$MY_TOKEN|g" ~/.claude/hooks/zikra-statusline.js
-  sed -i "s|DEFAULT_PROJECT_PLACEHOLDER|$USER_PROJECT|g" ~/.claude/hooks/zikra-statusline.js
+  sed -i "s|DEFAULT_PROJECT_PLACEHOLDER|$ZIKRA_PROJECT|g" ~/.claude/hooks/zikra-statusline.js
 fi
 
 # Seed the stats cache
-echo '{"runs_today":0,"runs_total":0,"memory_count":0,"last_saved":null,"project":"'$USER_PROJECT'"}' \
+echo '{"runs_today":0,"runs_total":0,"memory_count":0,"last_saved":null,"project":"'$ZIKRA_PROJECT'"}' \
   > ~/.claude/cache/zikra-stats.json
 
 # Download and install stats update hook
