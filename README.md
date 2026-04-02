@@ -1,12 +1,13 @@
 # Zikra
 
-> Shared memory layer for AI agents and developer teams.
+> Persistent memory for Claude Code, Cursor, Gemini CLI, and other AI coding agents — shared across sessions and machines.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![n8n](https://img.shields.io/badge/n8n-FF6D5A?style=flat&logo=n8n&logoColor=white)](https://n8n.io/)
+[![MCP](https://img.shields.io/badge/MCP-native-blue)](https://modelcontextprotocol.io/)
 
-Self-hosted · Agent-agnostic · PostgreSQL + pgvector · n8n
+**Website:** [zikra.dev](https://zikra.dev) · Self-hosted · Agent-agnostic · MCP native · PostgreSQL + pgvector · n8n
 
 ```
 zikra 17 runs · 847 memories │ you@team-server │ Sonnet 4.6 │ ~/project (main) │ 387K/200K ████░░░░░░ 45%
@@ -14,11 +15,13 @@ zikra 17 runs · 847 memories │ you@team-server │ Sonnet 4.6 │ ~/project (
 
 ---
 
-I built Zikra because I was frustrated. I like doing architecture and research on Claude Web — it can browse sites, do deep research, give real suggestions on system design. But when it came time to actually run the code, that's Claude Code's job. The problem? They don't talk to each other. Every new session, you're starting from scratch.
+AI agents have no memory between sessions. Claude Code forgets your architecture decisions overnight. Gemini CLI has no idea what Claude Web researched this morning. Cursor on your teammate's machine has never seen your decisions.
 
-So I built a shared memory layer that sits between all of them. It grew from there — more people joined, and suddenly decisions made in one session needed to be visible to everyone. Requirements written by one person needed to reach Claude Code running on a different machine. That's what this repo is.
+Zikra fixes that. It's a **MCP-native memory server** that all your agents connect to. Every decision, requirement, error, and session summary — saved, searchable, and shared across every tool and every machine.
 
-**This is the full stack: PostgreSQL + pgvector + n8n.** If you're a solo developer, start with [Zikra Lite](https://github.com/getzikra/zikra-lite) instead — it's a single Python process that takes 60 seconds to set up.
+I built it because I was doing architecture on Claude Web and running code on Claude Code — two tools with no shared context. It grew from a single file into this when teammates joined and decisions needed to be visible everywhere.
+
+**This is the full stack: PostgreSQL + pgvector + n8n.** For solo developers, start with [Zikra Lite](https://github.com/getzikra/zikra-lite) — single Python process, 60-second setup, same API.
 
 — Mukarram
 
@@ -26,10 +29,26 @@ So I built a shared memory layer that sits between all of them. It grew from the
 
 ## What it solves
 
-- **Session amnesia:** Claude forgets everything between sessions → Zikra remembers across all of them.
-- **Context fragmentation:** Different machines have no shared context → every agent reads the same pool.
+- **Session amnesia:** Claude Code forgets everything between sessions → Zikra remembers across all of them.
+- **Context fragmentation:** Different machines, different agents, no shared context → every agent reads the same pool.
 - **Team silos:** Decisions made in one session invisible to everyone else → requirements sync automatically.
-- **Agent lock-in:** Claude, Gemini, ChatGPT all work in silos → Zikra is agent-agnostic, same API for all.
+- **Agent lock-in:** Claude, Gemini, ChatGPT, Cursor all work in silos → Zikra is agent-agnostic, same API for all.
+- **MCP integration:** Connects to Claude Desktop and any MCP-compatible client natively.
+
+## MCP Setup (Claude Desktop)
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "zikra": {
+      "url": "https://your-zikra-server/mcp",
+      "headers": { "Authorization": "Bearer YOUR_ZIKRA_TOKEN" }
+    }
+  }
+}
+```
 
 ## Install
 
