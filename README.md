@@ -50,6 +50,22 @@ curl -fsSL https://zikra.dev/install.sh | bash -s -- --standard
 curl -fsSL https://zikra.dev/install.sh | bash -s -- --full
 ```
 
+## Web UI
+
+Zikra includes a web interface to browse memories, view prompt runs, manage tokens, and search across your project.
+
+To start the UI:
+
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 in your browser.
+
+The UI reads your token and webhook URL from `ui/.env` — copy `ui/.env.example` and fill in your values, pointing `VITE_ZIKRA_URL` to your n8n webhook URL.
+
 ## What each profile installs
 
 |                                              | Minimal | Standard | Full |
@@ -72,6 +88,7 @@ curl -fsSL https://zikra.dev/install.sh | bash -s -- --full
 - [Architecture](docs/architecture.md)
 - [Install guide](docs/install.md)
 - [Commands reference](docs/commands.md)
+- [Onboarding guide](docs/onboarding.md)
 
 ## Zikra Lite vs Zikra
 
