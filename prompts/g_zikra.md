@@ -303,20 +303,38 @@ fi
 # Seed the stats cache
 echo '{"runs_today":0,"runs_total":0,"memory_count":0,"last_saved":null,"project":"'$USER_PROJECT'"}' \
   > ~/.claude/cache/zikra-stats.json
+
+# Download and install stats update hook
+curl -fsSL $ZIKRA_RAW/hooks/zikra-stats-update.sh \
+  -o ~/.claude/hooks/zikra-stats-update.sh
+chmod +x ~/.claude/hooks/zikra-stats-update.sh
 ```
 
-Wire statusLine in settings.json using python3:
+Wire statusLine and stats update hook in settings.json using python3:
 ```python
 import json, os
 path = os.path.expanduser('~/.claude/settings.json')
 s = json.load(open(path)) if os.path.exists(path) else {}
+
+# Wire statusline
 hook_cmd = 'node ~/.claude/hooks/zikra-statusline.js'
 if s.get('statusLine', {}).get('command') != hook_cmd:
     s['statusLine'] = {'type': 'command', 'command': hook_cmd}
-    json.dump(s, open(path, 'w'), indent=2)
     print('Statusline wired')
 else:
     print('Statusline already wired')
+
+# Wire stats update hook to Stop
+home = os.path.expanduser('~')
+stats_cmd = f'bash {home}/.claude/hooks/zikra-stats-update.sh'
+stop_hooks = s.setdefault('hooks', {}).setdefault('Stop', [])
+if not any(stats_cmd in str(h) for h in stop_hooks):
+    stop_hooks.append({'hooks': [{'type': 'command', 'command': stats_cmd, 'timeout': 10}]})
+    print('Stats update hook wired to Stop')
+else:
+    print('Stats update hook already wired')
+
+json.dump(s, open(path, 'w'), indent=2)
 ```
 
 Print: Zikra bar installed. Restart Claude Code to see it.
