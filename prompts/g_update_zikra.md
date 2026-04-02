@@ -33,15 +33,18 @@ git stash pop
 ls migrations/
 ```
 
-If there are new migration files (numbered higher than what you last ran), apply them in order:
+## Step 2b — Run database migrations
 
 ```bash
-# Example: apply migration 002
-docker exec -i zikra_postgres psql -U zikra -d zikra \
-  < migrations/002_whatever.sql
+cd /path/to/zikra
+./scripts/migrate.sh
 ```
 
-Always apply migrations in numeric order. Never skip one.
+This is safe. It only adds new schema, never deletes data.
+If it reports `Schema up to date` you are already current.
+
+The script reads your `.env` for DB credentials, checks the current version in
+`zikra.migrations`, and applies any pending `migrations/NNN_*.sql` files in order.
 
 ## Step 3 — Restart containers
 
