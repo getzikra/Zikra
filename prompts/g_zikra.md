@@ -276,3 +276,47 @@ Print this block with real values substituted:
         Memory is active from the first message.
 ─────────────────────────────────────────────────
 ```
+
+---
+
+## Step 11 — Install statusline (Zikra bar)
+
+```bash
+mkdir -p ~/.claude/hooks ~/.claude/cache
+
+# Download statusline script
+curl -fsSL $ZIKRA_RAW/hooks/zikra-statusline.js \
+  -o ~/.claude/hooks/zikra-statusline.js
+chmod +x ~/.claude/hooks/zikra-statusline.js
+
+# Patch placeholders
+if [ "$OS_TYPE" = "Darwin" ]; then
+  sed -i '' "s|ZIKRA_URL_PLACEHOLDER|$ZIKRA_URL|g" ~/.claude/hooks/zikra-statusline.js
+  sed -i '' "s|ZIKRA_TOKEN_PLACEHOLDER|$MY_TOKEN|g" ~/.claude/hooks/zikra-statusline.js
+  sed -i '' "s|DEFAULT_PROJECT_PLACEHOLDER|$USER_PROJECT|g" ~/.claude/hooks/zikra-statusline.js
+else
+  sed -i "s|ZIKRA_URL_PLACEHOLDER|$ZIKRA_URL|g" ~/.claude/hooks/zikra-statusline.js
+  sed -i "s|ZIKRA_TOKEN_PLACEHOLDER|$MY_TOKEN|g" ~/.claude/hooks/zikra-statusline.js
+  sed -i "s|DEFAULT_PROJECT_PLACEHOLDER|$USER_PROJECT|g" ~/.claude/hooks/zikra-statusline.js
+fi
+
+# Seed the stats cache
+echo '{"runs_today":0,"runs_total":0,"memory_count":0,"last_saved":null,"project":"'$USER_PROJECT'"}' \
+  > ~/.claude/cache/zikra-stats.json
+```
+
+Wire statusLine in settings.json using python3:
+```python
+import json, os
+path = os.path.expanduser('~/.claude/settings.json')
+s = json.load(open(path)) if os.path.exists(path) else {}
+hook_cmd = 'node ~/.claude/hooks/zikra-statusline.js'
+if s.get('statusLine', {}).get('command') != hook_cmd:
+    s['statusLine'] = {'type': 'command', 'command': hook_cmd}
+    json.dump(s, open(path, 'w'), indent=2)
+    print('Statusline wired')
+else:
+    print('Statusline already wired')
+```
+
+Print: Zikra bar installed. Restart Claude Code to see it.
