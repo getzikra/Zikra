@@ -95,6 +95,22 @@ The UI reads your token and webhook URL from `ui/.env` — copy `ui/.env.example
 
 <!-- Shared file — keep in sync with zikra-lite/hooks/ when editing -->
 
+## How results are ranked
+
+Zikra does not return results in raw similarity order. Every search result
+passes through a scoring step that adjusts ranking based on:
+
+- **Age** — recent memories rank higher. A memory created today scores
+  roughly 2× higher than the same memory from 30 days ago, and 10× higher
+  than one from 90 days ago. Memories never disappear — they decay to a
+  floor of 5% weight and stay searchable.
+- **Access frequency** — for prompts, every run increments a counter.
+  Frequently used prompts surface higher in search results.
+- **Confidence** — memories saved with a lower confidence_score rank lower.
+  Use confidence to signal uncertainty when saving memories.
+
+No configuration required. This works automatically on every search.
+
 ## Requirements
 
 - PostgreSQL with `pgvector` extension
@@ -117,7 +133,7 @@ The UI reads your token and webhook URL from `ui/.env` — copy `ui/.env.example
 | Vector search | sqlite-vec | pgvector |
 | Scale | Millions of rows | Billions of rows |
 | n8n workflows | ❌ | ✅ Visual editor, scheduling |
-| Decay scoring | Manual | Automated via n8n schedule |
+| Smart ranking | Age + frequency + confidence | Age + frequency + confidence |
 | Admin UI | Basic | Django admin |
 | Backup | Copy one file | pg_dump, managed |
 | Setup time | 60 seconds | 30–60 minutes |
