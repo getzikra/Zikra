@@ -433,7 +433,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n    id,\n    title,\n    LEFT(content_md, 500) AS snippet,\n    memory_type,\n    project,\n    module,\n    ROUND((\n        0.7 * (1 - (embedding <=> '[{{ $(\"SR Embed\").first().json.data[0].embedding.join(\",\") }}]'::vector))\n        +\n        0.3 * ts_rank_cd(\n            to_tsvector('english', coalesce(title,'') || ' ' || coalesce(content_md,'')),\n            plainto_tsquery('english', '{{ $(\"Zikra Webhook\").first().json.body.query.replace(/\\'/g,\"''\") }}')\n        )\n    )::numeric, 4) AS score,\n    created_at\nFROM zikra.memories\nWHERE searchable = true\n  AND embedding IS NOT NULL\n  AND (\n    '{{ $(\"Auth Lookup\").first().json.role }}' = 'owner'\n    OR project = '{{ $(\"Zikra Webhook\").first().json.body.project }}'\n    OR project = 'global'\n  )\nORDER BY score DESC\nLIMIT {{ $(\"Zikra Webhook\").first().json.body.max_results || 5 }};",
+        "query": "SELECT\n    id,\n    title,\n    LEFT(content_md, 500) AS snippet,\n    memory_type,\n    project,\n    module,\n    ROUND((\n        0.7 * (1 - (embedding <=> '[{{ $(\"SR Embed\").first().json.data[0].embedding.join(\",\") }}]'::vector))\n        +\n        0.3 * ts_rank_cd(\n            to_tsvector('english', coalesce(title,'') || ' ' || coalesce(content_md,'')),\n            plainto_tsquery('english', '{{ $(\"Zikra Webhook\").first().json.body.query.replace(/\\'/g,\"''\") }}')\n        )\n    )::numeric, 4) AS score,\n    created_at,\n    access_count,\n    confidence_score\nFROM zikra.memories\nWHERE searchable = true\n  AND embedding IS NOT NULL\n  AND (\n    '{{ $(\"Auth Lookup\").first().json.role }}' = 'owner'\n    OR project = '{{ $(\"Zikra Webhook\").first().json.body.project }}'\n    OR project = 'global'\n  )\nORDER BY score DESC\nLIMIT {{ $(\"Zikra Webhook\").first().json.body.max_results || 5 }};",
         "options": {}
       },
       "id": "3a9eba22-63cc-4529-9239-59b3956ffead",
@@ -454,7 +454,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// SR Format v2 — hybrid search + tiered snippets + token budget\nconst items = $input.all();\nconst body = $('Zikra Webhook').first().json.body;\n\n// Token budget: caller can pass max_tokens, default 1500\nconst TOKEN_BUDGET = body.max_tokens || 1500;\n// Rough chars-per-token estimate for English text\nconst CHARS_PER_TOKEN = 4;\nconst CHAR_BUDGET = TOKEN_BUDGET * CHARS_PER_TOKEN;\n\n// Tiered snippet lengths by rank position\nconst SNIPPET_LENGTHS = [500, 300, 200, 150, 150];\n\nlet results = [];\nlet totalChars = 0;\n\nfor (let i = 0; i < items.length; i++) {\n    const item = items[i];\n    if (item.json.error) continue;\n\n    // Tiered truncation — top result gets most context\n    const maxLen = SNIPPET_LENGTHS[i] || 150;\n    const fullSnippet = item.json.snippet || item.json.content_snippet || '';\n    const snippet = fullSnippet.substring(0, maxLen);\n\n    // Enforce token budget — stop adding results once exceeded\n    const entryChars = (item.json.title || '').length + snippet.length;\n    if (totalChars + entryChars > CHAR_BUDGET && results.length > 0) break;\n    totalChars += entryChars;\n\n    results.push({\n        id: item.json.id,\n        title: item.json.title,\n        snippet: snippet,\n        memory_type: item.json.memory_type,\n        project: item.json.project,\n        module: item.json.module,\n        score: item.json.score,\n        created_at: item.json.created_at\n    });\n}\n\nreturn [{\n    json: {\n        results,\n        count: results.length,\n        mode: 'hybrid',\n        token_budget_used: Math.round(totalChars / CHARS_PER_TOKEN)\n    }\n}];\n"
+        "jsCode": "// SR Format v2 \u2014 hybrid search + tiered snippets + token budget\nconst items = $input.all();\nconst body = $('Zikra Webhook').first().json.body;\n\n// Token budget: caller can pass max_tokens, default 1500\nconst TOKEN_BUDGET = body.max_tokens || 1500;\n// Rough chars-per-token estimate for English text\nconst CHARS_PER_TOKEN = 4;\nconst CHAR_BUDGET = TOKEN_BUDGET * CHARS_PER_TOKEN;\n\n// Tiered snippet lengths by rank position\nconst SNIPPET_LENGTHS = [500, 300, 200, 150, 150];\n\nlet results = [];\nlet totalChars = 0;\n\nfor (let i = 0; i < items.length; i++) {\n    const item = items[i];\n    if (item.json.error) continue;\n\n    // Tiered truncation \u2014 top result gets most context\n    const maxLen = SNIPPET_LENGTHS[i] || 150;\n    const fullSnippet = item.json.snippet || item.json.content_snippet || '';\n    const snippet = fullSnippet.substring(0, maxLen);\n\n    // Enforce token budget \u2014 stop adding results once exceeded\n    const entryChars = (item.json.title || '').length + snippet.length;\n    if (totalChars + entryChars > CHAR_BUDGET && results.length > 0) break;\n    totalChars += entryChars;\n\n    results.push({\n        id: item.json.id,\n        title: item.json.title,\n        snippet: snippet,\n        memory_type: item.json.memory_type,\n        project: item.json.project,\n        module: item.json.module,\n        _raw_score: item.json.score,\n        score: item.json.score,\n        created_at: item.json.created_at,\n        access_count: item.json.access_count,\n        confidence_score: item.json.confidence_score\n    });\n}\n\nreturn [{\n    json: {\n        results,\n        count: results.length,\n        mode: 'hybrid',\n        token_budget_used: Math.round(totalChars / CHARS_PER_TOKEN)\n    }\n}];\n"
       },
       "id": "3a12fa87-7497-48fd-9122-4f73b0389989",
       "name": "SR Format",
@@ -737,7 +737,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst row = $input.first().json;\nconst wb  = $('Zikra Webhook').first().json.body;\nconst project = wb.project || 'unknown';\nconst mod     = wb.module  || 'core';\nconst errors    = row.errors    || [];\nconst prompts   = row.prompts   || [];\nconst decisions = row.decisions || [];\nconst schema    = row.schema_content || '';\n\nconst errSec = errors.length\n  ? errors.map(e=>`### ${e.title}\\n${e.snippet}\\n_${e.created_at}_`).join('\\n\\n')\n  : '_No unresolved errors_';\nconst decSec = decisions.length\n  ? decisions.map(d=>`### ${d.title}\\n${d.snippet}`).join('\\n\\n')\n  : '_No recent decisions_';\nconst prmSec = prompts.length\n  ? prompts.map(p=>`- **${p.title}**: ${p.snippet}`).join('\\n')\n  : '_None_';\n\nconst claudemd = `# Project: ${project}\n# Cortex: https://n8n.veltisai.com/webhook/cortex\n# Module: ${mod}\n\n## Recent Unresolved Errors\n${errSec}\n\n## Current Schema (${mod})\n${schema || '_No schema found_'}\n\n## Active Decisions\n${decSec}\n\n## Top Prompts\n${prmSec}\n\n## Debug Protocol\n1. Read exact error — do not paraphrase\n2. Search cortex: cortex search <error>\n3. Check known resolutions\n4. Fix or escalate\n5. Log to cortex: cortex log_error\n`;\nreturn [{json:{claudemd,project,module:mod}}];\n"
+        "jsCode": "\nconst row = $input.first().json;\nconst wb  = $('Zikra Webhook').first().json.body;\nconst project = wb.project || 'unknown';\nconst mod     = wb.module  || 'core';\nconst errors    = row.errors    || [];\nconst prompts   = row.prompts   || [];\nconst decisions = row.decisions || [];\nconst schema    = row.schema_content || '';\n\nconst errSec = errors.length\n  ? errors.map(e=>`### ${e.title}\\n${e.snippet}\\n_${e.created_at}_`).join('\\n\\n')\n  : '_No unresolved errors_';\nconst decSec = decisions.length\n  ? decisions.map(d=>`### ${d.title}\\n${d.snippet}`).join('\\n\\n')\n  : '_No recent decisions_';\nconst prmSec = prompts.length\n  ? prompts.map(p=>`- **${p.title}**: ${p.snippet}`).join('\\n')\n  : '_None_';\n\nconst claudemd = `# Project: ${project}\n# Cortex: https://n8n.veltisai.com/webhook/cortex\n# Module: ${mod}\n\n## Recent Unresolved Errors\n${errSec}\n\n## Current Schema (${mod})\n${schema || '_No schema found_'}\n\n## Active Decisions\n${decSec}\n\n## Top Prompts\n${prmSec}\n\n## Debug Protocol\n1. Read exact error \u2014 do not paraphrase\n2. Search cortex: cortex search <error>\n3. Check known resolutions\n4. Fix or escalate\n5. Log to cortex: cortex log_error\n`;\nreturn [{json:{claudemd,project,module:mod}}];\n"
       },
       "id": "fbb21c88-037a-499b-86df-c376e1821efa",
       "name": "SC Assemble",
@@ -766,7 +766,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({\n  error: \"Unknown or missing command: \" + $(\"Command Normaliser\").first().json.body._raw_command,\n  _received_command: $(\"Command Normaliser\").first().json.body._raw_command || $(\"Zikra Webhook\").first().json.body.command,\n  _use_command: \"unknown — see commands list above\",\n  hint: \"Send a POST request with a JSON body containing a 'command' field and a Bearer token in the Authorization header.\",\n  system: \"Zikra — AI persistent memory system. Webhook: https://n8n.veltisai.com/webhook/zikra\",\n  projects: [\"veltisai\", \"molten8\", \"zikra\", \"global\"],\n  commands: {\n    search: { description: \"Search memories by keyword\", aliases: [\"find\",\"query\",\"recall\",\"lookup\",\"search_memory\",\"retrieve\",\"remember\"] },\n    save_memory: { description: \"Save a decision, note, or context\", aliases: [\"save\",\"store\",\"write_memory\",\"add_memory\",\"write\"] },\n    get_prompt: { description: \"Fetch a named prompt\", aliases: [\"run_prompt\",\"fetch_prompt\",\"load_prompt\",\"execute_prompt\"] },\n    get_memory: { description: \"Fetch full content of one memory by exact title or UUID\" },\n    log_run: { description: \"Log session end\", aliases: [\"log_session\",\"end_session\",\"finish_run\",\"log_completion\"] },\n    log_error: { description: \"Log a bug\", aliases: [\"log_bug\",\"report_error\",\"save_error\",\"log_failure\"] },\n    sync_claudemd: { description: \"Sync CLAUDE.md\", aliases: [\"sync\",\"claudemd\"] },\n    debug_protocol: { description: \"Debug unresolved errors\", aliases: [\"debug\",\"dp\"] },\n    get_schema: { description: \"Get DB schema\", aliases: [\"schema\",\"get_db\"] },\n    save_requirement: { description: \"Submit a requirement for review\" },\n    list_requirements: { description: \"List pending requirements\" },\n    promote_requirement: { description: \"Promote requirement to prompt (owner only)\" },\n    create_token: { description: \"Create access token (owner only)\" }\n  }\n}) }}",
+        "responseBody": "={{ JSON.stringify({\n  error: \"Unknown or missing command: \" + $(\"Command Normaliser\").first().json.body._raw_command,\n  _received_command: $(\"Command Normaliser\").first().json.body._raw_command || $(\"Zikra Webhook\").first().json.body.command,\n  _use_command: \"unknown \u2014 see commands list above\",\n  hint: \"Send a POST request with a JSON body containing a 'command' field and a Bearer token in the Authorization header.\",\n  system: \"Zikra \u2014 AI persistent memory system. Webhook: https://n8n.veltisai.com/webhook/zikra\",\n  projects: [\"veltisai\", \"molten8\", \"zikra\", \"global\"],\n  commands: {\n    search: { description: \"Search memories by keyword\", aliases: [\"find\",\"query\",\"recall\",\"lookup\",\"search_memory\",\"retrieve\",\"remember\"] },\n    save_memory: { description: \"Save a decision, note, or context\", aliases: [\"save\",\"store\",\"write_memory\",\"add_memory\",\"write\"] },\n    get_prompt: { description: \"Fetch a named prompt\", aliases: [\"run_prompt\",\"fetch_prompt\",\"load_prompt\",\"execute_prompt\"] },\n    get_memory: { description: \"Fetch full content of one memory by exact title or UUID\" },\n    log_run: { description: \"Log session end\", aliases: [\"log_session\",\"end_session\",\"finish_run\",\"log_completion\"] },\n    log_error: { description: \"Log a bug\", aliases: [\"log_bug\",\"report_error\",\"save_error\",\"log_failure\"] },\n    sync_claudemd: { description: \"Sync CLAUDE.md\", aliases: [\"sync\",\"claudemd\"] },\n    debug_protocol: { description: \"Debug unresolved errors\", aliases: [\"debug\",\"dp\"] },\n    get_schema: { description: \"Get DB schema\", aliases: [\"schema\",\"get_db\"] },\n    save_requirement: { description: \"Submit a requirement for review\" },\n    list_requirements: { description: \"List pending requirements\" },\n    promote_requirement: { description: \"Promote requirement to prompt (owner only)\" },\n    create_token: { description: \"Create access token (owner only)\" }\n  }\n}) }}",
         "options": {}
       },
       "id": "4a9c128f-c37f-4677-bbc3-f89096e48a33",
@@ -1185,7 +1185,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Search Zikra for memories, decisions, prompts, and errors. Always search before starting work to load relevant context.\n\nUse command: search. Aliases accepted: find, query, recall, lookup, search_memory, retrieve, remember.\nDo NOT use get_memory for broad searches — use this tool.\n\nRequired fields:\n- query (string): what to search for\n- project (string): project name\n\nOptional:\n- max_results (integer, default 5)\n- max_tokens (integer, default 1500): token budget for results",
+        "toolDescription": "Search Zikra for memories, decisions, prompts, and errors. Always search before starting work to load relevant context.\n\nUse command: search. Aliases accepted: find, query, recall, lookup, search_memory, retrieve, remember.\nDo NOT use get_memory for broad searches \u2014 use this tool.\n\nRequired fields:\n- query (string): what to search for\n- project (string): project name\n\nOptional:\n- max_results (integer, default 5)\n- max_tokens (integer, default 1500): token budget for results",
         "method": "POST",
         "url": "https://n8n.veltisai.com/webhook/zikra",
         "authentication": "genericCredentialType",
@@ -1416,7 +1416,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Log a bug or unexpected failure to Zikra so it can be tracked and resolved.\n\nRequired fields:\n- title (string): short description of the error, e.g. \"Login button not rendering on mobile\"\n- content_md (string): full details — what happened, what was expected, stack trace if available\n- project (string): one of veltisai, molten8, zikra, global\n\nReturns: {status: \"logged\", id: uuid}",
+        "toolDescription": "Log a bug or unexpected failure to Zikra so it can be tracked and resolved.\n\nRequired fields:\n- title (string): short description of the error, e.g. \"Login button not rendering on mobile\"\n- content_md (string): full details \u2014 what happened, what was expected, stack trace if available\n- project (string): one of veltisai, molten8, zikra, global\n\nReturns: {status: \"logged\", id: uuid}",
         "method": "POST",
         "url": "https://n8n.veltisai.com/webhook/zikra",
         "authentication": "genericCredentialType",
@@ -1470,7 +1470,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Submit a new feature requirement or change request for owner review.\nUse when you want to propose something new — the owner (Mukarram) will review and promote it to a prompt.\n\nRequired fields:\n- title (string): short requirement title, e.g. \"Add dark mode toggle to dashboard\"\n- content_md (string): full requirement description — what, why, acceptance criteria\n\nProject and created_by are set automatically from your token.\nRequirements are pending until promoted. Use zikra_list_requirements to see pending items.\n\nReturns: {status: \"saved\", type: \"requirement\", id: uuid, pending_review: true}",
+        "toolDescription": "Submit a new feature requirement or change request for owner review.\nUse when you want to propose something new \u2014 the owner (Mukarram) will review and promote it to a prompt.\n\nRequired fields:\n- title (string): short requirement title, e.g. \"Add dark mode toggle to dashboard\"\n- content_md (string): full requirement description \u2014 what, why, acceptance criteria\n\nProject and created_by are set automatically from your token.\nRequirements are pending until promoted. Use zikra_list_requirements to see pending items.\n\nReturns: {status: \"saved\", type: \"requirement\", id: uuid, pending_review: true}",
         "method": "POST",
         "url": "https://n8n.veltisai.com/webhook/zikra",
         "authentication": "genericCredentialType",
@@ -1519,7 +1519,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "List all pending requirements waiting for owner review.\nNo parameters needed — results are scoped to your project automatically.\n\nUse this to:\n- See what requirements have been submitted\n- Check if your requirement was saved\n- Review pending items before a planning session\n\nReturns: {count: number, requirements: [{id, title, snippet, created_by, created_at}]}",
+        "toolDescription": "List all pending requirements waiting for owner review.\nNo parameters needed \u2014 results are scoped to your project automatically.\n\nUse this to:\n- See what requirements have been submitted\n- Check if your requirement was saved\n- Review pending items before a planning session\n\nReturns: {count: number, requirements: [{id, title, snippet, created_by, created_at}]}",
         "method": "POST",
         "url": "https://n8n.veltisai.com/webhook/zikra",
         "authentication": "genericCredentialType",
@@ -1602,7 +1602,7 @@
     },
     {
       "parameters": {
-        "toolDescription": "Fetch the current database or module schema for a project. Use when working on backend code, migrations, or anything requiring knowledge of table structure.\n\nRequired fields:\n- project (string): one of veltisai, molten8, zikra, global\n\nOptional:\n- module (string): specific module name to filter schema, e.g. \"auth\", \"payments\"\n\nReturns: {content_md, title, version, module} — the schema in markdown format",
+        "toolDescription": "Fetch the current database or module schema for a project. Use when working on backend code, migrations, or anything requiring knowledge of table structure.\n\nRequired fields:\n- project (string): one of veltisai, molten8, zikra, global\n\nOptional:\n- module (string): specific module name to filter schema, e.g. \"auth\", \"payments\"\n\nReturns: {content_md, title, version, module} \u2014 the schema in markdown format",
         "method": "POST",
         "url": "https://n8n.veltisai.com/webhook/zikra",
         "authentication": "genericCredentialType",
@@ -1771,7 +1771,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const input = $input.first();\nif (input.json && input.json.id) {\n  return [{ json: { id: input.json.id, source: 'insert' } }];\n}\n// No id means conflict was ignored or insert failed — signal lookup needed\nconst b = $('Zikra Webhook').first().json.body;\nreturn [{ json: {\n  id: null,\n  _title: b.title || '',\n  _memory_type: b.memory_type || 'conversation',\n  source: 'lookup_needed'\n} }];\n"
+        "jsCode": "const input = $input.first();\nif (input.json && input.json.id) {\n  return [{ json: { id: input.json.id, source: 'insert' } }];\n}\n// No id means conflict was ignored or insert failed \u2014 signal lookup needed\nconst b = $('Zikra Webhook').first().json.body;\nreturn [{ json: {\n  id: null,\n  _title: b.title || '',\n  _memory_type: b.memory_type || 'conversation',\n  source: 'lookup_needed'\n} }];\n"
       },
       "id": "sm-insert-fallback-001",
       "name": "SM Insert Fallback",
@@ -1815,6 +1815,19 @@
         -112,
         -96
       ]
+    },
+    {
+      "id": "sr-score-ranking",
+      "name": "Apply Score Ranking",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const now = Date.now();\nconst LN2 = 0.693;\n\nfunction scoreItem(rawScore, item) {\n  const created = item.created_at ? new Date(item.created_at).getTime() : now;\n  const ageDays = Math.max(0, (now - created) / (1000 * 60 * 60 * 24));\n  const decay = Math.max(0.05, Math.exp(-LN2 * ageDays / 30));\n  const freq  = 1.0 + 0.1 * Math.log1p(item.access_count || 0);\n  const conf  = parseFloat(item.confidence_score || 1.0);\n  return rawScore * decay * freq * conf;\n}\n\nconst input = .first().json;\nconst results = (input.results || []).map(item => {\n  const raw = item._raw_score || item.score || 1.0;\n  return {\n    ...item,\n    final_score: scoreItem(raw, item)\n  };\n}).sort((a, b) => b.final_score - a.final_score);\n\n// Strip scoring internals before response\nconst clean = results.map(({ _raw_score, access_count, confidence_score, final_score, ...rest }) => ({\n  ...rest,\n  score: parseFloat(final_score.toFixed(4))\n}));\n\nreturn [{\n  json: {\n    results: clean,\n    count: clean.length,\n    mode: input.mode,\n    token_budget_used: input.token_budget_used\n  }\n}];"
+      }
     }
   ],
   "pinData": {},
@@ -1980,7 +1993,7 @@
       "main": [
         [
           {
-            "node": "SR Respond",
+            "node": "Apply Score Ranking",
             "type": "main",
             "index": 0
           }
@@ -2400,6 +2413,17 @@
         [
           {
             "node": "Auth Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Score Ranking": {
+      "main": [
+        [
+          {
+            "node": "SR Respond",
             "type": "main",
             "index": 0
           }
