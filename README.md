@@ -2,6 +2,8 @@
 
 > Persistent memory for Claude Code, Cursor, Gemini CLI, and other AI coding agents — shared across sessions and machines.
 
+Zikra Full is for teams. If you are a solo developer, start with [Zikra Lite](https://github.com/getzikra/zikra-lite) — 3-step install, no Docker, no PostgreSQL.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=flat&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![n8n](https://img.shields.io/badge/n8n-FF6D5A?style=flat&logo=n8n&logoColor=white)](https://n8n.io/)
@@ -52,22 +54,18 @@ Add to your `claude_desktop_config.json`:
 
 ## Install
 
-```bash
-curl -fsSL https://zikra.dev/install.sh | bash
+1. Clone the repo
+2. Copy `.env.example` to `.env` and fill in credentials
+3. `docker compose up -d`
+4. Import `workflow/zikra_mcp_router.json` into n8n and activate it
+5. Run the Claude Code onboarding command (see below)
+
+**Onboard Claude Code (after install):**
 ```
-
-Choose a profile:
-
-```bash
-# Minimal — hooks + context file only (60 seconds)
-curl -fsSL https://zikra.dev/install.sh | bash -s -- --minimal
-
-# Standard — adds diary auto-extract + PreCompact hook (recommended)
-curl -fsSL https://zikra.dev/install.sh | bash -s -- --standard
-
-# Full — adds statusline bar + session capture daemon
-curl -fsSL https://zikra.dev/install.sh | bash -s -- --full
+Fetch https://raw.githubusercontent.com/getzikra/zikra/main/prompts/g_zikra.md
+and follow every instruction in it.
 ```
+Paste into any Claude Code session. Installs hooks and statusline bar automatically.
 
 ## Web UI
 
@@ -94,6 +92,8 @@ The UI reads your token and webhook URL from `ui/.env` — copy `ui/.env.example
 | Diary auto-extract on session end            | ❌      | ✅       | ✅   |
 | Session capture daemon                       | ❌      | ❌       | ✅   |
 | Statusline bar in Claude Code                | ❌      | ❌       | ✅   |
+
+<!-- Shared file — keep in sync with zikra-lite/hooks/ when editing -->
 
 ## Requirements
 
