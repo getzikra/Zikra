@@ -15,6 +15,8 @@
 
 ## User roles
 
+> **Zikra Full only.** The full role matrix below is enforced by Zikra Full (n8n + PostgreSQL). Zikra Lite enforces only one restriction: `create_token` requires `owner` or `admin` role. All other role distinctions are metadata only in Lite.
+
 | Role | Search | Save memories | Save prompts | Create tokens | Delete |
 |------|--------|--------------|-------------|--------------|--------|
 | owner | yes | yes | yes | yes | yes |
@@ -55,7 +57,7 @@ Set a persona when creating a token in the Web UI or via `create_token`.
 Paste this into Claude Code to install Zikra automatically:
 
 ```
-Fetch https://raw.githubusercontent.com/getzikra/zikra-lite/main/prompts/g_install_zikra_lite.md
+Fetch https://raw.githubusercontent.com/getzikra/zikra/main/prompts/g_zikra.md
 and follow every instruction in it.
 URL: https://n8n.yourdomain.com/webhook/zikra, Token: from your admin, Project: global
 ```

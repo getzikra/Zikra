@@ -4,6 +4,8 @@
 
 Before running the installer, you need:
 
+- [ ] [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and working (`claude --version`)
+- [ ] [Docker](https://docs.docker.com/get-docker/) + [Docker Compose v2](https://docs.docker.com/compose/install/) — required for the recommended install
 - [ ] A running PostgreSQL instance with the `pgvector` extension
 - [ ] A running n8n instance (self-hosted)
 - [ ] The Zikra n8n workflow imported and active
@@ -165,10 +167,23 @@ Note this URL — you will need it during install.sh.
 
 ## Running install.sh
 
+### Step 0: Generate your bearer token
+
+Before running install.sh you need a bearer token. Generate one now:
+
+```bash
+openssl rand -hex 16
+# example output: 4f3a9b2c1d8e7f6a5b4c3d2e1f0a9b8c
+```
+
+Copy the output — you will paste it when install.sh prompts for your token.
+
+### Run the installer
+
 On each agent machine:
 
 ```bash
-# Standard profile (recommended)
+# Quickest method — pipe to bash (review the script first if you prefer)
 curl -fsSL https://zikra.dev/install.sh | bash
 
 # Or choose a profile explicitly:
@@ -177,9 +192,17 @@ curl -fsSL https://zikra.dev/install.sh | bash -s -- --standard
 curl -fsSL https://zikra.dev/install.sh | bash -s -- --full
 ```
 
+**Manual alternative** (inspect before running):
+```bash
+curl -fsSL https://zikra.dev/install.sh -o /tmp/zikra_install.sh
+# Review the file before executing:
+less /tmp/zikra_install.sh
+bash /tmp/zikra_install.sh
+```
+
 When prompted:
 1. **Webhook URL** — paste your n8n webhook URL (e.g. `https://n8n.example.com/webhook/zikra`)
-2. **Bearer token** — paste a token you created via the `create_token` command
+2. **Bearer token** — paste the token you generated in Step 0
 3. **Default project** — a short lowercase name (e.g. `myproject`)
 
 ### Creating your first bearer token
@@ -188,11 +211,15 @@ Before running install.sh, create a token via the admin interface or directly
 in the database:
 
 ```sql
--- In psql:
+-- In psql (Zikra Full — uses `label` column):
 INSERT INTO zikra.access_tokens (token, label, role)
 VALUES ('myproject-' || gen_random_uuid()::text, 'main token', 'writer')
 RETURNING token;
 ```
+
+> **Column name note:** Zikra Full (PostgreSQL) uses `label` to identify token owners.
+> Zikra Lite (SQLite) uses `person_name` instead. These are functionally equivalent
+> but the column names differ — be aware when writing raw SQL against either backend.
 
 Copy the returned token value — this is your bearer token.
 

@@ -9,6 +9,7 @@ set -euo pipefail
 ZIKRA_URL="ZIKRA_URL_PLACEHOLDER"
 ZIKRA_TOKEN="ZIKRA_TOKEN_PLACEHOLDER"
 DEFAULT_PROJECT="DEFAULT_PROJECT_PLACEHOLDER"
+ZIKRA_USER_AGENT="curl/7.81.0"
 CACHE_FILE="$HOME/.claude/cache/zikra-stats.json"
 ZIKRA_RAW="https://raw.githubusercontent.com/getzikra/zikra/main"
 
@@ -19,7 +20,7 @@ zikra_post() {
   curl -s -X POST "$ZIKRA_URL" \
     -H "Authorization: Bearer $ZIKRA_TOKEN" \
     -H "Content-Type: application/json" \
-    -H "User-Agent: curl/7.81.0" \
+    -H "User-Agent: $ZIKRA_USER_AGENT" \
     --connect-timeout 15 \
     -d "$1"
 }
@@ -143,7 +144,7 @@ print(f\"  updated_at:    {d.get('updated_at',   '(never)')}\")
       -X POST "$ZIKRA_URL" \
       -H "Authorization: Bearer $ZIKRA_TOKEN" \
       -H "Content-Type: application/json" \
-      -H "User-Agent: curl/7.81.0" \
+      -H "User-Agent: $ZIKRA_USER_AGENT" \
       --connect-timeout 10 \
       -d "$BODY" 2>/dev/null || echo "000")"
 

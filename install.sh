@@ -105,6 +105,11 @@ chmod +x ~/.claude/zikra_autolog.sh
 patch_all ~/.claude/zikra_autolog.sh
 echo "  ✓ zikra_autolog.sh installed"
 
+echo "  → Downloading notify.sh..."
+curl -fsSL "$ZIKRA_RAW/hooks/notify.sh" -o ~/.claude/notify.sh
+chmod +x ~/.claude/notify.sh
+echo "  ✓ notify.sh installed"
+
 if [[ ! -f ~/.claude/CLAUDE.md ]]; then
   echo "  → Downloading CLAUDE.md..."
   curl -fsSL "$ZIKRA_RAW/context/CLAUDE.md" -o ~/.claude/CLAUDE.md

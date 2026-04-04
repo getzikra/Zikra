@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // zikra-statusline.js — Claude Code status line renderer
 // Reads local cache only. Zero network calls. Silent fail on any error.
+// Keep in sync with zikra-lite/hooks/zikra-statusline.js
 //
 // Output format:
 //   Zikra (8m ago) │ 17 runs · 847 memories │ veltisai │ Opus 4.6 │ 💀 650K/1M ████░░░░ 65%

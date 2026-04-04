@@ -6,13 +6,26 @@
 # Invoked automatically by Claude Code hooks — never run manually.
 # Works on: WSL, native Linux, macOS, Git Bash / MSYS on Windows.
 #
-# CANONICAL SOURCE: /mnt/d/GetZikra/zikra/hooks/zikra_autolog.sh
-# Mirror: /mnt/d/GetZikra/zikra-lite/hooks/zikra_autolog.sh
-# When editing, keep both copies in sync.
+# Canonical source: zikra-lite/hooks/zikra_autolog.sh — sync manually on changes.
+# This file (zikra/hooks/zikra_autolog.sh) must stay identical to the lite version.
 
 ZIKRA_URL="ZIKRA_URL_PLACEHOLDER"
 ZIKRA_TOKEN="ZIKRA_TOKEN_PLACEHOLDER"
 DEFAULT_PROJECT="DEFAULT_PROJECT_PLACEHOLDER"
+ZIKRA_USER_AGENT="curl/7.81.0"
+
+# Load from ~/.zikra/token if install.sh hasn't patched the placeholders yet
+_ZIKRA_TOKEN_FILE="$HOME/.zikra/token"
+if [[ -f "$_ZIKRA_TOKEN_FILE" ]]; then
+  _load_kv() { grep "^$1=" "$_ZIKRA_TOKEN_FILE" 2>/dev/null | head -1 | cut -d= -f2-; }
+  [[ "$ZIKRA_URL"       == *PLACEHOLDER* ]] && ZIKRA_URL="$(_load_kv ZIKRA_URL)"
+  [[ "$ZIKRA_TOKEN"     == *PLACEHOLDER* ]] && ZIKRA_TOKEN="$(_load_kv ZIKRA_TOKEN)"
+  [[ "$DEFAULT_PROJECT" == *PLACEHOLDER* ]] && DEFAULT_PROJECT="$(_load_kv ZIKRA_PROJECT)"
+fi
+# Also honour plain env vars as a last resort
+[[ "$ZIKRA_URL"       == *PLACEHOLDER* ]] && ZIKRA_URL="${ZIKRA_URL_ENV:-$ZIKRA_URL}"
+[[ "$ZIKRA_TOKEN"     == *PLACEHOLDER* ]] && ZIKRA_TOKEN="${ZIKRA_TOKEN_ENV:-$ZIKRA_TOKEN}"
+[[ "$DEFAULT_PROJECT" == *PLACEHOLDER* ]] && DEFAULT_PROJECT="${ZIKRA_PROJECT:-global}"
 
 # ── Environment detection ─────────────────────────────────────────────────────
 detect_shell_env() {
@@ -28,6 +41,23 @@ detect_shell_env() {
 }
 
 SHELL_ENV=$(detect_shell_env)
+mkdir -p "$HOME/.zikra"
+
+# ── Resolve claude binary — hook shells may not have full PATH ────────────────
+CLAUDE_BIN=$(command -v claude 2>/dev/null)
+if [ -z "$CLAUDE_BIN" ]; then
+  for candidate in \
+    "$HOME/.claude/local/claude" \
+    "$HOME/.nvm/versions/node/$(node --version 2>/dev/null)/bin/claude" \
+    "/usr/local/bin/claude" \
+    "/opt/homebrew/bin/claude"; do
+    if [ -x "$candidate" ]; then CLAUDE_BIN="$candidate"; break; fi
+  done
+fi
+if [ -z "$CLAUDE_BIN" ]; then
+  echo "[zikra_autolog] claude binary not found, skipping diary" >&2
+  exit 0
+fi
 
 # ── Portable temp dir — /tmp works on WSL/Linux/Mac; fall back to ~/.claude ──
 if [[ -d /tmp && -w /tmp ]]; then
@@ -59,7 +89,7 @@ zikra_post() {
   curl -s -X POST "$ZIKRA_URL" \
     -H "Authorization: Bearer $ZIKRA_TOKEN" \
     -H "Content-Type: application/json" \
-    -H "User-Agent: curl/7.81.0" \
+    -H "User-Agent: $ZIKRA_USER_AGENT" \
     --connect-timeout 15 \
     -d "$1" > /dev/null 2>&1
 }
@@ -87,7 +117,7 @@ if [[ "$HOOK_EVENT" == "PreCompact" ]]; then
   [[ -z "$TRANSCRIPT_PATH" || ! -f "$TRANSCRIPT_PATH" ]] && exit 0
 
   (
-    SUMMARY="$(tail -100 "$TRANSCRIPT_PATH" 2>/dev/null | claude -p \
+    SUMMARY="$(tail -100 "$TRANSCRIPT_PATH" 2>/dev/null | "$CLAUDE_BIN" -p \
       'Extract key decisions, problems solved, and what was being worked on from this conversation transcript. Be factual and concise — max 200 words. Plain text only, no markdown.' \
       2>/dev/null || echo "Pre-compact summary unavailable.")"
 
@@ -110,7 +140,7 @@ print(json.dumps({
 }))" "$TITLE" "$SUMMARY" "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" 2>/dev/null)"
 
     [[ -n "$BODY" ]] && zikra_post "$BODY"
-  ) &
+  ) >> "$HOME/.zikra/hook_errors.log" 2>&1 &
   disown
   exit 0
 fi
@@ -134,16 +164,16 @@ fi
   fi
   echo "$NOW" > "$SENTINEL"
 
-  # Find the most recently modified transcript
+  # Find the most recently modified transcript (space-safe)
   LATEST=""
   if command -v find >/dev/null 2>&1; then
-    LATEST="$(find "$HOME/.claude/projects" -name '*.jsonl' 2>/dev/null \
-      | xargs ls -t 2>/dev/null | head -1 || true)"
+    LATEST="$(find "$HOME/.claude/projects" -maxdepth 3 -name '*.jsonl' \
+      -printf "%T@ %p\n" 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2- || true)"
   fi
 
   [[ -z "$LATEST" || ! -f "$LATEST" ]] && exit 0
 
-  DIARY="$(tail -80 "$LATEST" 2>/dev/null | claude -p \
+  DIARY="$(tail -80 "$LATEST" 2>/dev/null | "$CLAUDE_BIN" -p \
     'From this Claude Code session transcript, write a concise diary entry covering: what was built or fixed, key decisions made and WHY, problems solved, and any failures or blockers encountered. Max 250 words. Factual, first-person, present tense.' \
     2>/dev/null || echo "Session diary generation failed.")"
 
@@ -167,7 +197,7 @@ print(json.dumps({
 
   [[ -n "$BODY" ]] && zikra_post "$BODY"
   zikra_notify "Session logged"
-) &
+) >> "$HOME/.zikra/hook_errors.log" 2>&1 &
 disown
 
 # ── cross-platform notification ──────────────────────

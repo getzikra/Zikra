@@ -69,9 +69,7 @@ Paste into any Claude Code session. Installs hooks and statusline bar automatica
 
 ## Web UI
 
-Zikra includes a web interface to browse memories, view prompt runs, manage tokens, and search across your project.
-
-**Note:** Web UI is not yet available in this release.
+Coming soon. A web interface for browsing memories, viewing prompt runs, managing tokens, and searching across your project is planned for a future release.
 
 ## What each profile installs
 
@@ -103,6 +101,7 @@ No configuration required. This works automatically on every search.
 
 ## Requirements
 
+- [Docker](https://docs.docker.com/get-docker/) + [Docker Compose](https://docs.docker.com/compose/install/) (v2+) — required for the recommended install
 - PostgreSQL with `pgvector` extension
 - n8n (self-hosted or cloud)
 - curl and python3 on every machine
@@ -124,11 +123,11 @@ No configuration required. This works automatically on every search.
 | Scale | Millions of rows | Billions of rows |
 | n8n workflows | ❌ | ✅ Visual editor, scheduling |
 | Smart ranking | Age + frequency + confidence | Age + frequency + confidence |
-| Admin UI | Basic web UI | n8n workflow editor |
+| Admin UI | Basic (built-in) | n8n dashboard + direct DB |
 | Backup | Copy one file | pg_dump, managed |
 | Setup time | 60 seconds | 30–60 minutes |
 
-Same API. Same commands. Same JSON shapes. Upgrade is just changing a URL.
+Same API. Same commands. Same JSON shapes. Migration from Lite to Full requires an export/import step — schema differences exist (SQLite vs PostgreSQL, `person_name` vs `label` in the tokens table). See [docs/migrate.md](docs/migrate.md) or [GitHub issues](https://github.com/getzikra/zikra/issues) for a migration guide.
 
 ## Accessing Zikra from anywhere
 

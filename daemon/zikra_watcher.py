@@ -25,6 +25,34 @@ import sys
 ZIKRA_URL        = "ZIKRA_URL_PLACEHOLDER"
 BEARER           = "ZIKRA_TOKEN_PLACEHOLDER"
 DEFAULT_PROJECT  = "DEFAULT_PROJECT_PLACEHOLDER"
+ZIKRA_USER_AGENT = "curl/7.81.0"
+
+
+def _load_token_file() -> None:
+    """Load ~/.zikra/token into os.environ — stdlib only, no deps."""
+    path = os.path.expanduser("~/.zikra/token")
+    try:
+        with open(path) as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if '=' in _line and not _line.startswith('#'):
+                    _k, _, _v = _line.partition('=')
+                    if _k.strip() and _k.strip() not in os.environ:
+                        os.environ[_k.strip()] = _v.strip()
+    except OSError:
+        pass
+
+
+_load_token_file()
+
+# Override from environment when install.sh did not patch the file
+# (e.g. running directly from source checkout)
+if "PLACEHOLDER" in ZIKRA_URL:
+    ZIKRA_URL = os.getenv("ZIKRA_URL", ZIKRA_URL)
+if "PLACEHOLDER" in BEARER:
+    BEARER = os.getenv("ZIKRA_TOKEN", BEARER)
+if "PLACEHOLDER" in DEFAULT_PROJECT:
+    DEFAULT_PROJECT = os.getenv("ZIKRA_PROJECT", os.getenv("DEFAULT_PROJECT", DEFAULT_PROJECT))
 DEBOUNCE         = 30          # seconds of mtime stability before firing
 POLL_INTERVAL    = 5           # seconds between polls
 TRANSCRIPT_GLOB  = os.path.expanduser("~/.claude/projects/**/*.jsonl")
@@ -65,7 +93,7 @@ def zikra_post(payload: dict) -> bool:
             headers={
                 "Authorization":  f"Bearer {BEARER}",
                 "Content-Type":   "application/json",
-                "User-Agent":     "curl/7.81.0",
+                "User-Agent":     ZIKRA_USER_AGENT,
             },
             method="POST",
         )
