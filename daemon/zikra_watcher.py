@@ -121,45 +121,46 @@ def extract_session_info(path: str) -> dict:
 
     try:
         with open(path, "r", errors="replace") as f:
-            lines = [l.strip() for l in f if l.strip()]
+            for raw in f:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    entry = json.loads(raw)
+                except Exception:
+                    continue
 
-        for raw in lines:
-            try:
-                entry = json.loads(raw)
-            except Exception:
-                continue
+                # Session ID
+                if not session_id:
+                    session_id = (
+                        entry.get("session_id")
+                        or entry.get("message", {}).get("session_id", "")
+                        or ""
+                    )
 
-            # Session ID
-            if not session_id:
-                session_id = (
-                    entry.get("session_id")
-                    or entry.get("message", {}).get("session_id", "")
-                    or ""
+                # Token usage — two possible locations
+                usage = (
+                    entry.get("usage")
+                    or entry.get("message", {}).get("usage")
+                    or {}
                 )
+                if usage:
+                    tokens_input          += usage.get("input_tokens",                  0)
+                    tokens_output         += usage.get("output_tokens",                 0)
+                    tokens_cache_read     += usage.get("cache_read_input_tokens",       0)
+                    tokens_cache_creation += usage.get("cache_creation_input_tokens",   0)
 
-            # Token usage — two possible locations
-            usage = (
-                entry.get("usage")
-                or entry.get("message", {}).get("usage")
-                or {}
-            )
-            if usage:
-                tokens_input          += usage.get("input_tokens",                  0)
-                tokens_output         += usage.get("output_tokens",                 0)
-                tokens_cache_read     += usage.get("cache_read_input_tokens",       0)
-                tokens_cache_creation += usage.get("cache_creation_input_tokens",   0)
-
-            # Last assistant message text
-            role = entry.get("type") or entry.get("role") or ""
-            msg  = entry.get("message", {})
-            if role == "assistant" or msg.get("role") == "assistant":
-                content = entry.get("content") or msg.get("content") or ""
-                if isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, dict) and block.get("type") == "text":
-                            last_assistant = block.get("text", "")
-                elif isinstance(content, str):
-                    last_assistant = content
+                # Last assistant message text
+                role = entry.get("type") or entry.get("role") or ""
+                msg  = entry.get("message", {})
+                if role == "assistant" or msg.get("role") == "assistant":
+                    content = entry.get("content") or msg.get("content") or ""
+                    if isinstance(content, list):
+                        for block in content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                last_assistant = block.get("text", "")
+                    elif isinstance(content, str):
+                        last_assistant = content
 
     except Exception as exc:
         _log(f"extract error for {os.path.basename(path)}: {exc}")

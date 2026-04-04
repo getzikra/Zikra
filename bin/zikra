@@ -235,8 +235,8 @@ import json, sys
 print(json.dumps({
     'command':    'log_error',
     'project':    '$DEFAULT_PROJECT',
-    'title':      sys.argv[1],
-    'content_md': sys.argv[2],
+    'message':    sys.argv[1],
+    'context_md': sys.argv[2],
 }))" "$TITLE" "$DETAIL")"
 
     zikra_post "$BODY" > /dev/null

@@ -128,6 +128,13 @@ else
   echo "  ✓ Zikra section appended to existing CLAUDE.md"
 fi
 
+# Backup existing settings.json before any modifications
+_SETTINGS=~/.claude/settings.json
+if [ -f "$_SETTINGS" ]; then
+  cp "$_SETTINGS" "${_SETTINGS}.bak.$(date +%Y%m%d_%H%M%S)"
+  echo "  ✓ Backed up settings.json"
+fi
+
 # Wire Stop hook in settings.json
 python3 - <<'PYEOF'
 import json, os, sys
@@ -159,8 +166,10 @@ already_wired = any(
 
 if not already_wired:
     s["hooks"]["Stop"].append(stop_hook)
-    with open(settings_path, "w") as f:
+    tmp = settings_path + '.tmp'
+    with open(tmp, 'w') as f:
         json.dump(s, f, indent=2)
+    os.replace(tmp, settings_path)
     print("  ✓ Stop hook wired in settings.json")
 else:
     print("  ~ Stop hook already present in settings.json")
@@ -192,8 +201,10 @@ already_wired = any(
 
 if not already_wired:
     s["hooks"]["PreCompact"].append(precompact_hook)
-    with open(settings_path, "w") as f:
+    tmp = settings_path + '.tmp'
+    with open(tmp, 'w') as f:
         json.dump(s, f, indent=2)
+    os.replace(tmp, settings_path)
     print("  ✓ PreCompact hook wired in settings.json")
 else:
     print("  ~ PreCompact hook already present in settings.json")
@@ -232,8 +243,10 @@ with open(settings_path) as f:
 
 s["statusLine"] = {"type": "command", "command": statusline_path}
 
-with open(settings_path, "w") as f:
+tmp = settings_path + '.tmp'
+with open(tmp, 'w') as f:
     json.dump(s, f, indent=2)
+os.replace(tmp, settings_path)
 
 print("  ✓ statusLine wired in settings.json")
 PYEOF
