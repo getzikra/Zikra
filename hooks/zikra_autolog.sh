@@ -172,6 +172,8 @@ disown
 
 # ── cross-platform notification ──────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-bash "$SCRIPT_DIR/notify.sh" "Session logged to Zikra" "Zikra" 2>/dev/null &
+if [ -f "$SCRIPT_DIR/notify.sh" ]; then
+    bash "$SCRIPT_DIR/notify.sh" "Session logged to Zikra" "Zikra" 2>/dev/null &
+fi
 
 exit 0

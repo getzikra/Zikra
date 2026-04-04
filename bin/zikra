@@ -176,7 +176,7 @@ print(json.dumps({
     # Store run_id for watcher linkage
     RUN_ID="$(echo "$RESP" | python3 -c \
       "import json,sys; print(json.load(sys.stdin).get('run_id',''))" 2>/dev/null || true)"
-    [[ -n "$RUN_ID" ]] && echo "$RUN_ID" > /tmp/zikra_prompt_id
+    [[ -n "$RUN_ID" ]] && echo "$RUN_ID" > "$HOME/.claude/.zikra_prompt_id"
 
     # Print prompt content
     echo "$RESP" | python3 -c "

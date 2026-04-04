@@ -71,17 +71,7 @@ Paste into any Claude Code session. Installs hooks and statusline bar automatica
 
 Zikra includes a web interface to browse memories, view prompt runs, manage tokens, and search across your project.
 
-To start the UI:
-
-```bash
-cd ui
-npm install
-npm run dev
-```
-
-Open http://localhost:5173 in your browser.
-
-The UI reads your token and webhook URL from `ui/.env` — copy `ui/.env.example` and fill in your values, pointing `VITE_ZIKRA_URL` to your n8n webhook URL.
+**Note:** Web UI is not yet available in this release.
 
 ## What each profile installs
 
@@ -134,7 +124,7 @@ No configuration required. This works automatically on every search.
 | Scale | Millions of rows | Billions of rows |
 | n8n workflows | ❌ | ✅ Visual editor, scheduling |
 | Smart ranking | Age + frequency + confidence | Age + frequency + confidence |
-| Admin UI | Basic | Django admin |
+| Admin UI | Basic web UI | n8n workflow editor |
 | Backup | Copy one file | pg_dump, managed |
 | Setup time | 60 seconds | 30–60 minutes |
 

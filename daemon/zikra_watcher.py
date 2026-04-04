@@ -265,6 +265,17 @@ def main() -> None:
                 f"(in={info['tokens_input']} out={info['tokens_output']})"
             )
 
+        # Prune seen entries for files that no longer exist on disk
+        stale = [p for p in seen if not os.path.exists(p)]
+        for p in stale:
+            seen.pop(p, None)
+
+        # Cap seen dict to 1000 most-recently-seen entries to bound memory
+        if len(seen) > 1000:
+            oldest = sorted(seen, key=lambda p: seen[p].get("stable_since", 0))
+            for p in oldest[:len(seen) - 1000]:
+                seen.pop(p, None)
+
 
 if __name__ == "__main__":
     try:
