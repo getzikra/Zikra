@@ -79,16 +79,20 @@ echo ""
 
 # ── Patch helper ────────────────────────────────────────────────────────────
 patch_file() {
+  local file="$1" placeholder="$2" value="$3"
+  python3 -c "
+import sys
+content = open(sys.argv[1]).read()
+content = content.replace(sys.argv[2], sys.argv[3])
+open(sys.argv[1], 'w').write(content)
+" "$file" "$placeholder" "$value"
+}
+
+patch_all() {
   local f="$1"
-  if [[ "$OS" == "Darwin" ]]; then
-    sed -i '' "s|ZIKRA_URL_PLACEHOLDER|${ZIKRA_URL}|g"            "$f"
-    sed -i '' "s|ZIKRA_TOKEN_PLACEHOLDER|${ZIKRA_TOKEN}|g"         "$f"
-    sed -i '' "s|DEFAULT_PROJECT_PLACEHOLDER|${DEFAULT_PROJECT}|g" "$f"
-  else
-    sed -i  "s|ZIKRA_URL_PLACEHOLDER|${ZIKRA_URL}|g"            "$f"
-    sed -i  "s|ZIKRA_TOKEN_PLACEHOLDER|${ZIKRA_TOKEN}|g"         "$f"
-    sed -i  "s|DEFAULT_PROJECT_PLACEHOLDER|${DEFAULT_PROJECT}|g" "$f"
-  fi
+  patch_file "$f" "ZIKRA_URL_PLACEHOLDER"       "${ZIKRA_URL}"
+  patch_file "$f" "ZIKRA_TOKEN_PLACEHOLDER"      "${ZIKRA_TOKEN}"
+  patch_file "$f" "DEFAULT_PROJECT_PLACEHOLDER"  "${DEFAULT_PROJECT}"
 }
 
 # ── Always install (all profiles) ───────────────────────────────────────────
@@ -98,13 +102,13 @@ mkdir -p ~/.claude/hooks ~/.claude/cache
 echo "  → Downloading zikra_autolog.sh..."
 curl -fsSL "$ZIKRA_RAW/hooks/zikra_autolog.sh" -o ~/.claude/zikra_autolog.sh
 chmod +x ~/.claude/zikra_autolog.sh
-patch_file ~/.claude/zikra_autolog.sh
+patch_all ~/.claude/zikra_autolog.sh
 echo "  ✓ zikra_autolog.sh installed"
 
 if [[ ! -f ~/.claude/CLAUDE.md ]]; then
   echo "  → Downloading CLAUDE.md..."
   curl -fsSL "$ZIKRA_RAW/context/CLAUDE.md" -o ~/.claude/CLAUDE.md
-  patch_file ~/.claude/CLAUDE.md
+  patch_all ~/.claude/CLAUDE.md
   echo "  ✓ CLAUDE.md installed"
 else
   echo "  ~ CLAUDE.md already exists — skipping (edit manually to update credentials)"
@@ -188,7 +192,7 @@ if [[ "$PROFILE_NAME" == "full" ]]; then
   echo "  → Downloading zikra_watcher.py..."
   curl -fsSL "$ZIKRA_RAW/daemon/zikra_watcher.py" -o ~/.claude/zikra_watcher.py
   chmod +x ~/.claude/zikra_watcher.py
-  patch_file ~/.claude/zikra_watcher.py
+  patch_all ~/.claude/zikra_watcher.py
   echo "  ✓ zikra_watcher.py installed"
 
   echo "  → Downloading zikra-statusline.js..."

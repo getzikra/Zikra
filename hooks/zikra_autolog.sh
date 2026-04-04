@@ -5,6 +5,10 @@
 #
 # Invoked automatically by Claude Code hooks — never run manually.
 # Works on: WSL, native Linux, macOS, Git Bash / MSYS on Windows.
+#
+# CANONICAL SOURCE: /mnt/d/GetZikra/zikra/hooks/zikra_autolog.sh
+# Mirror: /mnt/d/GetZikra/zikra-lite/hooks/zikra_autolog.sh
+# When editing, keep both copies in sync.
 
 ZIKRA_URL="ZIKRA_URL_PLACEHOLDER"
 ZIKRA_TOKEN="ZIKRA_TOKEN_PLACEHOLDER"
