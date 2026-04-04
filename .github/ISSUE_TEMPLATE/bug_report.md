@@ -1,13 +1,13 @@
 ---
 name: Bug Report
-about: Report something that isn't working
-title: '[BUG] '
+about: Report something that is not working
+title: "[BUG] "
 labels: bug
-assignees: ''
+assignees: ""
 ---
 
 **Describe the bug**
-A clear description of what's wrong.
+A clear description of what is wrong.
 
 **To reproduce**
 Steps to reproduce the behavior.
@@ -20,8 +20,6 @@ What you expected to happen.
 - Zikra version:
 - Claude Code version:
 - Python version:
-- PostgreSQL version:
-- n8n version:
 
 **Logs**
 Paste relevant logs here.
