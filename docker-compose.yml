@@ -52,6 +52,20 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  # ── LiteLLM proxy — embeddings for n8n workflow ───────────────────────────
+  sys_litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: zikra_litellm
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-zikra-change-me}
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
   # ── n8n workflow engine ────────────────────────────────────────────────────
   n8n:
     image: n8nio/n8n:latest

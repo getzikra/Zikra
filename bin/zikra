@@ -46,7 +46,7 @@ print(json.dumps({
     'command':     'search',
     'query':       sys.argv[1],
     'project':     '$DEFAULT_PROJECT',
-    'max_results': 5,
+    'limit': 5,
 }))" "$QUERY")"
 
     RESP="$(zikra_post "$BODY")"
@@ -139,7 +139,7 @@ print(f\"  updated_at:    {d.get('updated_at',   '(never)')}\")
 
     echo ""
     echo "── Webhook reachability ─────────────────────────"
-    BODY="{\"command\":\"search\",\"query\":\"ping\",\"project\":\"${DEFAULT_PROJECT}\",\"max_results\":1}"
+    BODY="{\"command\":\"search\",\"query\":\"ping\",\"project\":\"${DEFAULT_PROJECT}\",\"limit\":1}"
     HTTP="$(curl -s -o /dev/null -w "%{http_code}" \
       -X POST "$ZIKRA_URL" \
       -H "Authorization: Bearer $ZIKRA_TOKEN" \
@@ -245,8 +245,52 @@ print(json.dumps({
 
   # ── sync ──────────────────────────────────────────────────────────────────
   sync)
-    echo "Re-downloading and running install.sh from $ZIKRA_RAW..."
-    curl -fsSL "$ZIKRA_RAW/install.sh" | bash
+    echo "Syncing Zikra hook files from $ZIKRA_RAW (credentials preserved)..."
+
+    # Read existing credentials from token file; fall back to env
+    _TOKEN_FILE="$HOME/.zikra/token"
+    _EXISTING_URL="$ZIKRA_URL"
+    _EXISTING_TOKEN="$ZIKRA_TOKEN"
+    if [[ -f "$_TOKEN_FILE" ]]; then
+      _kv() { grep "^$1=" "$_TOKEN_FILE" 2>/dev/null | head -1 | cut -d= -f2-; }
+      [[ -n "$(_kv ZIKRA_URL)" ]]   && _EXISTING_URL="$(_kv ZIKRA_URL)"
+      [[ -n "$(_kv ZIKRA_TOKEN)" ]] && _EXISTING_TOKEN="$(_kv ZIKRA_TOKEN)"
+    fi
+
+    if [[ -z "$_EXISTING_URL" || -z "$_EXISTING_TOKEN" ]]; then
+      echo "Error: could not read ZIKRA_URL / ZIKRA_TOKEN from $_TOKEN_FILE or environment." >&2
+      echo "Run the full installer instead: curl -fsSL $ZIKRA_RAW/install.sh | bash" >&2
+      exit 1
+    fi
+
+    TMPDIR_SYNC="$(mktemp -d)"
+    trap 'rm -rf "$TMPDIR_SYNC"' EXIT
+
+    _HOOK_FILES=(
+      "hooks/zikra_autolog.sh:$HOME/.claude/zikra_autolog.sh"
+      "hooks/notify.sh:$HOME/.claude/notify.sh"
+      "hooks/zikra-statusline.js:$HOME/.claude/hooks/zikra-statusline.js"
+    )
+
+    for entry in "${_HOOK_FILES[@]}"; do
+      src="${entry%%:*}"
+      dst="${entry##*:}"
+      # Only update if the destination already exists (don't install new components)
+      [[ ! -f "$dst" ]] && continue
+      tmp="$TMPDIR_SYNC/$(basename "$dst")"
+      if curl -fsSL "$ZIKRA_RAW/$src" -o "$tmp" 2>/dev/null; then
+        # Patch placeholders with existing credentials
+        sed -i "s|ZIKRA_URL_PLACEHOLDER|$_EXISTING_URL|g" "$tmp" 2>/dev/null || true
+        sed -i "s|ZIKRA_TOKEN_PLACEHOLDER|$_EXISTING_TOKEN|g" "$tmp" 2>/dev/null || true
+        chmod +x "$tmp"
+        cp "$tmp" "$dst"
+        echo "  ✓ updated $(basename "$dst")"
+      else
+        echo "  ! failed to download $src — skipping" >&2
+      fi
+    done
+
+    echo "Sync complete. Credentials unchanged."
     ;;
 
   # ── help ──────────────────────────────────────────────────────────────────

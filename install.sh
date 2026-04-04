@@ -115,8 +115,17 @@ if [[ ! -f ~/.claude/CLAUDE.md ]]; then
   curl -fsSL "$ZIKRA_RAW/context/CLAUDE.md" -o ~/.claude/CLAUDE.md
   patch_all ~/.claude/CLAUDE.md
   echo "  ✓ CLAUDE.md installed"
+elif grep -q "Zikra" ~/.claude/CLAUDE.md 2>/dev/null; then
+  echo "  ~ CLAUDE.md already contains Zikra section — skipping"
 else
-  echo "  ~ CLAUDE.md already exists — skipping (edit manually to update credentials)"
+  echo "  CLAUDE.md already exists. Appending Zikra section."
+  _TMP_ZIKRA="$(mktemp)"
+  curl -fsSL "$ZIKRA_RAW/context/CLAUDE.md" -o "$_TMP_ZIKRA"
+  patch_all "$_TMP_ZIKRA"
+  printf '\n\n---\n## Zikra Memory System\n\n' >> ~/.claude/CLAUDE.md
+  cat "$_TMP_ZIKRA" >> ~/.claude/CLAUDE.md
+  rm -f "$_TMP_ZIKRA"
+  echo "  ✓ Zikra section appended to existing CLAUDE.md"
 fi
 
 # Wire Stop hook in settings.json

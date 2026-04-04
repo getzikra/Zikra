@@ -168,7 +168,7 @@ fi
   LATEST=""
   if command -v find >/dev/null 2>&1; then
     LATEST="$(find "$HOME/.claude/projects" -maxdepth 3 -name '*.jsonl' \
-      -printf "%T@ %p\n" 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2- || true)"
+      2>/dev/null | xargs ls -t 2>/dev/null | head -1)"
   fi
 
   [[ -z "$LATEST" || ! -f "$LATEST" ]] && exit 0

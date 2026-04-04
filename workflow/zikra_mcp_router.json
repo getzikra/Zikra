@@ -338,7 +338,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer sk-1234567890abcdef"
+              "value": "Bearer YOUR_LITELLM_MASTER_KEY_HERE"
             },
             {
               "name": "Content-Type",
@@ -407,7 +407,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer sk-1234567890abcdef"
+              "value": "Bearer YOUR_LITELLM_MASTER_KEY_HERE"
             },
             {
               "name": "Content-Type",
@@ -546,7 +546,7 @@
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer sk-1234567890abcdef"
+              "value": "Bearer YOUR_LITELLM_MASTER_KEY_HERE"
             },
             {
               "name": "Content-Type",

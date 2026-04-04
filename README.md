@@ -58,6 +58,7 @@ Add to your `claude_desktop_config.json`:
 2. Copy `.env.example` to `.env` and fill in credentials
 3. `docker compose up -d`
 4. Import `workflow/zikra_mcp_router.json` into n8n and activate it
+   - After importing, open the `SM Embed`, `SR Embed`, and `LE Embed` HTTP Request nodes and replace `YOUR_LITELLM_MASTER_KEY_HERE` in the Authorization header with the value of `LITELLM_MASTER_KEY` from your `.env`
 5. Run the Claude Code onboarding command (see below)
 
 **Onboard Claude Code (after install):**
@@ -106,6 +107,7 @@ No configuration required. This works automatically on every search.
 - n8n (self-hosted or cloud)
 - curl and python3 on every machine
 - node (for `--full` statusline only)
+- **OpenAI API key** — required for semantic embeddings. The `sys_litellm` service in `docker-compose.yml` proxies embedding calls to OpenAI using `OPENAI_API_KEY` from your `.env` file. After importing the n8n workflow, update the `LITELLM_MASTER_KEY` in your `.env` and set the same value in the Authorization header of the `SM Embed`, `SR Embed`, and `LE Embed` HTTP Request nodes inside the workflow.
 
 ## Documentation
 

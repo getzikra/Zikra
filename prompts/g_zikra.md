@@ -140,20 +140,31 @@ grep "PLACEHOLDER" ~/.claude/zikra_autolog.sh \
 ## Step 6 — Install CLAUDE.md (only if not already present)
 
 ```bash
+OS="$(uname -s)"
+SED_I() { [[ "$OS" == "Darwin" ]] && sed -i '' "$@" || sed -i "$@"; }
+
+_patch_zikra_claudemd() {
+  SED_I "s|ZIKRA_URL_PLACEHOLDER|${ZIKRA_URL}|g"           "$1"
+  SED_I "s|ZIKRA_TOKEN_PLACEHOLDER|${MY_TOKEN}|g"          "$1"
+  SED_I "s|DEFAULT_PROJECT_PLACEHOLDER|${ZIKRA_PROJECT}|g" "$1"
+  SED_I "s|RUNNER_PLACEHOLDER|${ZIKRA_PERSON}@${ZIKRA_MACHINE}|g" "$1"
+}
+
 if [ ! -f ~/.claude/CLAUDE.md ]; then
   curl -fsSL "$ZIKRA_RAW/context/CLAUDE.md" -o ~/.claude/CLAUDE.md
-
-  OS="$(uname -s)"
-  SED_I() { [[ "$OS" == "Darwin" ]] && sed -i '' "$@" || sed -i "$@"; }
-
-  SED_I "s|ZIKRA_URL_PLACEHOLDER|${ZIKRA_URL}|g"                        ~/.claude/CLAUDE.md
-  SED_I "s|ZIKRA_TOKEN_PLACEHOLDER|${MY_TOKEN}|g"                       ~/.claude/CLAUDE.md
-  SED_I "s|DEFAULT_PROJECT_PLACEHOLDER|${ZIKRA_PROJECT}|g"              ~/.claude/CLAUDE.md
-  SED_I "s|RUNNER_PLACEHOLDER|${ZIKRA_PERSON}@${ZIKRA_MACHINE}|g"       ~/.claude/CLAUDE.md
-
+  _patch_zikra_claudemd ~/.claude/CLAUDE.md
   echo "✓ CLAUDE.md installed"
+elif grep -q "Zikra" ~/.claude/CLAUDE.md 2>/dev/null; then
+  echo "~ CLAUDE.md already contains Zikra section — skipping"
 else
-  echo "~ CLAUDE.md already exists — skipping"
+  echo "CLAUDE.md already exists. Appending Zikra section."
+  _TMP_ZIKRA="$(mktemp)"
+  curl -fsSL "$ZIKRA_RAW/context/CLAUDE.md" -o "$_TMP_ZIKRA"
+  _patch_zikra_claudemd "$_TMP_ZIKRA"
+  printf '\n\n---\n## Zikra Memory System\n\n' >> ~/.claude/CLAUDE.md
+  cat "$_TMP_ZIKRA" >> ~/.claude/CLAUDE.md
+  rm -f "$_TMP_ZIKRA"
+  echo "✓ Zikra section appended to existing CLAUDE.md"
 fi
 ```
 
