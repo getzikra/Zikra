@@ -26,7 +26,7 @@ fi
 DB_HOST="${POSTGRES_HOST:-localhost}"
 DB_PORT="${POSTGRES_PORT:-5432}"
 DB_USER="${POSTGRES_USER:-zikra_user}"
-DB_NAME="${POSTGRES_DB:-ai_cortex}"
+DB_NAME="${POSTGRES_DB:-ai_zikra}"
 export PGPASSWORD="${POSTGRES_PASSWORD:-}"
 
 PSQL="psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -v ON_ERROR_STOP=1"

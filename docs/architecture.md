@@ -194,10 +194,11 @@ machine is found by Claude on another.
 Every request must include `Authorization: Bearer <token>`. The n8n workflow
 validates the token against `zikra.access_tokens` before processing any command.
 
-Tokens have three roles:
-- `reader` — may call: search, get_memory, get_prompt, list_requirements
-- `writer` — may call all reader commands plus: save_memory, log_run, log_error, save_requirement
-- `admin` — may call all commands plus: create_token, promote_requirement
+Tokens have four roles:
+- `viewer` — may call: search, get_memory, get_prompt, list_requirements, list_prompts
+- `developer` — may call all viewer commands plus: save_memory, log_run, log_error, save_requirement, save_prompt, promote_requirement
+- `admin` — may call all developer commands plus: create_token
+- `owner` — full access including all commands
 
 ### Project scoping
 

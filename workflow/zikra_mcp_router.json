@@ -609,7 +609,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH active AS (\n    DELETE FROM zikra.active_runs\n    WHERE runner = '{{ $(\"Zikra Webhook\").first().json.body.runner || \"unknown\" }}'\n    RETURNING prompt_id, prompt_name\n)\nINSERT INTO zikra.prompt_runs\n    (project, prompt_name, runner, session_id, status, output_summary, errors, files_modified,\n     tokens_input, tokens_output, tokens_cache_read, tokens_cache_creation,\n     cost_usd)\nSELECT\n    '{{ $(\"Zikra Webhook\").first().json.body.project || \"global\" }}',\n    COALESCE(active.prompt_name, '{{ $(\"Zikra Webhook\").first().json.body.prompt_name || \"unknown\" }}'),\n    '{{ $(\"Zikra Webhook\").first().json.body.runner || \"unknown\" }}',\n    '{{ $(\"Zikra Webhook\").first().json.body.session_id||\"\" }}',\n    '{{ $(\"Zikra Webhook\").first().json.body.status||\"success\" }}',\n    '{{ ($(\"Zikra Webhook\").first().json.body.output_summary||\"\").replace(/'/g,\"''\") }}',\n    '{{ $(\"Zikra Webhook\").first().json.body.errors || \"\" }}',\n    {{ $(\"Zikra Webhook\").first().json.body.files_modified != null ? $(\"Zikra Webhook\").first().json.body.files_modified : 0 }},\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_input != null ? $(\"Zikra Webhook\").first().json.body.tokens_input : \"NULL\" }},\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_output != null ? $(\"Zikra Webhook\").first().json.body.tokens_output : \"NULL\" }},\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_cache_read != null ? $(\"Zikra Webhook\").first().json.body.tokens_cache_read : \"NULL\" }},\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_cache_creation != null ? $(\"Zikra Webhook\").first().json.body.tokens_cache_creation : \"NULL\" }},\n    {{ $(\"Zikra Webhook\").first().json.body.cost_usd != null ? $(\"Zikra Webhook\").first().json.body.cost_usd : \"NULL\" }}\nFROM (SELECT NULL::text AS prompt_name) AS fallback\nLEFT JOIN active ON true\nRETURNING id;",
+        "query": "WITH active AS (\n    DELETE FROM zikra.active_runs\n    WHERE runner = '{{ $(\"Zikra Webhook\").first().json.body.runner || \"unknown\" }}'\n    RETURNING prompt_run_id\n)\nINSERT INTO zikra.prompt_runs\n    (project, prompt_name, runner, status, output_summary,\n     tokens_input, tokens_output, tokens_cache_read, tokens_cache_creation)\nSELECT\n    '{{ $(\"Zikra Webhook\").first().json.body.project || \"global\" }}',\n    '{{ $(\"Zikra Webhook\").first().json.body.prompt_name || \"unknown\" }}',\n    '{{ $(\"Zikra Webhook\").first().json.body.runner || \"unknown\" }}',\n    '{{ $(\"Zikra Webhook\").first().json.body.status||\"success\" }}',\n    '{{ ($(\"Zikra Webhook\").first().json.body.output_summary||\"\").replace(/'/g,\"''\") }}',\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_input != null ? $(\"Zikra Webhook\").first().json.body.tokens_input : 0 }},\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_output != null ? $(\"Zikra Webhook\").first().json.body.tokens_output : 0 }},\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_cache_read != null ? $(\"Zikra Webhook\").first().json.body.tokens_cache_read : 0 }},\n    {{ $(\"Zikra Webhook\").first().json.body.tokens_cache_creation != null ? $(\"Zikra Webhook\").first().json.body.tokens_cache_creation : 0 }}\nFROM (SELECT 1) AS dummy\nRETURNING id;",
         "options": {}
       },
       "id": "c20bc731-5927-49b2-8bbb-1378941a01d1",
@@ -737,7 +737,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst row = $input.first().json;\nconst wb  = $('Zikra Webhook').first().json.body;\nconst project = wb.project || 'unknown';\nconst mod     = wb.module  || 'core';\nconst errors    = row.errors    || [];\nconst prompts   = row.prompts   || [];\nconst decisions = row.decisions || [];\nconst schema    = row.schema_content || '';\n\nconst errSec = errors.length\n  ? errors.map(e=>`### ${e.title}\\n${e.snippet}\\n_${e.created_at}_`).join('\\n\\n')\n  : '_No unresolved errors_';\nconst decSec = decisions.length\n  ? decisions.map(d=>`### ${d.title}\\n${d.snippet}`).join('\\n\\n')\n  : '_No recent decisions_';\nconst prmSec = prompts.length\n  ? prompts.map(p=>`- **${p.title}**: ${p.snippet}`).join('\\n')\n  : '_None_';\n\nconst claudemd = `# Project: ${project}\n# Cortex: https://n8n.veltisai.com/webhook/cortex\n# Module: ${mod}\n\n## Recent Unresolved Errors\n${errSec}\n\n## Current Schema (${mod})\n${schema || '_No schema found_'}\n\n## Active Decisions\n${decSec}\n\n## Top Prompts\n${prmSec}\n\n## Debug Protocol\n1. Read exact error \u2014 do not paraphrase\n2. Search cortex: cortex search <error>\n3. Check known resolutions\n4. Fix or escalate\n5. Log to cortex: cortex log_error\n`;\nreturn [{json:{claudemd,project,module:mod}}];\n"
+        "jsCode": "\nconst row = $input.first().json;\nconst wb  = $('Zikra Webhook').first().json.body;\nconst project = wb.project || 'unknown';\nconst mod     = wb.module  || 'core';\nconst errors    = row.errors    || [];\nconst prompts   = row.prompts   || [];\nconst decisions = row.decisions || [];\nconst schema    = row.schema_content || '';\n\nconst errSec = errors.length\n  ? errors.map(e=>`### ${e.title}\\n${e.snippet}\\n_${e.created_at}_`).join('\\n\\n')\n  : '_No unresolved errors_';\nconst decSec = decisions.length\n  ? decisions.map(d=>`### ${d.title}\\n${d.snippet}`).join('\\n\\n')\n  : '_No recent decisions_';\nconst prmSec = prompts.length\n  ? prompts.map(p=>`- **${p.title}**: ${p.snippet}`).join('\\n')\n  : '_None_';\n\nconst claudemd = `# Project: ${project}\n# Zikra: https://n8n.veltisai.com/webhook/zikra\n# Module: ${mod}\n\n## Recent Unresolved Errors\n${errSec}\n\n## Current Schema (${mod})\n${schema || '_No schema found_'}\n\n## Active Decisions\n${decSec}\n\n## Top Prompts\n${prmSec}\n\n## Debug Protocol\n1. Read exact error \u2014 do not paraphrase\n2. Search zikra: zikra search <error>\n3. Check known resolutions\n4. Fix or escalate\n5. Log to zikra: zikra log_error\n`;\nreturn [{json:{claudemd,project,module:mod}}];\n"
       },
       "id": "fbb21c88-037a-499b-86df-c376e1821efa",
       "name": "SC Assemble",
@@ -781,7 +781,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO zikra.active_runs (runner, project, prompt_run_id, prompt_name)\nVALUES (\n    '{{ $('Zikra Webhook').first().json.body.runner || \"unknown\" }}',\n    '{{ $('Zikra Webhook').first().json.body.project || \"global\" }}',\n    '{{ $('GP Query').first().json.id }}',\n    '{{ $('GP Query').first().json.title }}'\n)\nON CONFLICT (runner) DO UPDATE SET\n    prompt_run_id = EXCLUDED.prompt_run_id,\n    prompt_name = EXCLUDED.prompt_name,\n    started_at  = now();",
+        "query": "INSERT INTO zikra.active_runs (runner, project, prompt_run_id)\nVALUES (\n    '{{ $('Zikra Webhook').first().json.body.runner || \"unknown\" }}',\n    '{{ $('Zikra Webhook').first().json.body.project || \"global\" }}',\n    '{{ $('GP Query').first().json.id }}'\n);",
         "options": {}
       },
       "id": "a4f7722a-d614-45b6-98a5-82b9daa798ce",
@@ -903,7 +903,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const role = $('Auth Lookup').first().json.role;\nconst mtype = $(\"Zikra Webhook\").first().json.body.memory_type || 'conversation';\nif (!role) {\n  return [{json:{error:'access denied', code:403}}];\n}\nif (role === 'viewer') {\n  return [{json:{error:'viewers cannot write memories', code:403}}];\n}\nif (role === 'contributor' && !['requirement','conversation'].includes(mtype)) {\n  return [{json:{error:'contributors can only save requirements or conversations', code:403}}];\n}\nreturn $input.all();"
+        "jsCode": "const role = $('Auth Lookup').first().json.role;\nconst mtype = $(\"Zikra Webhook\").first().json.body.memory_type || 'conversation';\nif (!role) {\n  return [{json:{error:'access denied', code:403}}];\n}\nif (role === 'viewer') {\n  return [{json:{error:'viewers cannot write memories', code:403}}];\n}\nreturn $input.all();"
       },
       "id": "node-role-gate",
       "name": "Role Gate",
@@ -1091,7 +1091,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH new_token AS (\n  INSERT INTO zikra.access_tokens (token, project, person_name)\n  VALUES (\n    LOWER(LEFT(REGEXP_REPLACE('{{ ($(\"Zikra Webhook\").first().json.body.project||\"global\").replace(/[^a-z0-9]/gi,\"\") }}', '[^a-z0-9]', '', 'g'), 4))\n    || '-' || SUBSTRING(MD5(RANDOM()::text), 1, 8),\n    '{{ $(\"Zikra Webhook\").first().json.body.project || \"global\" }}',\n    '{{ ($(\"Zikra Webhook\").first().json.body.person_name||\"\").replace(/'/g, \"''\") }}'\n  )\n  RETURNING id, token, project, person_name\n), new_tp AS (\n  INSERT INTO zikra.token_projects (token_id, project, role)\n  SELECT id, project, '{{ $(\"Zikra Webhook\").first().json.body.role || \"contributor\" }}'\n  FROM new_token\n  RETURNING token_id\n)\nSELECT t.token, t.project, t.person_name FROM new_token t",
+        "query": "WITH new_token AS (\n  INSERT INTO zikra.access_tokens (token, project, person_name)\n  VALUES (\n    LOWER(LEFT(REGEXP_REPLACE('{{ ($(\"Zikra Webhook\").first().json.body.project||\"global\").replace(/[^a-z0-9]/gi,\"\") }}', '[^a-z0-9]', '', 'g'), 4))\n    || '-' || SUBSTRING(MD5(RANDOM()::text), 1, 8),\n    '{{ $(\"Zikra Webhook\").first().json.body.project || \"global\" }}',\n    '{{ ($(\"Zikra Webhook\").first().json.body.person_name||\"\").replace(/'/g, \"''\") }}'\n  )\n  RETURNING id, token, project, person_name\n), new_tp AS (\n  INSERT INTO zikra.token_projects (token_id, project, role)\n  SELECT id, project, '{{ $(\"Zikra Webhook\").first().json.body.role || \"admin\" }}'\n  FROM new_token\n  RETURNING token_id\n)\nSELECT t.token, t.project, t.person_name FROM new_token t",
         "options": {}
       },
       "id": "node-create-token",
@@ -1232,7 +1232,7 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }
@@ -1296,7 +1296,7 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }
@@ -1350,7 +1350,7 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }
@@ -1409,7 +1409,7 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }
@@ -1463,7 +1463,7 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }
@@ -1512,7 +1512,7 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }
@@ -1551,7 +1551,7 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }
@@ -1595,7 +1595,7 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }
@@ -1644,14 +1644,14 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }
     },
     {
       "parameters": {
-        "toolDescription": "Promote a pending requirement to a prompt (owner only). Use after reviewing a requirement submitted by a collaborator.\n\nRequired fields:\n- requirement_id (string): the UUID of the requirement to promote (get this from zikra_list_requirements)\n\nWhat happens:\n- The requirement memory_type changes from 'requirement' to 'prompt'\n- It becomes available via zikra_get_prompt\n- pending_review is set to false\n\nReturns: {status: \"promoted\", id, title}",
+        "toolDescription": "Promote a pending requirement to a prompt (owner only). Use after reviewing a requirement submitted by a developer.\n\nRequired fields:\n- requirement_id (string): the UUID of the requirement to promote (get this from zikra_list_requirements)\n\nWhat happens:\n- The requirement memory_type changes from 'requirement' to 'prompt'\n- It becomes available via zikra_get_prompt\n- pending_review is set to false\n\nReturns: {status: \"promoted\", id, title}",
         "method": "POST",
         "url": "https://n8n.veltisai.com/webhook/zikra",
         "authentication": "genericCredentialType",
@@ -1688,14 +1688,14 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }
     },
     {
       "parameters": {
-        "toolDescription": "Create a new Zikra access token for a team member (owner only).\n\nRequired fields:\n- person_name (string): the person's name, e.g. \"Alice\"\n- project (string): which project to scope the token to: veltisai, molten8, zikra, or global\n- role (string): one of owner, collaborator, guest\n- persona (string): one of architect, developer, requirements_engineer\n\nRoles:\n- owner: full access, can promote requirements and create tokens\n- collaborator: can save memories, submit requirements, log runs\n- guest: read-only search access\n\nPersonas are used to track who does what work. Always set persona.\n\nReturns: {id, token, project, role, person_name, persona}",
+        "toolDescription": "Create a new Zikra access token for a team member (owner only).\n\nRequired fields:\n- person_name (string): the person's name, e.g. \"Alice\"\n- project (string): which project to scope the token to: veltisai, molten8, zikra, or global\n- role (string): one of owner, admin, developer, viewer\n- persona (string): one of architect, developer, requirements_engineer\n\nRoles:\n- owner: full access, can promote requirements and create tokens\n- admin: can create tokens; all developer permissions\n- developer: can save memories, submit requirements, log runs\n- viewer: read-only search access\n\nPersonas are used to track who does what work. Always set persona.\n\nReturns: {id, token, project, role, person_name, persona}",
         "method": "POST",
         "url": "https://n8n.veltisai.com/webhook/zikra",
         "authentication": "genericCredentialType",
@@ -1721,7 +1721,7 @@
             },
             {
               "name": "role",
-              "description": "Role: owner, collaborator, or guest",
+              "description": "Role: owner, admin, developer, or viewer",
               "type": "string"
             },
             {
@@ -1747,7 +1747,7 @@
       "typeVersion": 1.1,
       "credentials": {
         "httpHeaderAuth": {
-          "id": "zikra-cortex-auth",
+          "id": "zikra-auth",
           "name": "Zikra Auth"
         }
       }

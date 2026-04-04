@@ -66,7 +66,7 @@ docker exec -it zikra_postgres psql -U zikra -d zikra -c "\dt zikra.*"
 ```sql
 -- In psql:
 INSERT INTO zikra.access_tokens (token, label, role)
-VALUES ('dev-' || gen_random_uuid()::text, 'dev token', 'writer')
+VALUES ('dev-' || gen_random_uuid()::text, 'dev token', 'developer')
 RETURNING token;
 ```
 

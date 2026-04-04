@@ -447,7 +447,7 @@ Create a new bearer token. Requires an existing admin-role token for authorizati
 **Required fields:**
 - `command` — `"create_token"`
 - `label` — string, human-readable description of the token's purpose
-- `role` — `"reader"` | `"writer"` | `"admin"`
+- `role` — `"owner"` | `"admin"` | `"developer"` | `"viewer"`
 
 **Optional fields:**
 - `projects` — array of project names (empty = all projects)
@@ -461,7 +461,7 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
   -d '{
     "command":  "create_token",
     "label":    "CI/CD pipeline — myproject only",
-    "role":     "writer",
+    "role":     "developer",
     "projects": ["myproject"]
   }'
 ```
@@ -472,7 +472,7 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
   "id":       "d4e5f6a7-...",
   "token":    "zikra-7f3a9b2c4d1e8f5a",
   "label":    "CI/CD pipeline — myproject only",
-  "role":     "writer",
+  "role":     "developer",
   "projects": ["myproject"]
 }
 ```

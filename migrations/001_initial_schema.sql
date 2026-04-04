@@ -5,6 +5,9 @@
 
 BEGIN;
 
+-- Schema must exist before any zikra.* objects can be created
+CREATE SCHEMA IF NOT EXISTS zikra;
+
 -- Migration version tracking
 CREATE TABLE IF NOT EXISTS zikra.migrations (
     version     integer     NOT NULL PRIMARY KEY,
@@ -31,12 +34,6 @@ $$;
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Schema
--- ─────────────────────────────────────────────────────────────────────────────
-
-CREATE SCHEMA IF NOT EXISTS zikra;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- zikra.memories
@@ -129,18 +126,18 @@ CREATE TABLE IF NOT EXISTS zikra.access_tokens (
     id          uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
     token       text        NOT NULL UNIQUE,
     label       text,
-    role        text        NOT NULL DEFAULT 'reader',
+    role        text        NOT NULL DEFAULT 'viewer',
     active      boolean     DEFAULT true,
     created_at  timestamptz DEFAULT now(),
     last_used   timestamptz,
 
     CONSTRAINT token_role_check CHECK (
-        role IN ('reader', 'writer', 'admin')
+        role IN ('owner', 'admin', 'developer', 'viewer')
     )
 );
 
 COMMENT ON TABLE  zikra.access_tokens      IS 'Bearer tokens for authenticating agent and user API requests';
-COMMENT ON COLUMN zikra.access_tokens.role IS 'reader=search only, writer=read+write, admin=full access including tokens';
+COMMENT ON COLUMN zikra.access_tokens.role IS 'owner=all access, admin=no create_token, developer=read+write ops, viewer=read-only';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- zikra.token_projects

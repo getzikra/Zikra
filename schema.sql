@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS zikra.memories (
     CONSTRAINT memories_confidence_check CHECK (
         confidence >= 0.0 AND confidence <= 1.0
     ),
-    CONSTRAINT memories_unique_title_type UNIQUE (title, memory_type)
+    CONSTRAINT memories_unique_title_type_project UNIQUE (title, memory_type, project)
 );
 
 COMMENT ON TABLE  zikra.memories                IS 'Core persistent memory store for all AI agent sessions';
@@ -125,18 +125,18 @@ CREATE TABLE IF NOT EXISTS zikra.access_tokens (
     id          uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
     token       text        NOT NULL UNIQUE,
     label       text,
-    role        text        NOT NULL DEFAULT 'reader',
+    role        text        NOT NULL DEFAULT 'viewer',
     active      boolean     DEFAULT true,
     created_at  timestamptz DEFAULT now(),
     last_used   timestamptz,
 
     CONSTRAINT token_role_check CHECK (
-        role IN ('reader', 'writer', 'admin')
+        role IN ('owner', 'admin', 'developer', 'viewer')
     )
 );
 
 COMMENT ON TABLE  zikra.access_tokens            IS 'Bearer tokens for authenticating agent and user API requests';
-COMMENT ON COLUMN zikra.access_tokens.role       IS 'reader=search only, writer=read+write, admin=full access including tokens';
+COMMENT ON COLUMN zikra.access_tokens.role       IS 'owner=all access, admin=no create_token, developer=read+write ops, viewer=read-only';
 COMMENT ON COLUMN zikra.access_tokens.last_used  IS 'Updated on every authenticated request for audit purposes';
 
 -- ─────────────────────────────────────────────────────────────────────────────

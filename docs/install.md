@@ -137,7 +137,7 @@ Navigate to `http://localhost:5678` (or your n8n URL) and log in.
 ### Step 2: Import the workflow
 
 1. Click **Workflows** → **Import from file**
-2. Select the Zikra workflow JSON (available at zikra.dev/workflow.json)
+2. Select the Zikra workflow JSON (available at `workflow/zikra_mcp_router.json` in the repository)
 3. Click **Import**
 
 ### Step 3: Configure credentials
@@ -213,7 +213,7 @@ in the database:
 ```sql
 -- In psql (Zikra Full — uses `label` column):
 INSERT INTO zikra.access_tokens (token, label, role)
-VALUES ('myproject-' || gen_random_uuid()::text, 'main token', 'writer')
+VALUES ('myproject-' || gen_random_uuid()::text, 'main token', 'developer')
 RETURNING token;
 ```
 
