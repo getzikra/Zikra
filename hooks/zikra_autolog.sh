@@ -84,6 +84,27 @@ TRANSCRIPT_PATH="$(printf '%s' "$PAYLOAD" | python3 -c \
   "import sys,json; d=json.load(sys.stdin); print(d.get('transcript_path',''))" \
   2>/dev/null || echo "")"
 
+HOOK_CWD="$(printf '%s' "$PAYLOAD" | python3 -c \
+  "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" \
+  2>/dev/null || echo "")"
+
+# ── Dynamic project detection — CWD overrides install-time DEFAULT_PROJECT ───
+detect_project_from_cwd() {
+    local cwd="${1:-}"
+    local cwd_l host_l
+    cwd_l="$(printf '%s' "$cwd" | tr '[:upper:]' '[:lower:]')"
+    host_l="$(printf '%s' "$HOSTNAME_SHORT" | tr '[:upper:]' '[:lower:]')"
+    if   [[ "$cwd_l" == *"getzikra"* ]] || [[ "$cwd_l" == *"/zikra"* ]]; then echo "zikra"
+    elif [[ "$cwd_l" == *"molten8"*  ]]; then echo "molten8"
+    elif [[ "$cwd_l" == *"veltis"*   ]]; then echo "veltisai"
+    elif [[ "$host_l" == *"workstation"* ]] || [[ "$host_l" == *"desktop"* ]]; then echo "$DEFAULT_PROJECT"
+    else echo "$DEFAULT_PROJECT"
+    fi
+}
+if [[ -n "$HOOK_CWD" ]]; then
+    DEFAULT_PROJECT="$(detect_project_from_cwd "$HOOK_CWD")"
+fi
+
 # ── POST helper — completely silent ──────────────────────────────────────────
 zikra_post() {
   curl -s -X POST "$ZIKRA_URL" \
