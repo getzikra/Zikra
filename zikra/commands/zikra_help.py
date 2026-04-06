@@ -1,0 +1,107 @@
+async def cmd_zikra_help(body: dict) -> dict:
+    commands = [
+        {
+            'command': 'search',
+            'aliases': ['find', 'query', 'recall', 'lookup', 'search_memory', 'find_memory', 'retrieve', 'remember'],
+            'description': 'Search memories using hybrid semantic + keyword search.',
+            'required': ['query'],
+            'optional': ['project', 'limit', 'max_tokens'],
+        },
+        {
+            'command': 'save_memory',
+            'aliases': ['save', 'store', 'write_memory', 'add_memory', 'write'],
+            'description': 'Save a new memory or knowledge entry. Updates existing entry if title+memory_type match.',
+            'required': ['title'],
+            'optional': ['content_md', 'project', 'module', 'memory_type', 'tags', 'resolution', 'created_by'],
+        },
+        {
+            'command': 'get_memory',
+            'aliases': ['fetch_memory', 'read_memory', 'load_memory'],
+            'description': 'Fetch a specific memory by its title or UUID.',
+            'required': ['title or id'],
+            'optional': ['memory_type'],
+        },
+        {
+            'command': 'get_prompt',
+            'aliases': ['run_prompt', 'fetch_prompt', 'load_prompt', 'execute_prompt'],
+            'description': 'Fetch a stored prompt by name. Increments access_count.',
+            'required': ['prompt_name'],
+            'optional': ['project'],
+        },
+        {
+            'command': 'save_prompt',
+            'aliases': ['write_prompt', 'store_prompt'],
+            'description': 'Save a new prompt (memory_type=prompt) with semantic embedding.',
+            'required': ['title'],
+            'optional': ['content_md', 'project', 'created_by', 'tags'],
+        },
+        {
+            'command': 'list_prompts',
+            'aliases': ['get_prompts'],
+            'description': 'List all saved prompts, optionally filtered by project.',
+            'required': [],
+            'optional': ['project', 'limit'],
+        },
+        {
+            'command': 'log_run',
+            'aliases': ['log_session', 'end_session', 'finish_run', 'log_completion'],
+            'description': 'Record what an agent session accomplished including token usage.',
+            'required': [],
+            'optional': ['project', 'runner', 'prompt_name', 'status', 'output_summary', 'tokens_input', 'tokens_output', 'cost_usd'],
+        },
+        {
+            'command': 'log_error',
+            'aliases': ['log_bug', 'report_error', 'save_error', 'log_failure'],
+            'description': 'Log an error, failure, or blocker event.',
+            'required': [],
+            'optional': ['project', 'runner', 'error_type', 'message', 'stack_trace', 'context_md'],
+        },
+        {
+            'command': 'get_schema',
+            'aliases': ['schema', 'get_db'],
+            'description': 'Return the database schema and table definitions.',
+            'required': [],
+            'optional': [],
+        },
+        {
+            'command': 'save_requirement',
+            'aliases': [],
+            'description': 'Save a product requirement or user story (memory_type=requirement).',
+            'required': ['title'],
+            'optional': ['content_md', 'project', 'module', 'tags', 'created_by'],
+        },
+        {
+            'command': 'list_requirements',
+            'aliases': ['list_reqs', 'get_requirements'],
+            'description': 'List requirements for a project, optionally filtered by status.',
+            'required': [],
+            'optional': ['project', 'status', 'limit'],
+        },
+        {
+            'command': 'promote_requirement',
+            'aliases': ['promote'],
+            'description': 'Promote a requirement to a decision or other memory_type.',
+            'required': ['id or title'],
+            'optional': ['promote_to'],
+        },
+        {
+            'command': 'create_token',
+            'aliases': ['new_token', 'token'],
+            'description': 'Generate a new bearer access token.',
+            'required': [],
+            'optional': ['person_name', 'role'],
+        },
+        {
+            'command': 'zikra_help',
+            'aliases': ['help'],
+            'description': 'Return this list of all available commands and their descriptions.',
+            'required': [],
+            'optional': [],
+        },
+    ]
+
+    return {
+        'commands': commands,
+        'count': len(commands),
+        'tip': 'All commands are sent as POST to /webhook/zikra with Authorization: Bearer <token>',
+    }

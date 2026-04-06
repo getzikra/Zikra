@@ -7,3 +7,11 @@ __pycache__/
 .claude/cache/
 zikra-stats.json
 "workflow/Zikra MCP Router.json"
+*.zip
+zikra.db
+*.egg-info/
+dist/
+build/
+Thumbs.db
+.memory/
+CLAUDE.md

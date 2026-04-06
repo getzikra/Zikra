@@ -15,10 +15,8 @@ import os
 import json
 import time
 import glob
-import platform
 import socket
 import urllib.request
-import urllib.error
 import sys
 
 # ── Configuration (patched by install.sh) ────────────────────────────────────
@@ -202,6 +200,12 @@ def _log(msg: str) -> None:
 # ── Main poll loop ────────────────────────────────────────────────────────────
 
 def main() -> None:
+    REQUIRED = {"ZIKRA_TOKEN": os.getenv("ZIKRA_TOKEN", BEARER), "ZIKRA_URL": os.getenv("ZIKRA_URL", ZIKRA_URL)}
+    for name, val in REQUIRED.items():
+        if not val or "PLACEHOLDER" in val:
+            print(f"ERROR: {name} is not configured. Run installer.py first.", file=sys.stderr)
+            sys.exit(1)
+
     runner = get_hostname()
 
     # path → {"mtime": float, "stable_since": float, "fired": bool}
