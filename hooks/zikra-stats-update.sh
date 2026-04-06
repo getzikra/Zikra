@@ -18,11 +18,11 @@ HOOK_CWD="$(printf '%s' "$PAYLOAD" | python3 -c \
   "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" \
   2>/dev/null || echo "")"
 
-# Fetch live memory count from Zikra (search with max_results=1 returns total)
+# Fetch live memory count from Zikra (search with limit=1 returns total)
 MEMORY_COUNT=$(curl -s -X POST "$ZIKRA_URL" \
   -H "Authorization: Bearer $ZIKRA_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"search","query":"*","max_results":1}' \
+  -d '{"command":"search","query":"*","limit":1}' \
   | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('total', d.get('count', 0)))" 2>/dev/null || echo "0")
 
 python3 - "$MEMORY_COUNT" "$HOOK_CWD" "${ZIKRA_PROJECT:-global}" <<'PYEOF'

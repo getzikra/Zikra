@@ -13,12 +13,14 @@ Env vars:
 """
 
 import json
+import logging
 import os
 from typing import Optional
 
-
 from zikra.config import VECTOR_SEARCH_K
 from zikra.scoring import score as rescore
+
+logger = logging.getLogger(__name__)
 
 _pg_pool: Optional['asyncpg.Pool'] = None
 
@@ -149,8 +151,8 @@ async def init_pg() -> 'asyncpg.Pool':
         await conn.execute(_PG_TABLES)
         try:
             await conn.execute(_PG_VEC_INDEX)
-        except Exception:
-            pass  # non-fatal — falls back to FTS if no vector index
+        except Exception as e:
+            logger.warning(f'Vector index creation skipped, falling back to FTS: {e}')
 
     return _pg_pool
 
@@ -224,9 +226,13 @@ async def save_memory_pg(pool: 'asyncpg.Pool', data: dict, embedding: list) -> s
 
 # ── search_memories ───────────────────────────────────────────────────────────
 
-async def _fts_search_pg(conn, query_text: str, project: str, limit: int) -> list:
-    """tsvector FTS with ILIKE fallback."""
+async def _fts_search_pg(conn, query_text: str, project: str, limit: int) -> tuple:
+    """tsvector FTS with ILIKE fallback. Returns (results, degraded, reason)."""
     rows = []
+    degraded = False
+    reason = ''
+
+    # Level 1 — tsvector FTS MATCH
     try:
         rows = await conn.fetch("""
             SELECT id, title,
@@ -245,9 +251,10 @@ async def _fts_search_pg(conn, query_text: str, project: str, limit: int) -> lis
             ORDER BY fts_score DESC
             LIMIT $3
         """, query_text, project, limit)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f'FTS MATCH failed: {e}')
 
+    # Level 2 — ILIKE fallback
     if not rows:
         try:
             rows = await conn.fetch("""
@@ -262,8 +269,12 @@ async def _fts_search_pg(conn, query_text: str, project: str, limit: int) -> lis
                   AND (project = $2 OR project = 'global')
                 LIMIT $3
             """, f'%{query_text}%', project, limit)
-        except Exception:
-            pass
+            if rows:
+                degraded = True
+                reason = 'like_fallback'
+        except Exception as e:
+            logger.warning(f'LIKE fallback failed: {e}')
+            return [], True, 'all_search_methods_failed'
 
     results = []
     for row in rows:
@@ -284,11 +295,12 @@ async def _fts_search_pg(conn, query_text: str, project: str, limit: int) -> lis
             'score': round(rescore(raw, mem), 4),
             'created_at': created_str,
         })
-    return results
+    return results, degraded, reason
 
 
 async def search_memories_pg(pool: 'asyncpg.Pool', query_text: str,
-                              query_embedding: list, project: str, limit: int) -> list:
+                              query_embedding: list, project: str, limit: int) -> tuple:
+    """Returns (results, degraded, reason)."""
     is_zero = not query_embedding or all(v == 0.0 for v in query_embedding)
     vec = None if is_zero else _vec_str(query_embedding)
 
@@ -308,7 +320,8 @@ async def search_memories_pg(pool: 'asyncpg.Pool', query_text: str,
                 ORDER BY embedding <=> $1::vector
                 LIMIT $3
             """, vec, project, VECTOR_SEARCH_K)
-        except Exception:
+        except Exception as e:
+            logger.warning(f'Vector search failed, falling back to FTS: {e}')
             return await _fts_search_pg(conn, query_text, project, limit)
 
         if not vec_rows:
@@ -354,7 +367,7 @@ async def search_memories_pg(pool: 'asyncpg.Pool', query_text: str,
             })
 
         results.sort(key=lambda x: x['score'], reverse=True)
-        return results[:limit]
+        return results[:limit], False, ''
 
 
 # ── CRUD helpers ───────────────────────────────────────────────────────────────

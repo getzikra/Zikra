@@ -7,7 +7,7 @@ mcp.json for teammates:
 {
   "mcpServers": {
     "zikra": {
-      "url": "http://<host-ip>:7723/mcp/sse",
+      "url": "http://<host-ip>:8000/mcp/sse",
       "headers": { "Authorization": "Bearer <ZIKRA_TOKEN>" }
     }
   }
@@ -53,7 +53,8 @@ async def _check_auth_request(request: Request) -> dict | None:
     """Auth check for Starlette Request objects. Returns auth_info dict or None."""
     try:
         return await verify_auth(request)
-    except Exception:
+    except Exception as e:
+        logger.warning(f'Auth check error: {e}')
         return None
 
 

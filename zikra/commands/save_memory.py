@@ -8,12 +8,13 @@ async def cmd_save_memory(body: dict) -> dict:
         return {'error': 'title is required'}
 
     content = body.get('content_md') or body.get('content', '')
-    embedding = await embed(f'{title} {content}') or [0.0] * 1536
+    _raw_embed = await embed(f'{title} {content}')
+    embedding = _raw_embed if _raw_embed is not None else [0.0] * 1536
+    embedding_degraded = _raw_embed is None
 
     memory_id = await store_memory(body, embedding)
 
-    return {
-        'id': memory_id,
-        'title': title,
-        'status': 'saved',
-    }
+    result = {'id': memory_id, 'title': title, 'status': 'saved'}
+    if embedding_degraded:
+        result['warning'] = 'semantic embedding unavailable; keyword search only for this entry'
+    return result

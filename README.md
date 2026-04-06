@@ -24,12 +24,18 @@ Zikra fixes that. It's a **MCP-native memory server** that all your agents conne
 ## Install
 
 ```bash
-git clone https://github.com/your-org/zikra
+git clone https://github.com/getzikra/zikra
 cd zikra
+python3 -m venv .venv
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -e .
 python3 installer.py   # interactive setup, ~2 minutes
+python3 -m zikra
+# To skip the onboarding wizard:
 python3 -m zikra --no-onboarding
 ```
+
+Note: python3 -m zikra must be run from the same directory as your .env file.
 
 Docker is not required. The server is a single Python process.
 
@@ -76,7 +82,6 @@ After running the installer, Zikra registers itself in `~/.claude/settings.json`
 | `ZIKRA_PORT` | No | `8000` | HTTP port |
 | `ZIKRA_DB_PATH` | No | `./zikra.db` | SQLite database path |
 | `ZIKRA_PROJECT` | No | `main` | Default project |
-| `ZIKRA_PROFILE` | No | `webhook` | `webhook`, `autolog`, or `full` |
 | `ZIKRA_SKIP_ONBOARDING` | No | — | Set to `1` for CI/scripted use |
 | `OPENAI_API_BASE` | No | `https://api.openai.com/v1` | Swap for local or compatible embedding endpoint |
 | `ZIKRA_EMBEDDING_MODEL` | No | `text-embedding-3-small` | Embedding model name |
@@ -121,11 +126,16 @@ All commands are sent as `POST /webhook/zikra` with `Authorization: Bearer <toke
 | `get_memory` | `fetch_memory`, `read_memory` | Retrieve memory by title or `id` |
 | `get_prompt` | `fetch_prompt`, `run_prompt` | Retrieve a named prompt |
 | `log_run` | `log_session`, `end_session` | Log a completed agent run |
-| `log_error` | `log_bug`, `report_error` | Log an error or failure. Field: `context_md` |
+| `log_error` | `log_bug`, `report_error` | Log an error or failure. Field: `message`, optional `context_md` |
 | `save_requirement` | — | Save a project requirement |
-| `list_prompts` | — | List prompts for a project |
-| `list_requirements` | — | List requirements for a project |
-| `get_schema` | `schema` | Return the database schema |
+| `save_prompt` | `write_prompt`, `store_prompt` | Save a prompt with semantic embedding |
+| `list_prompts` | `get_prompts` | List prompts for a project |
+| `list_requirements` | `list_reqs` | List requirements for a project |
+| `promote_requirement` | `promote` | Change a requirement's memory_type (default: to prompt) |
+| `create_token` | `new_token` | Generate a new bearer token (owner role required) |
+| `get_schema` | `schema` | Return database DDL introspection (engine, tables, DDL) |
+| `zikra_help` | `help` | Return full command reference with fields and aliases |
+| `debug_protocol` | — | Return backend diagnostics: engine, memory count, key status |
 
 **Roles:** `owner`, `admin`, `developer`, `viewer`
 
@@ -179,7 +189,6 @@ OPENAI_API_KEY=sk-... python3 -m zikra.tests.test_all
 ## Notes on planned features
 
 - Automated weekly cleanup and errors aging out in 30 days are **planned, not yet implemented**.
-- A web UI for browsing memories is planned for a future release.
 
 ---
 

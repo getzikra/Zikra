@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import sys
 
@@ -16,8 +17,11 @@ def main():
     parser.add_argument('--port', type=int, default=None,
                         help='Port to listen on (default: value of ZIKRA_PORT or 8000)')
     parser.add_argument('--no-onboarding', action='store_true',
-                        help='No-op flag kept for backwards compatibility')
+                        help='Skip interactive onboarding wizard on startup')
     args = parser.parse_args()
+
+    if args.no_onboarding:
+        os.environ['ZIKRA_SKIP_ONBOARDING'] = '1'
 
     # If no .env and not suppressed, tell user to run installer
     skip_message = (
@@ -35,10 +39,23 @@ def main():
 
     backend = os.getenv('DB_BACKEND', 'sqlite').lower()
 
+    VALID_BACKENDS = ('sqlite', 'postgres')
+    if backend not in VALID_BACKENDS:
+        print(
+            f"ERROR: DB_BACKEND={backend!r} is not valid. "
+            f"Use one of: {', '.join(VALID_BACKENDS)}",
+            file=sys.stderr
+        )
+        sys.exit(1)
+
+    # Give the root logger a handler so zikra.* INFO messages reach the console.
+    # uvicorn loggers have propagate=False, so no double-printing occurs.
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s:     %(message)s')
+
     if backend == 'postgres':
-        print(f'Zikra running at http://{host}:{port}/webhook/zikra (backend: postgres)')
         import uvicorn
-        uvicorn.run('zikra.server:app', host=host, port=port, reload=False)
+        uvicorn.run('zikra.server:app', host=host, port=port, reload=False,
+                    log_level='info')
         return
 
     # SQLite path
@@ -53,9 +70,9 @@ def main():
     run_onboarding(conn, port=port)
     conn.close()
 
-    print(f'Zikra running at http://{host}:{port}/webhook/zikra (backend: sqlite)')
     import uvicorn
-    uvicorn.run('zikra.server:app', host=host, port=port, reload=False)
+    uvicorn.run('zikra.server:app', host=host, port=port, reload=False,
+                log_level='info')
 
 
 if __name__ == '__main__':

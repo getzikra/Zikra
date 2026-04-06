@@ -18,9 +18,6 @@ BASE = f'http://localhost:{_PORT}/webhook/zikra'
 HEADERS = {'Authorization': 'Bearer test-token-lite', 'Content-Type': 'application/json'}
 TEST_DB = f'/tmp/zikra_test_{_PORT}.db'
 
-SAVED_MEMORY_ID = None
-
-
 def post(command: str, extra: dict = None) -> dict:
     if extra is None:
         extra = {}
@@ -37,8 +34,6 @@ def save_memory_plain():
     r = post('save_memory', {'title': 'auth uses JWT tokens', 'content_md': 'We use JWT for all API authentication.'})
     assert r.get('status') == 'saved', f'expected status=saved, got {r}'
     assert 'id' in r
-    global SAVED_MEMORY_ID
-    SAVED_MEMORY_ID = r['id']
 
 
 def save_memory_tags():

@@ -41,8 +41,8 @@ async def cmd_search(body: dict) -> dict:
         query_embedding = [0.0] * 1536
         embedding_warning = 'semantic search unavailable, results are keyword-only'
 
-    results = await find_memories(query, query_embedding, project, limit)
-    results, tokens_used = apply_token_budget(results, max_tokens)
+    results_list, fts_degraded, fts_reason = await find_memories(query, query_embedding, project, limit)
+    results, tokens_used = apply_token_budget(results_list, max_tokens)
 
     response = {
         'results': results,
@@ -51,4 +51,7 @@ async def cmd_search(body: dict) -> dict:
     }
     if embedding_warning:
         response['warning'] = embedding_warning
+    if fts_degraded:
+        response['degraded'] = True
+        response['degraded_reason'] = fts_reason
     return response

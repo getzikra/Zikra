@@ -28,7 +28,7 @@ Ask these four questions one at a time. Wait for each answer.
 
 **Q1 — Zikra URL**
 Where is your Zikra server running?
-- Zikra Lite (local): `http://localhost:7723`
+- Zikra (local): `http://localhost:8000`
 - Zikra Full (remote): `https://n8n.yourserver.com/webhook/zikra`
 
 **Q2 — Admin token**
@@ -257,7 +257,7 @@ SEARCH_RESP=$(curl -s -X POST "$ZIKRA_URL" \
   -H "Authorization: Bearer $MY_TOKEN" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
-  -d "{\"command\":\"search\",\"query\":\"zikra\",\"project\":\"$ZIKRA_PROJECT\",\"max_results\":1}")
+  -d "{\"command\":\"search\",\"query\":\"zikra\",\"project\":\"$ZIKRA_PROJECT\",\"limit\":1}")
 
 echo "$SEARCH_RESP"
 ```

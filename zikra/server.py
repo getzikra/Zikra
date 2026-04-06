@@ -1,6 +1,9 @@
+import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
+
+logger = logging.getLogger(__name__)
 from fastapi.responses import HTMLResponse, JSONResponse
 from dotenv import load_dotenv
 from zikra.db import init_db, is_postgres, debug_memory_count
@@ -30,6 +33,10 @@ async def lifespan(app: FastAPI):
     if is_postgres():
         from zikra.db_postgres import init_pg
         await init_pg()
+    host = os.getenv('ZIKRA_HOST', '0.0.0.0')
+    port = os.getenv('ZIKRA_PORT', '8000')
+    backend = os.getenv('DB_BACKEND', 'sqlite')
+    logger.info(f'Zikra running at http://{host}:{port}/webhook/zikra (backend: {backend})')
     yield
 
 
@@ -166,11 +173,6 @@ async function loadStats() {
   const r = await api('get_schema');
   if (!r) return;
 
-  const db2 = await fetch('/webhook/zikra', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ command: 'search', query: ' ', project: 'global', limit: 0, max_tokens: 1 })
-  });
   // count via schema — just update labels
   document.getElementById('s-total').textContent = '✓';
 }

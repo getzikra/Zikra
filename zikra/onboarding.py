@@ -49,7 +49,7 @@ def _validate_project(v: str):
     return None
 
 
-def run_onboarding(conn: sqlite3.Connection, port: int = 7723):
+def run_onboarding(conn: sqlite3.Connection, port: int = 8000):
     import sys, os
     if os.getenv('ZIKRA_SKIP_ONBOARDING') or not sys.stdin or not sys.stdin.isatty():
         return

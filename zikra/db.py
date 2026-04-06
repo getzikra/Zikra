@@ -1,3 +1,4 @@
+import logging
 import sqlite3
 import sqlite_vec
 import sys
@@ -9,6 +10,8 @@ import re
 import struct
 from typing import Optional
 from zikra.config import VECTOR_SEARCH_K
+
+logger = logging.getLogger(__name__)
 
 # ── Backend state ──────────────────────────────────────────────────────────────
 
@@ -129,9 +132,6 @@ def _sqlite_save_memory(db, lock, data: dict, embedding: list) -> str:
     return row['id'] if row else memory_id
 
 
-# Keep the old name as an alias for anything calling it directly
-save_memory = _sqlite_save_memory
-
 
 # ── SQLite: search_memories ────────────────────────────────────────────────────
 
@@ -154,23 +154,34 @@ def _fts_query(db, match_expr: str, project: str, limit: int):
     """, [match_expr, project, limit]).fetchall()
 
 
-def _fts_search(db, query_text: str, project: str, limit: int) -> list:
-    """Full-text search fallback — AND → OR → LIKE."""
+def _fts_search(db, query_text: str, project: str, limit: int) -> tuple:
+    """Full-text search fallback — AND → OR → LIKE.
+    Returns (results, degraded, reason)."""
     rows = []
+    degraded = False
+    reason = ''
 
+    # Level 1 — FTS MATCH
     try:
         rows = _fts_query(db, query_text, project, limit)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f'FTS MATCH failed: {e}')
+        # fall through to OR tokens
 
+    # Level 2 — OR token MATCH
     if not rows:
         tokens = [t for t in re.sub(r'[^\w\s]', ' ', query_text).split() if t]
         if len(tokens) > 1:
             try:
                 rows = _fts_query(db, ' OR '.join(tokens), project, limit)
-            except Exception:
-                pass
+                if rows:
+                    degraded = True
+                    reason = 'fts_or_fallback'
+            except Exception as e:
+                logger.warning(f'FTS OR fallback failed: {e}')
+                # fall through to LIKE
 
+    # Level 3 — LIKE
     if not rows:
         try:
             rows = db.execute("""
@@ -186,8 +197,12 @@ def _fts_search(db, query_text: str, project: str, limit: int) -> list:
                   AND (project = ? OR project = 'global')
                 LIMIT ?
             """, [f'%{query_text}%', f'%{query_text}%', project, limit]).fetchall()
-        except Exception:
-            pass
+            if rows:
+                degraded = True
+                reason = 'like_fallback'
+        except Exception as e:
+            logger.warning(f'LIKE fallback failed: {e}')
+            return [], True, 'all_search_methods_failed'
 
     from zikra.scoring import score as rescore
     results = []
@@ -209,11 +224,12 @@ def _fts_search(db, query_text: str, project: str, limit: int) -> list:
             'score': round(rescore(raw, mem), 4),
             'created_at': row['created_at'],
         })
-    return results
+    return results, degraded, reason
 
 
 def search_memories(db, query_text: str, query_embedding: list,
-                    project: str, limit: int = 5) -> list:
+                    project: str, limit: int = 5) -> tuple:
+    """Returns (results, degraded, reason)."""
     is_zero = all(v == 0.0 for v in query_embedding)
 
     vec_results = []
@@ -226,7 +242,8 @@ def search_memories(db, query_text: str, query_embedding: list,
                 WHERE embedding MATCH ?
                   AND k = ?
             """, [vec_bytes, VECTOR_SEARCH_K]).fetchall()
-        except Exception:
+        except Exception as e:
+            logger.warning(f'Vector search failed, falling back to FTS: {e}')
             vec_results = []
 
     if not vec_results:
@@ -280,7 +297,7 @@ def search_memories(db, query_text: str, query_embedding: list,
         })
 
     results.sort(key=lambda x: x['score'], reverse=True)
-    return results[:limit]
+    return results[:limit], False, ''
 
 
 # ── Async public API — dispatches to SQLite or Postgres ───────────────────────
@@ -297,8 +314,8 @@ async def store_memory(data: dict, embedding: list) -> str:
 
 
 async def find_memories(query_text: str, query_embedding: list,
-                        project: str, limit: int) -> list:
-    """Hybrid vector + FTS search."""
+                        project: str, limit: int) -> tuple:
+    """Hybrid vector + FTS search. Returns (results, degraded, reason)."""
     if _is_pg:
         from zikra.db_postgres import search_memories_pg, get_pg_pool
         return await search_memories_pg(get_pg_pool(), query_text, query_embedding, project, limit)

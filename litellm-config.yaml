@@ -1,8 +1,0 @@
-model_list:
-  - model_name: text-embedding-3-small
-    litellm_params:
-      model: openai/text-embedding-3-small
-      api_key: os.environ/OPENAI_API_KEY
-
-litellm_settings:
-  drop_params: true

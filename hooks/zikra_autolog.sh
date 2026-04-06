@@ -105,14 +105,17 @@ if [[ -n "$HOOK_CWD" ]]; then
     DEFAULT_PROJECT="$(detect_project_from_cwd "$HOOK_CWD")"
 fi
 
-# ── POST helper — completely silent ──────────────────────────────────────────
+# ── POST helper — logs failures to ~/.zikra/autolog_errors.log ───────────────
+LOG_FILE="${HOME}/.zikra/autolog_errors.log"
+mkdir -p "$(dirname "$LOG_FILE")"
+
 zikra_post() {
   curl -s -X POST "$ZIKRA_URL" \
     -H "Authorization: Bearer $ZIKRA_TOKEN" \
     -H "Content-Type: application/json" \
     -H "User-Agent: $ZIKRA_USER_AGENT" \
     --connect-timeout 15 \
-    -d "$1" > /dev/null 2>&1
+    -d "$1" >> "$LOG_FILE" 2>&1 || echo "[$(date)] POST failed" >> "$LOG_FILE"
 }
 
 # ── Notify helper — stdout only, works everywhere ────────────────────────────

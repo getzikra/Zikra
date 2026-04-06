@@ -19,7 +19,6 @@ if not sys.stdin.isatty():
 import json
 import re
 import secrets
-import shutil
 from pathlib import Path
 
 
@@ -114,6 +113,7 @@ token = secrets.token_urlsafe(32)
 
 env_lines = [
     f'ZIKRA_TOKEN={token}',
+    'ZIKRA_SKIP_ONBOARDING=1',
     f'OPENAI_API_KEY={openai_key}',
     f'DB_BACKEND={db_backend}',
 ]
@@ -130,11 +130,15 @@ if db_backend == 'postgres':
 env_lines += [
     'ZIKRA_HOST=0.0.0.0',
     f'ZIKRA_PROJECT={project}',
-    f'ZIKRA_PROFILE={zikra_profile}',
 ]
 
-Path('.env').write_text('\n'.join(env_lines) + '\n')
-print('\n✓ .env written')
+env_content = '\n'.join(env_lines) + '\n'
+try:
+    Path('.env').write_text(env_content)
+    print('✓ .env written')
+except OSError as e:
+    print(f'ERROR: could not write .env: {e}', file=sys.stderr)
+    sys.exit(1)
 
 # ── Postgres: verify asyncpg is available ────────────────────────────────────
 
@@ -208,7 +212,7 @@ WantedBy=default.target
             systemd_dir.mkdir(parents=True, exist_ok=True)
             (systemd_dir / 'zikra.service').write_text(service_content)
             print(f'  ✓ systemd unit written to {systemd_dir}/zikra.service')
-        except PermissionError as e:
+        except OSError as e:
             print(f'  WARNING: Could not write systemd unit: {e}')
     else:
         print('  NOTE: systemd not available on this platform — skipping service install.')
@@ -224,7 +228,7 @@ try:
         f'ZIKRA_PROJECT={project}\n'
     )
     print(f'  ✓ token saved to {token_dir}/token')
-except PermissionError as e:
+except OSError as e:
     print(f'  WARNING: Could not save token file: {e}')
 
 # ── Register MCP server in ~/.claude/settings.json ───────────────────────────

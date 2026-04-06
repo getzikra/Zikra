@@ -29,7 +29,7 @@ Results are ranked by a combined score. Use this at the start of every session.
 - `project` — string, project namespace
 
 **Optional fields:**
-- `max_results` — integer (default: 5, max: 20)
+- `limit` — integer (default: 5, max: 20)
 - `memory_type` — filter to a specific type (`"decision"`, `"error"`, etc.)
 - `include_archived` — boolean (default: false)
 
@@ -40,10 +40,10 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
   -d '{
-    "command":     "search",
-    "query":       "authentication JWT refresh token",
-    "project":     "myproject",
-    "max_results": 5
+    "command": "search",
+    "query":   "authentication JWT refresh token",
+    "project": "myproject",
+    "limit":   5
   }'
 ```
 
@@ -124,9 +124,6 @@ prompt_run entry and returns a run_id for linking to the subsequent log_run.
 - `project` — string
 - `runner` — string, hostname of the machine executing the prompt
 
-**Optional fields:**
-- `max_results` — integer (default: 1)
-
 **Example:**
 ```bash
 curl -s -X POST "https://n8n.example.com/webhook/zikra" \
@@ -169,12 +166,10 @@ Called automatically by the Stop hook and zikra_watcher.py daemon.
 - `output_summary` — string, 1–3 sentence description of what was done
 - `tokens_input` — integer
 - `tokens_output` — integer
-- `tokens_cache_read` — integer
-- `tokens_cache_creation` — integer
 
 **Optional fields:**
-- `session_id` — string, Claude Code session UUID from transcript
-- `prompt_run_id` — UUID, links this run to a prior get_prompt call
+- `prompt_name` — string, name of the prompt that was run
+- `cost_usd` — float, cost of the run in USD
 
 **Example:**
 ```bash
@@ -183,16 +178,13 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
   -d '{
-    "command":               "log_run",
-    "project":               "myproject",
-    "runner":                "dev-machine-01",
-    "status":                "success",
-    "output_summary":        "Implemented user authentication with JWT. Added refresh token rotation and blacklist. All tests passing.",
-    "tokens_input":          48200,
-    "tokens_output":         12400,
-    "tokens_cache_read":     31000,
-    "tokens_cache_creation": 0,
-    "session_id":            "sess_abc123def456"
+    "command":        "log_run",
+    "project":        "myproject",
+    "runner":         "dev-machine-01",
+    "status":         "success",
+    "output_summary": "Implemented user authentication with JWT. Added refresh token rotation and blacklist. All tests passing.",
+    "tokens_input":   48200,
+    "tokens_output":  12400
   }'
 ```
 
@@ -214,12 +206,13 @@ tracking and future search.
 **Required fields:**
 - `command` — `"log_error"`
 - `project` — string
-- `title` — string, short description of the error
-- `content_md` — string, full details: what happened, what was tried, resolution if known
+- `message` — string, short description of the error
 
 **Optional fields:**
-- `module` — string, feature area where the error occurred
-- `source_file` — string, file path if applicable
+- `context_md` — string, full details: what happened, what was tried, resolution if known
+- `runner` — string, hostname
+- `error_type` — string, category of error
+- `stack_trace` — string, stack trace if applicable
 
 **Example:**
 ```bash
@@ -230,8 +223,8 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
   -d '{
     "command":    "log_error",
     "project":    "myproject",
-    "title":      "prod deploy failed — missing DATABASE_URL env var",
-    "content_md": "Deploy to production failed because DATABASE_URL was not set in the environment. The .env file was not copied to the server. Fixed by adding DATABASE_URL to the deployment secrets in CI."
+    "message":    "prod deploy failed — missing DATABASE_URL env var",
+    "context_md": "Deploy to production failed because DATABASE_URL was not set in the environment. The .env file was not copied to the server. Fixed by adding DATABASE_URL to the deployment secrets in CI."
   }'
 ```
 
@@ -285,15 +278,11 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
 
 ## get_schema
 
-Retrieve the stored schema documentation for a project or module.
-Searches memories with memory_type=`"schema"`.
+Returns database introspection data: engine type, table names, and DDL for each
+table. Does not search memories.
 
 **Required fields:**
 - `command` — `"get_schema"`
-- `project` — string
-
-**Optional fields:**
-- `module` — string, filter to a specific module
 
 **Example:**
 ```bash
@@ -301,24 +290,17 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
-  -d '{
-    "command": "get_schema",
-    "project": "myproject",
-    "module":  "auth"
-  }'
+  -d '{"command": "get_schema"}'
 ```
 
 **Response:**
 ```json
 {
-  "schemas": [
-    {
-      "title":      "users table schema",
-      "module":     "auth",
-      "content_md": "## users\n| column | type | notes |\n|--------|------|-------|..."
-    }
-  ],
-  "count": 1
+  "engine": "sqlite",
+  "tables": ["memories", "prompt_runs", "error_log", "access_tokens"],
+  "schema": {
+    "memories": "CREATE TABLE memories (...)"
+  }
 }
 ```
 
@@ -410,12 +392,15 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
 
 ## promote_requirement
 
-Mark a requirement as implemented (sets `resolved=true`, `resolution` text, `status=archived`).
+Promotes a requirement to another memory_type (default: `"prompt"`). Looks up
+by `id` (UUID) or `title`.
 
 **Required fields:**
 - `command` — `"promote_requirement"`
-- `id` — UUID of the requirement memory
-- `resolution` — string, how it was implemented
+- `id` or `title` — UUID or title of the requirement memory
+
+**Optional fields:**
+- `promote_to` — string, target memory_type (default: `"prompt"`)
 
 **Example:**
 ```bash
@@ -424,9 +409,8 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
   -d '{
-    "command":    "promote_requirement",
-    "id":         "5b9c3d1e-...",
-    "resolution": "Implemented in PR #42 using Nodemailer + SMTP. Token stored in Redis with 1-hour TTL."
+    "command": "promote_requirement",
+    "id":      "5b9c3d1e-..."
   }'
 ```
 

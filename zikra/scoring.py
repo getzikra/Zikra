@@ -1,5 +1,8 @@
+import logging
 import math
 from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
 
 
 def score(raw: float, mem: dict) -> float:
@@ -10,7 +13,8 @@ def score(raw: float, mem: dict) -> float:
     try:
         created = datetime.fromisoformat(mem["created_at"].replace("Z", "+00:00"))
         age_days = max(0, (datetime.now(timezone.utc) - created).days)
-    except Exception:
+    except Exception as e:
+        logger.warning(f'Failed to parse created_at timestamp {mem.get("created_at")!r}: {e}')
         age_days = 0
 
     decay = max(0.05, math.exp(-0.693 * age_days / 30))
