@@ -605,29 +605,53 @@ async def list_by_memory_type(memory_type: str, project: str, limit: int,
         elif status == 'resolved':
             pending_review = 0
 
+    # global → sees ALL memories; specific project → scoped to that project only
     if pending_review is not None:
-        sql = """
-            SELECT id, title, SUBSTR(content_md, 1, 300) AS snippet,
-                   project, access_count, created_by, created_at
-            FROM memories
-            WHERE memory_type = ?
-              AND (project = ? OR project = 'global')
-              AND pending_review = ?
-            ORDER BY access_count DESC, created_at DESC
-            LIMIT ?
-        """
-        params = [memory_type, project, pending_review, limit]
+        if project == 'global':
+            sql = """
+                SELECT id, title, SUBSTR(content_md, 1, 300) AS snippet,
+                       project, access_count, created_by, created_at
+                FROM memories
+                WHERE memory_type = ?
+                  AND pending_review = ?
+                ORDER BY access_count DESC, created_at DESC
+                LIMIT ?
+            """
+            params = [memory_type, pending_review, limit]
+        else:
+            sql = """
+                SELECT id, title, SUBSTR(content_md, 1, 300) AS snippet,
+                       project, access_count, created_by, created_at
+                FROM memories
+                WHERE memory_type = ?
+                  AND project = ?
+                  AND pending_review = ?
+                ORDER BY access_count DESC, created_at DESC
+                LIMIT ?
+            """
+            params = [memory_type, project, pending_review, limit]
     else:
-        sql = """
-            SELECT id, title, SUBSTR(content_md, 1, 300) AS snippet,
-                   project, access_count, created_by, created_at
-            FROM memories
-            WHERE memory_type = ?
-              AND (project = ? OR project = 'global')
-            ORDER BY access_count DESC, created_at DESC
-            LIMIT ?
-        """
-        params = [memory_type, project, limit]
+        if project == 'global':
+            sql = """
+                SELECT id, title, SUBSTR(content_md, 1, 300) AS snippet,
+                       project, access_count, created_by, created_at
+                FROM memories
+                WHERE memory_type = ?
+                ORDER BY access_count DESC, created_at DESC
+                LIMIT ?
+            """
+            params = [memory_type, limit]
+        else:
+            sql = """
+                SELECT id, title, SUBSTR(content_md, 1, 300) AS snippet,
+                       project, access_count, created_by, created_at
+                FROM memories
+                WHERE memory_type = ?
+                  AND project = ?
+                ORDER BY access_count DESC, created_at DESC
+                LIMIT ?
+            """
+            params = [memory_type, project, limit]
 
     async with _aio_db.execute(sql, params) as cur:
         rows = await cur.fetchall()
