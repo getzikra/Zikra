@@ -740,6 +740,22 @@ async def list_all_memories(project: str = 'global', limit: int = 250) -> list[d
     return out
 
 
+async def count_memories_by_project(project: str) -> int:
+    """Return memory count scoped by project. 'global' sees all."""
+    if _is_pg:
+        from zikra.db_postgres import count_memories_pg, get_pg_pool
+        return await count_memories_pg(get_pg_pool(), project)
+    if project == 'global':
+        sql = "SELECT COUNT(*) FROM memories WHERE searchable = 1"
+        params = ()
+    else:
+        sql = "SELECT COUNT(*) FROM memories WHERE searchable = 1 AND project = ?"
+        params = (project,)
+    async with _aio_db.execute(sql, params) as cur:
+        row = await cur.fetchone()
+    return row[0] if row else 0
+
+
 async def debug_memory_count() -> int:
     """Return total count of memories (for debug_protocol)."""
     if _is_pg:

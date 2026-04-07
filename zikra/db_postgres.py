@@ -654,6 +654,20 @@ async def list_all_memories_pg(pool, project: str = 'global', limit: int = 250) 
     return out
 
 
+async def count_memories_pg(pool, project: str) -> int:
+    """Return total memory count scoped by project. 'global' sees all."""
+    async with pool.acquire() as conn:
+        if project == 'global':
+            row = await conn.fetchrow(
+                "SELECT COUNT(*) AS n FROM memories WHERE searchable = 1")
+        else:
+            row = await conn.fetchrow(
+                "SELECT COUNT(*) AS n FROM memories WHERE searchable = 1 AND project = $1",
+                project,
+            )
+    return row['n'] if row else 0
+
+
 async def debug_count_pg(pool) -> int:
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT COUNT(*) AS n FROM memories")

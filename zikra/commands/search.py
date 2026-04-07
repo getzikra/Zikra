@@ -1,4 +1,4 @@
-from zikra.db import find_memories
+from zikra.db import find_memories, count_memories_by_project
 from zikra.embed import embed
 from zikra.commands import _require_project, _parse_limit
 from zikra.config import SNIPPET_LENGTHS
@@ -59,7 +59,8 @@ async def cmd_search(body: dict) -> dict:
     )
     results, tokens_used = apply_token_budget(results_list, max_tokens)
 
-    response = {'results': results, 'count': len(results), 'tokens_used': tokens_used}
+    total = await count_memories_by_project(project)
+    response = {'results': results, 'count': len(results), 'total': total, 'tokens_used': tokens_used}
     if embedding_warning:
         response['degraded'] = True
         response['warning'] = embedding_warning
