@@ -348,3 +348,21 @@ json.dump(s, open(path, 'w'), indent=2)
 ```
 
 Print: Zikra bar installed. Restart Claude Code to see it.
+
+---
+
+## Keeping Zikra updated
+
+Run `zikra update` to pull the latest version and refresh hooks.
+You will see a warning at startup if your install is behind:
+
+```
+⚠  Zikra update available — run: zikra update
+```
+
+`zikra update` will:
+1. Pull the latest code from GitHub (`git pull origin main`)
+2. Re-run `pip install -e .` (or `.[postgres]` for Postgres installs)
+3. Compare hook files in `hooks/` against your `~/.claude/` installs and update any that differ
+4. Restart the systemd service automatically if it is running
+5. Print a summary of what changed
