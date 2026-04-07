@@ -680,6 +680,66 @@ async def change_memory_type(memory_id: str, new_type: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+async def list_projects() -> list[str]:
+    """Return distinct project names."""
+    if _is_pg:
+        from zikra.db_postgres import list_projects_pg, get_pg_pool
+        return await list_projects_pg(get_pg_pool())
+
+    async with _aio_db.execute("""
+        SELECT DISTINCT project
+        FROM memories
+        WHERE project IS NOT NULL AND project != ''
+        ORDER BY project
+    """) as cur:
+        rows = await cur.fetchall()
+    return [r['project'] for r in rows]
+
+
+async def list_all_memories(project: str = 'global', limit: int = 250) -> list[dict]:
+    """Return a compact list of memories for UI views such as graph browsing."""
+    if _is_pg:
+        from zikra.db_postgres import list_all_memories_pg, get_pg_pool
+        return await list_all_memories_pg(get_pg_pool(), project, limit)
+
+    if project == 'global':
+        sql = """
+            SELECT id, title, SUBSTR(content_md, 1, 280) AS snippet,
+                   content_md, memory_type, project, module, tags,
+                   access_count, created_by, pending_review, resolved, created_at
+            FROM memories
+            WHERE searchable = 1
+            ORDER BY access_count DESC, created_at DESC
+            LIMIT ?
+        """
+        params = [limit]
+    else:
+        sql = """
+            SELECT id, title, SUBSTR(content_md, 1, 280) AS snippet,
+                   content_md, memory_type, project, module, tags,
+                   access_count, created_by, pending_review, resolved, created_at
+            FROM memories
+            WHERE searchable = 1
+              AND project = ?
+            ORDER BY access_count DESC, created_at DESC
+            LIMIT ?
+        """
+        params = [project, limit]
+
+    async with _aio_db.execute(sql, params) as cur:
+        rows = await cur.fetchall()
+
+    out = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item['tags'] = json.loads(item.get('tags') or '[]')
+        except (TypeError, json.JSONDecodeError):
+            item['tags'] = []
+        out.append(item)
+    return out
+
+
 async def debug_memory_count() -> int:
     """Return total count of memories (for debug_protocol)."""
     if _is_pg:

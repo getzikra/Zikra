@@ -618,6 +618,42 @@ async def change_memory_type_pg(pool, memory_id: str, new_type: str) -> Optional
     return dict(row) if row else None
 
 
+async def list_projects_pg(pool) -> list[str]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT DISTINCT project
+            FROM memories
+            WHERE project IS NOT NULL AND project != ''
+            ORDER BY project
+        """)
+    return [r['project'] for r in rows]
+
+
+async def list_all_memories_pg(pool, project: str = 'global', limit: int = 250) -> list[dict]:
+    project_param = None if project == 'global' else project
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT id, title,
+                   SUBSTRING(content_md, 1, 280) AS snippet,
+                   content_md, memory_type, project, module, tags,
+                   access_count, created_by, pending_review, resolved, created_at
+            FROM memories
+            WHERE searchable = 1
+              AND ($1::text IS NULL OR project = $1)
+            ORDER BY access_count DESC, created_at DESC
+            LIMIT $2
+        """, project_param, limit)
+    out = []
+    for row in rows:
+        item = _row_to_dict(row)
+        try:
+            item['tags'] = json.loads(item.get('tags') or '[]')
+        except (TypeError, json.JSONDecodeError):
+            item['tags'] = []
+        out.append(item)
+    return out
+
+
 async def debug_count_pg(pool) -> int:
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT COUNT(*) AS n FROM memories")

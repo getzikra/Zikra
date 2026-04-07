@@ -2,12 +2,22 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from json import JSONDecodeError
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from dotenv import load_dotenv
 
-from zikra.db import init_db, is_postgres, debug_memory_count, open_aio_db, set_aio_db
+from zikra.db import (
+    debug_memory_count,
+    init_db,
+    is_postgres,
+    list_all_memories,
+    list_projects,
+    list_by_memory_type,
+    open_aio_db,
+    set_aio_db,
+)
 from zikra.auth import verify_auth, ROLE_PERMISSIONS
 from zikra.commands.search import cmd_search
 from zikra.commands.save_memory import cmd_save_memory
@@ -50,7 +60,7 @@ async def lifespan(app: FastAPI):
         await app.state.sqlite_db.close()
 
 
-app = FastAPI(title='Zikra Lite', version='0.1.0', lifespan=lifespan)
+app = FastAPI(title='Zikra', version='0.1.0', lifespan=lifespan)
 app.mount('/mcp', build_mcp_app())
 
 
@@ -180,124 +190,113 @@ async def health():
 
 # ── Web UI ─────────────────────────────────────────────────────────────────────
 
-_UI_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zikra Lite</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-         background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 2rem; }
-  h1 { font-size: 1.5rem; font-weight: 700; color: #a78bfa; margin-bottom: 0.25rem; }
-  .sub { color: #64748b; font-size: 0.875rem; margin-bottom: 2rem; }
-  .stats { display: flex; gap: 1.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
-  .stat { background: #1e2130; border: 1px solid #2d3148; border-radius: 8px;
-          padding: 1rem 1.5rem; min-width: 120px; }
-  .stat-n { font-size: 1.75rem; font-weight: 700; color: #a78bfa; }
-  .stat-l { font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; }
-  .search-row { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-  input, select { background: #1e2130; border: 1px solid #2d3148; color: #e2e8f0;
-                  border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 0.875rem; }
-  input[type=text] { flex: 1; min-width: 200px; }
-  input[type=password] { width: 220px; }
-  button { background: #7c3aed; color: #fff; border: none; border-radius: 6px;
-           padding: 0.5rem 1.25rem; cursor: pointer; font-size: 0.875rem; }
-  button:hover { background: #6d28d9; }
-  .results { display: flex; flex-direction: column; gap: 0.75rem; }
-  .card { background: #1e2130; border: 1px solid #2d3148; border-radius: 8px; padding: 1rem; }
-  .card-title { font-weight: 600; color: #c4b5fd; margin-bottom: 0.4rem; }
-  .card-snippet { font-size: 0.8rem; color: #94a3b8; line-height: 1.5; }
-  .card-meta { font-size: 0.7rem; color: #475569; margin-top: 0.5rem; }
-  .badge { display: inline-block; background: #312e81; color: #a5b4fc;
-           border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.65rem;
-           margin-right: 0.35rem; }
-  .msg { color: #64748b; font-size: 0.875rem; padding: 1rem 0; }
-  .err { color: #f87171; font-size: 0.875rem; padding: 0.5rem 0; }
-</style>
-</head>
-<body>
-<h1>Zikra Lite</h1>
-<p class="sub">Local AI memory — <span id="host"></span></p>
-
-<div class="stats" id="stats">
-  <div class="stat"><div class="stat-n" id="s-total">—</div><div class="stat-l">memories</div></div>
-  <div class="stat"><div class="stat-n" id="s-prompts">—</div><div class="stat-l">prompts</div></div>
-  <div class="stat"><div class="stat-n" id="s-reqs">—</div><div class="stat-l">requirements</div></div>
-</div>
-
-<div class="search-row">
-  <input type="password" id="tok" placeholder="Bearer token" />
-  <input type="text" id="q" placeholder="Search memories…" />
-  <select id="proj"><option value="">all projects</option></select>
-  <button onclick="doSearch()">Search</button>
-</div>
-<div id="err" class="err"></div>
-<div class="results" id="results"><p class="msg">Enter your token and a query to search.</p></div>
-
-<script>
-document.getElementById('host').textContent = location.host;
-
-const tok = () => document.getElementById('tok').value.trim();
-
-async function api(command, extra = {}) {
-  const t = tok();
-  if (!t) { document.getElementById('err').textContent = 'Token required'; return null; }
-  document.getElementById('err').textContent = '';
-  const r = await fetch('/webhook/zikra', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + t, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ command, ...extra })
-  });
-  if (r.status === 401) { document.getElementById('err').textContent = 'Bad token'; return null; }
-  return r.json();
-}
-
-async function loadStats() {
-  const t = tok();
-  if (!t) return;
-  const r = await api('get_schema');
-  if (!r) return;
-  document.getElementById('s-total').textContent = '✓';
-}
-
-async function doSearch() {
-  const q = document.getElementById('q').value.trim();
-  const proj = document.getElementById('proj').value || 'global';
-  if (!q) return;
-  const r = await api('search', { query: q, project: proj, limit: 10 });
-  if (!r) return;
-  const el = document.getElementById('results');
-  if (!r.results || r.results.length === 0) {
-    el.innerHTML = '<p class="msg">No results found.</p>'; return;
-  }
-  el.innerHTML = r.results.map(m => `
-    <div class="card">
-      <div class="card-title">${esc(m.title)}</div>
-      <div class="card-snippet">${esc(m.snippet || '')}</div>
-      <div class="card-meta">
-        <span class="badge">${esc(m.memory_type)}</span>
-        <span class="badge">${esc(m.project)}</span>
-        score: ${m.score} &nbsp; ${m.created_at || ''}
-      </div>
-    </div>`).join('');
-}
-
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
-document.getElementById('tok').addEventListener('change', loadStats);
-</script>
-</body>
-</html>"""
+_UI_HTML = (Path(__file__).with_name('ui.html')).read_text(encoding='utf-8')
 
 
 @app.get('/', response_class=HTMLResponse)
 async def web_ui():
     return HTMLResponse(_UI_HTML)
+
+
+def _normalise_title(value: str) -> str:
+    return ' '.join((value or '').lower().split())
+
+
+def _build_graph_payload(memories: list[dict]) -> dict:
+    max_edges = 260
+    node_degree_cap = 6
+    title_map = {m['id']: _normalise_title(m.get('title', '')) for m in memories}
+    candidate_edges: list[tuple[float, str, str, str]] = []
+    ids = [m['id'] for m in memories]
+
+    for index, left in enumerate(memories):
+        left_title = title_map[left['id']]
+        left_content = (left.get('content_md') or '').lower()
+        left_tags = {str(tag).strip().lower() for tag in (left.get('tags') or []) if str(tag).strip()}
+        for right in memories[index + 1:]:
+            right_title = title_map[right['id']]
+            right_content = (right.get('content_md') or '').lower()
+            right_tags = {str(tag).strip().lower() for tag in (right.get('tags') or []) if str(tag).strip()}
+
+            score = 0.0
+            relation = ''
+            shared_tags = left_tags & right_tags
+            if left.get('module') and left.get('module') == right.get('module'):
+                score += 2.4
+                relation = 'module'
+            if shared_tags:
+                score += min(1.8, 0.7 * len(shared_tags))
+                relation = relation or 'tag'
+            if left.get('project') and left.get('project') == right.get('project'):
+                score += 1.85
+                relation = relation or 'project'
+            if left_title and len(left_title) >= 10 and left_title in right_content:
+                score += 3.2
+                relation = 'reference'
+            if right_title and len(right_title) >= 10 and right_title in left_content:
+                score += 3.2
+                relation = 'reference'
+            if left.get('memory_type') == right.get('memory_type'):
+                score += 0.25
+            if score >= 2.0:
+                candidate_edges.append((score, left['id'], right['id'], relation or 'related'))
+
+    candidate_edges.sort(key=lambda item: item[0], reverse=True)
+    degree_count = {node_id: 0 for node_id in ids}
+    edges = []
+    for score, source, target, relation in candidate_edges:
+        if len(edges) >= max_edges:
+            break
+        if degree_count[source] >= node_degree_cap or degree_count[target] >= node_degree_cap:
+            continue
+        degree_count[source] += 1
+        degree_count[target] += 1
+        edges.append({
+            'source': source,
+            'target': target,
+            'type': relation,
+            'weight': round(score, 2),
+        })
+
+    nodes = []
+    for memory in memories:
+        nodes.append({
+            'id': memory['id'],
+            'title': memory.get('title') or 'Untitled',
+            'snippet': memory.get('snippet') or '',
+            'memory_type': memory.get('memory_type') or 'conversation',
+            'project': memory.get('project') or 'global',
+            'module': memory.get('module') or '',
+            'created_at': memory.get('created_at'),
+            'access_count': memory.get('access_count') or 0,
+            'created_by': memory.get('created_by') or '',
+        })
+    return {'nodes': nodes, 'edges': edges}
+
+
+@app.get('/api/ui/bootstrap')
+async def ui_bootstrap(request: Request):
+    auth_info = await verify_auth(request)
+    project = request.query_params.get('project') or 'global'
+    prompts = await list_by_memory_type('prompt', project, 8)
+    requirements = await list_by_memory_type('requirement', project, 8)
+    return {
+        'role': auth_info.get('role', 'viewer'),
+        'project': project,
+        'projects': await list_projects(),
+        'memory_total': await debug_memory_count(),
+        'recent_prompts': prompts,
+        'recent_requirements': requirements,
+    }
+
+
+@app.get('/api/ui/graph')
+async def ui_graph(request: Request):
+    await verify_auth(request)
+    project = request.query_params.get('project') or 'global'
+    limit = min(int(request.query_params.get('limit', '180')), 300)
+    memories = await list_all_memories(project, limit)
+    return _build_graph_payload(memories)
 
 
 # ── Webhook ────────────────────────────────────────────────────────────────────

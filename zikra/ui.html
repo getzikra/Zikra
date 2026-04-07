@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zikra</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23161524'/%3E%3Cstop offset='100%25' stop-color='%23090a10'/%3E%3C/linearGradient%3E%3ClinearGradient id='z' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23ffb36b'/%3E%3Cstop offset='100%25' stop-color='%23f97316'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23bg)'/%3E%3Crect x='2' y='2' width='60' height='60' rx='14' fill='none' stroke='%23ffffff' stroke-opacity='.08'/%3E%3Cpath d='M17 18h30v6L26 41h22v6H16v-6l21-17H17z' fill='url(%23z)'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0c0d14;
+    --bg-2: #090a10;
+    --panel: #14152a;
+    --panel-2: #181a31;
+    --border: #1e2035;
+    --text: #e2e0ff;
+    --text-2: #c8c6e0;
+    --muted: #8a8aa8;
+    --muted-2: #5a5c78;
+    --purple: #a89cf7;
+    --purple-2: #7c6fcd;
+    --blue: #5ba3f5;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(circle at top left, rgba(168, 156, 247, 0.13), transparent 28%),
+      radial-gradient(circle at top right, rgba(91, 163, 245, 0.08), transparent 24%),
+      linear-gradient(180deg, #090a10 0%, var(--bg) 100%);
+    min-height: 100vh;
+  }
+
+  button, input, select {
+    font: inherit;
+  }
+
+  .shell {
+    width: min(1400px, calc(100vw - 28px));
+    margin: 0 auto;
+    padding: 18px 0 36px;
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .brand-mark {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    border: 1px solid rgba(168, 156, 247, 0.25);
+    background: linear-gradient(135deg, rgba(168, 156, 247, 0.2), rgba(91, 163, 245, 0.12));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    display: grid;
+    place-items: center;
+  }
+
+  .brand-mark::before {
+    content: "";
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: radial-gradient(circle at 30% 30%, #ddd6ff, var(--purple));
+    box-shadow: 0 0 20px rgba(168, 156, 247, 0.6);
+  }
+
+  .brand-name {
+    font-size: 14px;
+    letter-spacing: -0.2px;
+  }
+
+  .brand-name .muted {
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  .brand-name .dot {
+    color: var(--purple);
+    font-weight: 700;
+  }
+
+  .brand-host {
+    margin-top: 3px;
+    color: var(--muted-2);
+    font-size: 11px;
+  }
+
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(20, 21, 42, 0.84);
+    padding: 9px 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--muted-2);
+    box-shadow: 0 0 0 4px rgba(90, 92, 120, 0.15);
+  }
+
+  .status.live .status-dot {
+    background: var(--green);
+    box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.15);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(320px, 1.2fr) minmax(320px, 0.8fr);
+    gap: 18px;
+    margin-bottom: 18px;
+  }
+
+  .panel {
+    background: linear-gradient(180deg, rgba(20, 21, 42, 0.97), rgba(12, 13, 22, 0.98));
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    box-shadow: var(--shadow);
+  }
+
+  .hero-copy {
+    padding: 26px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero-copy::after {
+    content: "";
+    position: absolute;
+    right: -80px;
+    bottom: -100px;
+    width: 240px;
+    height: 240px;
+    background: radial-gradient(circle, rgba(168, 156, 247, 0.18), transparent 62%);
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 999px;
+    padding: 7px 10px;
+    border: 1px solid rgba(168, 156, 247, 0.2);
+    background: rgba(168, 156, 247, 0.1);
+    color: var(--purple);
+    font-size: 11px;
+    margin-bottom: 18px;
+  }
+
+  h1 {
+    margin: 0 0 12px;
+    max-width: 10ch;
+    font-size: clamp(31px, 5vw, 52px);
+    line-height: 0.97;
+    letter-spacing: -1.4px;
+  }
+
+  .hero-copy p {
+    max-width: 58ch;
+    color: var(--muted);
+    line-height: 1.72;
+    font-size: 14px;
+  }
+
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+  }
+
+  .chip {
+    border-radius: 999px;
+    border: 1px solid rgba(168, 156, 247, 0.16);
+    background: rgba(10, 11, 20, 0.55);
+    color: var(--muted);
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .auth-card {
+    padding: 22px;
+    display: grid;
+    gap: 14px;
+    align-content: start;
+  }
+
+  .title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.65;
+  }
+
+  .field-grid {
+    display: grid;
+    gap: 10px;
+  }
+
+  .field {
+    display: grid;
+    gap: 6px;
+  }
+
+  .field label {
+    color: var(--muted-2);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  input[type="password"],
+  input[type="text"],
+  select {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--panel);
+    color: var(--text-2);
+    padding: 13px 14px;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  input[type="password"]:focus,
+  input[type="text"]:focus,
+  select:focus {
+    border-color: rgba(168, 156, 247, 0.45);
+    box-shadow: 0 0 0 4px rgba(168, 156, 247, 0.08);
+  }
+
+  .auth-actions,
+  .action-row,
+  .tab-row,
+  .quick-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .check input {
+    accent-color: var(--purple-2);
+  }
+
+  button {
+    border: 0;
+    border-radius: 14px;
+    cursor: pointer;
+    padding: 12px 16px;
+    transition: transform 0.14s ease, opacity 0.14s ease, background 0.14s ease;
+  }
+
+  button:hover {
+    transform: translateY(-1px);
+  }
+
+  button:disabled {
+    opacity: 0.45;
+    transform: none;
+    cursor: default;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--purple-2), var(--purple));
+    color: #0b0b12;
+    font-weight: 700;
+  }
+
+  .btn-secondary {
+    background: rgba(20, 21, 42, 0.94);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .stat {
+    padding: 16px 18px;
+  }
+
+  .stat-number {
+    color: var(--text);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    margin-bottom: 6px;
+  }
+
+  .stat-label {
+    color: var(--muted-2);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+    gap: 18px;
+  }
+
+  .content-panel,
+  .side-panel {
+    padding: 18px;
+  }
+
+  .tab-row {
+    margin-top: 14px;
+    margin-bottom: 14px;
+  }
+
+  .tab {
+    background: rgba(20, 21, 42, 0.9);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    padding: 10px 14px;
+  }
+
+  .tab.active {
+    background: rgba(168, 156, 247, 0.12);
+    color: var(--purple);
+    border-color: rgba(168, 156, 247, 0.24);
+  }
+
+  .view {
+    display: none;
+  }
+
+  .view.active {
+    display: block;
+  }
+
+  .search-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .quick-row {
+    margin-bottom: 14px;
+  }
+
+  .quick {
+    background: rgba(168, 156, 247, 0.09);
+    border: 1px solid rgba(168, 156, 247, 0.14);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 7px 11px;
+    font-size: 12px;
+  }
+
+  .results,
+  .list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .card {
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(20, 21, 42, 0.88), rgba(14, 15, 28, 0.98));
+    padding: 16px;
+  }
+
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .card-title {
+    font-size: 15px;
+    line-height: 1.38;
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .card-snippet {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.72;
+    white-space: pre-wrap;
+  }
+
+  .pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 6px 10px;
+    border: 1px solid rgba(168, 156, 247, 0.12);
+    background: rgba(10, 11, 20, 0.55);
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .pill.type {
+    color: var(--purple);
+    background: rgba(168, 156, 247, 0.08);
+    border-color: rgba(168, 156, 247, 0.2);
+  }
+
+  .message {
+    color: var(--muted);
+    border-radius: 18px;
+    border: 1px dashed rgba(168, 156, 247, 0.14);
+    background: rgba(10, 11, 20, 0.42);
+    padding: 18px;
+    line-height: 1.7;
+    font-size: 13px;
+  }
+
+  .error {
+    color: var(--red);
+    font-size: 12px;
+    min-height: 18px;
+  }
+
+  .success {
+    color: var(--green);
+    font-size: 12px;
+    min-height: 18px;
+  }
+
+  .graph-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 12px;
+  }
+
+  .graph-wrap {
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(10, 11, 20, 0.92), rgba(8, 9, 16, 0.98));
+    min-height: 560px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .graph-svg {
+    width: 100%;
+    height: 560px;
+    display: block;
+  }
+
+  .graph-detail {
+    border-radius: 18px;
+    border: 1px solid var(--border);
+    background: rgba(11, 12, 21, 0.56);
+    padding: 14px;
+    display: grid;
+    gap: 10px;
+    align-content: start;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    display: inline-block;
+  }
+
+  .detail-title {
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.45;
+    font-weight: 600;
+  }
+
+  .detail-meta {
+    color: var(--muted-2);
+    font-size: 11px;
+    line-height: 1.7;
+  }
+
+  .list-card {
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: rgba(11, 12, 21, 0.56);
+    padding: 14px;
+  }
+
+  .list-card-title {
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.45;
+    margin-bottom: 6px;
+  }
+
+  .list-card-meta {
+    color: var(--muted-2);
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
+  .side-stack {
+    display: grid;
+    gap: 18px;
+  }
+
+  @media (max-width: 1140px) {
+    .hero,
+    .workspace,
+    .stats,
+    .graph-shell {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .shell {
+      width: min(100vw - 18px, 1400px);
+      padding-top: 10px;
+    }
+
+    .header,
+    .search-row,
+    .auth-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .hero-copy,
+    .auth-card,
+    .content-panel,
+    .side-panel {
+      padding: 16px;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <div class="header">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div>
+          <div class="brand-name"><span class="muted">zikra</span><span class="dot">.</span><span class="muted">memory</span></div>
+          <div class="brand-host">live on <span id="host"></span></div>
+        </div>
+      </div>
+      <div class="status" id="status">
+        <span class="status-dot"></span>
+        <span id="status-text">Not connected</span>
+      </div>
+    </div>
+
+    <div class="hero">
+      <section class="panel hero-copy">
+        <div class="eyebrow">Focused memory workspace</div>
+        <h1>The project memory, without the clutter.</h1>
+        <p>
+          This rebuild takes the older Zikra direction seriously: a memory-first workspace, stronger visual identity,
+          and a graph for browsing the corpus like a thinking surface instead of a plain admin form.
+        </p>
+        <div class="chip-row">
+          <span class="chip">Search decisions fast</span>
+          <span class="chip">Browse graph relationships</span>
+          <span class="chip">Read prompts and requirements cleanly</span>
+        </div>
+      </section>
+
+      <aside class="panel auth-card">
+        <div>
+          <div class="title">Access</div>
+          <div class="subtitle">
+            Connect with any valid Zikra bearer token. This version validates against viewer-safe routes, so normal developer and viewer tokens do not look broken.
+          </div>
+        </div>
+
+        <div class="field-grid">
+          <div class="field">
+            <label for="token">Bearer token</label>
+            <input id="token" type="password" placeholder="Paste your token">
+          </div>
+          <div class="field">
+            <label for="project">Project</label>
+            <input id="project" type="text" placeholder="global">
+          </div>
+        </div>
+
+        <label class="check">
+          <input id="remember" type="checkbox">
+          Remember token on this browser
+        </label>
+
+        <div class="auth-actions">
+          <button id="connect-btn" class="btn-primary">Connect</button>
+          <button id="clear-btn" class="btn-secondary">Clear Session</button>
+        </div>
+
+        <div id="success" class="success"></div>
+        <div id="error" class="error"></div>
+      </aside>
+    </div>
+
+    <div class="stats">
+      <div class="panel stat">
+        <div id="memory-total" class="stat-number">-</div>
+        <div class="stat-label">Memory Pool</div>
+      </div>
+      <div class="panel stat">
+        <div id="role" class="stat-number">-</div>
+        <div class="stat-label">Role</div>
+      </div>
+      <div class="panel stat">
+        <div id="prompt-count" class="stat-number">-</div>
+        <div class="stat-label">Prompts</div>
+      </div>
+      <div class="panel stat">
+        <div id="requirement-count" class="stat-number">-</div>
+        <div class="stat-label">Requirements</div>
+      </div>
+    </div>
+
+    <div class="workspace">
+      <section class="panel content-panel">
+        <div class="title">Workspace</div>
+        <div class="subtitle">Search, browse, and map the memory pool without switching tools.</div>
+
+        <div class="tab-row">
+          <button class="tab active" data-view="search">Search</button>
+          <button class="tab" data-view="graph">Graph</button>
+          <button class="tab" data-view="prompts">Prompts</button>
+          <button class="tab" data-view="requirements">Requirements</button>
+        </div>
+
+        <div id="view-search" class="view active">
+          <div class="search-row">
+            <input id="query" type="text" placeholder="Search memories, architecture, auth, errors, prompts...">
+            <button id="search-btn" class="btn-primary">Search</button>
+          </div>
+          <div class="quick-row">
+            <button class="quick" data-query="architecture decisions">architecture decisions</button>
+            <button class="quick" data-query="authentication flow">authentication flow</button>
+            <button class="quick" data-query="open errors">open errors</button>
+            <button class="quick" data-query="prompt workflow">prompt workflow</button>
+          </div>
+          <div id="search-results" class="results">
+            <div class="message">Connect first, then search the memory pool.</div>
+          </div>
+        </div>
+
+        <div id="view-graph" class="view">
+          <div class="action-row" style="margin-bottom: 12px;">
+            <button id="graph-refresh-btn" class="btn-secondary">Refresh Graph</button>
+          </div>
+          <div class="legend" id="legend"></div>
+          <div class="graph-shell">
+            <div class="graph-wrap">
+              <svg id="graph" class="graph-svg" viewBox="0 0 980 560" preserveAspectRatio="xMidYMid meet"></svg>
+            </div>
+            <div id="graph-detail" class="graph-detail">
+              <div class="message">Select a node to inspect the memory.</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="view-prompts" class="view">
+          <div id="prompt-list" class="list">
+            <div class="message">No prompt data yet.</div>
+          </div>
+        </div>
+
+        <div id="view-requirements" class="view">
+          <div id="requirement-list" class="list">
+            <div class="message">No requirement data yet.</div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-stack">
+        <section class="panel side-panel">
+          <div class="title">Direction</div>
+          <div class="subtitle">
+            This rebuild intentionally keeps the page narrow in purpose: memory interaction only. No extra dashboards, no busy chrome, no unrelated management surfaces.
+          </div>
+          <div class="message" style="margin-top: 14px;">
+            The old site was stronger as a memory environment than the installed version, but it also leaked auth into shipped client code. This rebuild preserves the feel while moving token handling back to normal authenticated requests.
+          </div>
+        </section>
+
+        <section class="panel side-panel">
+          <div class="title">Current Project</div>
+          <div id="project-label" class="subtitle" style="margin-top: 8px;">global</div>
+          <div id="project-projects" class="list" style="margin-top: 14px;">
+            <div class="message">Projects will appear after connect.</div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+<script>
+  const STORAGE_KEY = 'zikra_ui_token';
+  const REMEMBER_KEY = 'zikra_ui_remember';
+  const PROJECT_KEY = 'zikra_ui_project';
+
+  const TYPE_COLORS = {
+    decision: '#a89cf7',
+    prompt: '#5ba3f5',
+    architecture: '#fbbf24',
+    error: '#f87171',
+    requirement: '#34d399',
+    conversation: '#8a8aa8',
+    note: '#7c6fcd'
+  };
+
+  const state = {
+    bootstrap: null,
+    graph: null,
+    selectedNode: null
+  };
+
+  const hostEl = document.getElementById('host');
+  const statusEl = document.getElementById('status');
+  const statusTextEl = document.getElementById('status-text');
+  const tokenEl = document.getElementById('token');
+  const projectEl = document.getElementById('project');
+  const rememberEl = document.getElementById('remember');
+  const errorEl = document.getElementById('error');
+  const successEl = document.getElementById('success');
+  const queryEl = document.getElementById('query');
+  const graphEl = document.getElementById('graph');
+  const legendEl = document.getElementById('legend');
+  const graphDetailEl = document.getElementById('graph-detail');
+
+  hostEl.textContent = location.host;
+
+  function getToken() {
+    return tokenEl.value.trim();
+  }
+
+  function getProject() {
+    return projectEl.value.trim() || 'global';
+  }
+
+  function esc(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatDate(value) {
+    if (!value) return 'recent';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  function setStatus(live, text) {
+    statusEl.classList.toggle('live', !!live);
+    statusTextEl.textContent = text;
+  }
+
+  function flashError(message) {
+    errorEl.textContent = message || '';
+    if (message) successEl.textContent = '';
+  }
+
+  function flashSuccess(message) {
+    successEl.textContent = message || '';
+    if (message) errorEl.textContent = '';
+  }
+
+  function saveSession() {
+    localStorage.setItem(PROJECT_KEY, getProject());
+    localStorage.setItem(REMEMBER_KEY, rememberEl.checked ? '1' : '0');
+    if (rememberEl.checked) {
+      localStorage.setItem(STORAGE_KEY, getToken());
+      sessionStorage.removeItem(STORAGE_KEY);
+    } else {
+      sessionStorage.setItem(STORAGE_KEY, getToken());
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }
+
+  function clearSession() {
+    state.bootstrap = null;
+    state.graph = null;
+    state.selectedNode = null;
+    tokenEl.value = '';
+    sessionStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    setStatus(false, 'Not connected');
+    flashSuccess('');
+    flashError('');
+    document.getElementById('memory-total').textContent = '-';
+    document.getElementById('role').textContent = '-';
+    document.getElementById('prompt-count').textContent = '-';
+    document.getElementById('requirement-count').textContent = '-';
+    document.getElementById('search-results').innerHTML = '<div class="message">Connect first, then search the memory pool.</div>';
+    document.getElementById('prompt-list').innerHTML = '<div class="message">No prompt data yet.</div>';
+    document.getElementById('requirement-list').innerHTML = '<div class="message">No requirement data yet.</div>';
+    document.getElementById('project-projects').innerHTML = '<div class="message">Projects will appear after connect.</div>';
+    graphDetailEl.innerHTML = '<div class="message">Select a node to inspect the memory.</div>';
+    graphEl.innerHTML = '';
+    legendEl.innerHTML = '';
+  }
+
+  async function fetchJson(url, options = {}) {
+    const response = await fetch(url, options);
+    if (response.status === 401) {
+      setStatus(false, 'Unauthorized');
+      flashError('Unauthorized: token was rejected.');
+      return null;
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      flashError(text || ('Request failed with status ' + response.status));
+      return null;
+    }
+    return response.json();
+  }
+
+  async function apiCommand(command, extra = {}) {
+    if (!getToken()) {
+      flashError('Token required');
+      return null;
+    }
+    return fetchJson('/webhook/zikra', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + getToken(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ command, project: getProject(), ...extra })
+    });
+  }
+
+  function renderProjects(projects) {
+    const target = document.getElementById('project-projects');
+    if (!projects || projects.length === 0) {
+      target.innerHTML = '<div class="message">No saved projects yet.</div>';
+      return;
+    }
+    target.innerHTML = projects.map(project => `
+      <div class="list-card">
+        <div class="list-card-title">${esc(project)}</div>
+        <div class="list-card-meta">Memory scope available for browsing.</div>
+      </div>
+    `).join('');
+  }
+
+  function renderList(items, targetId, emptyText) {
+    const target = document.getElementById(targetId);
+    if (!items || items.length === 0) {
+      target.innerHTML = '<div class="message">' + esc(emptyText) + '</div>';
+      return;
+    }
+    target.innerHTML = items.map(item => `
+      <article class="card">
+        <div class="card-title">${esc(item.title || 'Untitled')}</div>
+        <div class="card-snippet">${esc(item.snippet || '')}</div>
+        <div class="pill-row">
+          <span class="pill">${esc(item.project || 'global')}</span>
+          <span class="pill">${esc(formatDate(item.created_at))}</span>
+          ${item.created_by ? '<span class="pill">' + esc(item.created_by) + '</span>' : ''}
+        </div>
+      </article>
+    `).join('');
+  }
+
+  function renderSearchResults(payload) {
+    const target = document.getElementById('search-results');
+    if (!payload || !payload.results || payload.results.length === 0) {
+      target.innerHTML = '<div class="message">No results found for that query.</div>';
+      return;
+    }
+    target.innerHTML = payload.results.map(item => `
+      <article class="card">
+        <div class="card-head">
+          <div class="card-title">${esc(item.title || 'Untitled')}</div>
+          <span class="pill">score ${esc(item.score)}</span>
+        </div>
+        <div class="card-snippet">${esc(item.snippet || '')}</div>
+        <div class="pill-row">
+          <span class="pill type">${esc(item.memory_type || 'memory')}</span>
+          <span class="pill">${esc(item.project || 'global')}</span>
+          ${item.module ? '<span class="pill">' + esc(item.module) + '</span>' : ''}
+          <span class="pill">${esc(formatDate(item.created_at))}</span>
+        </div>
+      </article>
+    `).join('');
+  }
+
+  function selectTab(name) {
+    document.querySelectorAll('.tab').forEach(button => {
+      button.classList.toggle('active', button.dataset.view === name);
+    });
+    document.querySelectorAll('.view').forEach(view => {
+      view.classList.toggle('active', view.id === 'view-' + name);
+    });
+  }
+
+  function renderLegend(nodes) {
+    const types = [...new Set((nodes || []).map(node => node.memory_type))];
+    if (types.length === 0) {
+      legendEl.innerHTML = '';
+      return;
+    }
+    legendEl.innerHTML = types.map(type => `
+      <span class="legend-item">
+        <span class="legend-dot" style="background:${TYPE_COLORS[type] || '#8a8aa8'}"></span>
+        ${esc(type)}
+      </span>
+    `).join('');
+  }
+
+  function renderGraphDetail(node) {
+    if (!node) {
+      graphDetailEl.innerHTML = '<div class="message">Select a node to inspect the memory.</div>';
+      return;
+    }
+    graphDetailEl.innerHTML = `
+      <div class="pill type">${esc(node.memory_type || 'memory')}</div>
+      <div class="detail-title">${esc(node.title || 'Untitled')}</div>
+      <div class="detail-meta">
+        <div>project: ${esc(node.project || 'global')}</div>
+        ${node.module ? '<div>module: ' + esc(node.module) + '</div>' : ''}
+        <div>created: ${esc(formatDate(node.created_at))}</div>
+        <div>accessed: ${esc(node.access_count || 0)}x</div>
+      </div>
+      <div class="message">${esc(node.snippet || '')}</div>
+    `;
+  }
+
+  function buildGraphLayout(data) {
+    const width = 980;
+    const height = 560;
+    const cx = width / 2;
+    const cy = height / 2;
+    const types = [...new Set(data.nodes.map(node => node.memory_type || 'conversation'))];
+    const groups = {};
+    types.forEach(type => {
+      groups[type] = data.nodes.filter(node => (node.memory_type || 'conversation') === type);
+    });
+    const ringRadius = Math.min(width, height) * 0.3;
+    const positions = {};
+    types.forEach((type, groupIndex) => {
+      const angle = (Math.PI * 2 * groupIndex) / Math.max(types.length, 1) - Math.PI / 2;
+      const centerX = cx + Math.cos(angle) * ringRadius;
+      const centerY = cy + Math.sin(angle) * ringRadius * 0.8;
+      const nodes = groups[type];
+      nodes.forEach((node, index) => {
+        const innerAngle = (Math.PI * 2 * index) / Math.max(nodes.length, 1);
+        const r = 22 + (index % 6) * 18;
+        positions[node.id] = {
+          x: centerX + Math.cos(innerAngle) * r * 1.9,
+          y: centerY + Math.sin(innerAngle) * r * 1.35
+        };
+      });
+    });
+    return positions;
+  }
+
+  function renderGraph(data) {
+    state.graph = data;
+    state.selectedNode = null;
+    graphEl.innerHTML = '';
+    renderLegend(data.nodes || []);
+    renderGraphDetail(null);
+    if (!data || !data.nodes || data.nodes.length === 0) {
+      graphEl.innerHTML = '';
+      graphDetailEl.innerHTML = '<div class="message">No graph data for this project.</div>';
+      return;
+    }
+    const positions = buildGraphLayout(data);
+
+    const edgeMarkup = (data.edges || []).map(edge => {
+      const source = positions[edge.source];
+      const target = positions[edge.target];
+      if (!source || !target) return '';
+      const opacity = edge.type === 'reference' ? 0.4 : edge.type === 'module' ? 0.28 : 0.18;
+      const color = edge.type === 'reference' ? '#a89cf7' : edge.type === 'module' ? '#5ba3f5' : '#5a5c78';
+      return `<line x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" stroke="${color}" stroke-opacity="${opacity}" stroke-width="${Math.max(1, edge.weight / 2)}" />`;
+    }).join('');
+
+    const groupLabels = [...new Set((data.nodes || []).map(node => node.memory_type || 'conversation'))].map(type => {
+      const firstNode = (data.nodes || []).find(node => (node.memory_type || 'conversation') === type);
+      if (!firstNode) return '';
+      const pos = positions[firstNode.id];
+      return `<text x="${pos.x}" y="${pos.y - 34}" text-anchor="middle" fill="#5a5c78" font-size="11" letter-spacing="1.2">${esc(type.toUpperCase())}</text>`;
+    }).join('');
+
+    const nodeMarkup = (data.nodes || []).map(node => {
+      const pos = positions[node.id];
+      const radius = 8 + Math.min(12, (node.access_count || 0));
+      const fill = TYPE_COLORS[node.memory_type] || '#8a8aa8';
+      const label = esc((node.title || 'Untitled').slice(0, 18));
+      return `
+        <g class="graph-node" data-id="${esc(node.id)}" style="cursor:pointer">
+          <circle cx="${pos.x}" cy="${pos.y}" r="${radius}" fill="${fill}" fill-opacity="0.88" stroke="#090a10" stroke-width="2.2" />
+          <text x="${pos.x}" y="${pos.y + radius + 14}" text-anchor="middle" fill="#c8c6e0" font-size="10">${label}</text>
+        </g>
+      `;
+    }).join('');
+
+    graphEl.innerHTML = `
+      <rect x="0" y="0" width="980" height="560" fill="transparent"></rect>
+      <g>${edgeMarkup}</g>
+      <g>${groupLabels}</g>
+      <g>${nodeMarkup}</g>
+    `;
+
+    graphEl.querySelectorAll('.graph-node').forEach(element => {
+      element.addEventListener('click', () => {
+        const node = (data.nodes || []).find(item => item.id === element.dataset.id);
+        state.selectedNode = node || null;
+        renderGraphDetail(node || null);
+        graphEl.querySelectorAll('.graph-node circle').forEach(circle => {
+          circle.setAttribute('stroke', '#090a10');
+          circle.setAttribute('stroke-width', '2.2');
+        });
+        const selectedCircle = element.querySelector('circle');
+        if (selectedCircle) {
+          selectedCircle.setAttribute('stroke', '#ffffff');
+          selectedCircle.setAttribute('stroke-width', '3.4');
+        }
+      });
+    });
+  }
+
+  async function loadBootstrap() {
+    if (!getToken()) {
+      flashError('Token required');
+      return;
+    }
+    const data = await fetchJson('/api/ui/bootstrap?project=' + encodeURIComponent(getProject()), {
+      headers: { 'Authorization': 'Bearer ' + getToken() }
+    });
+    if (!data) return;
+    state.bootstrap = data;
+    document.getElementById('memory-total').textContent = String(data.memory_total || 0);
+    document.getElementById('role').textContent = String(data.role || 'viewer');
+    document.getElementById('prompt-count').textContent = String((data.recent_prompts || []).length);
+    document.getElementById('requirement-count').textContent = String((data.recent_requirements || []).length);
+    document.getElementById('project-label').textContent = getProject();
+    renderProjects(data.projects || []);
+    renderList(data.recent_prompts || [], 'prompt-list', 'No prompts yet for this project.');
+    renderList(data.recent_requirements || [], 'requirement-list', 'No requirements yet for this project.');
+  }
+
+  async function loadGraph() {
+    if (!getToken()) return;
+    const data = await fetchJson('/api/ui/graph?project=' + encodeURIComponent(getProject()), {
+      headers: { 'Authorization': 'Bearer ' + getToken() }
+    });
+    if (!data) return;
+    renderGraph(data);
+  }
+
+  async function connect() {
+    flashError('');
+    flashSuccess('');
+    const help = await apiCommand('zikra_help', {});
+    if (!help) return;
+    saveSession();
+    setStatus(true, 'Connected to ' + getProject());
+    flashSuccess('Session ready.');
+    await loadBootstrap();
+    await loadGraph();
+  }
+
+  async function doSearch(queryOverride) {
+    const query = queryOverride || queryEl.value.trim();
+    if (!query) {
+      flashError('Enter a search query.');
+      return;
+    }
+    queryEl.value = query;
+    flashError('');
+    flashSuccess('');
+    document.getElementById('search-results').innerHTML = '<div class="message">Searching the memory pool...</div>';
+    const payload = await apiCommand('search', { query, limit: 12 });
+    if (!payload) return;
+    renderSearchResults(payload);
+  }
+
+  document.getElementById('connect-btn').addEventListener('click', connect);
+  document.getElementById('clear-btn').addEventListener('click', clearSession);
+  document.getElementById('search-btn').addEventListener('click', () => doSearch());
+  document.getElementById('graph-refresh-btn').addEventListener('click', loadGraph);
+  queryEl.addEventListener('keydown', event => {
+    if (event.key === 'Enter') doSearch();
+  });
+
+  document.querySelectorAll('.quick').forEach(button => {
+    button.addEventListener('click', () => doSearch(button.dataset.query || ''));
+  });
+
+  document.querySelectorAll('.tab').forEach(button => {
+    button.addEventListener('click', () => selectTab(button.dataset.view));
+  });
+
+  (function hydrate() {
+    const remembered = localStorage.getItem(REMEMBER_KEY) === '1';
+    rememberEl.checked = remembered;
+    tokenEl.value = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY) || '';
+    projectEl.value = localStorage.getItem(PROJECT_KEY) || 'global';
+    if (getToken()) {
+      setStatus(false, 'Session restored');
+    }
+  })();
+</script>
+</body>
+</html>
