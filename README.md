@@ -1,4 +1,4 @@
-# Zikra
+# Zikra — Shared Memory Across Every AI Tool Your Team Uses
 
 > Persistent memory for Claude Code, Cursor, Gemini CLI, and other AI coding agents — shared across sessions and machines.
 
@@ -197,3 +197,6 @@ OPENAI_API_KEY=sk-... python3 -m zikra.tests.test_all
 ## License
 
 MIT — see [LICENSE](LICENSE)
+
+*Design in Claude Web. Execute in Claude Code. Share with your whole team.*
+*Claude Web · Claude Code · Gemini Web · Gemini CLI · Codex · ChatGPT · any agent that can POST.*
