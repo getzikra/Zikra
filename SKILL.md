@@ -42,7 +42,7 @@ curl -s -X POST $ZIKRA_URL \
   -H "Authorization: Bearer $ZIKRA_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"command":"log_error","project":"yourproject",
-       "title":"what broke","content_md":"what happened and why"}'
+       "message":"what broke","context_md":"what happened and why"}'
 ```
 
 ## Memory types

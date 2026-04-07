@@ -25,7 +25,7 @@ from mcp import types
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.routing import Mount, Route
+from starlette.routing import Mount
 
 from zikra.commands.search import cmd_search
 from zikra.commands.save_memory import cmd_save_memory
@@ -210,7 +210,7 @@ async def list_tools() -> list[types.Tool]:
                 'type': 'object',
                 'properties': {
                     'label': {'type': 'string'},
-                    'role': {'type': 'string', 'default': 'admin'},
+                    'role': {'type': 'string', 'default': 'developer'},
                 },
             },
         ),
@@ -295,18 +295,18 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 _SID_RE = re.compile(r'session_id=([0-9a-f]+)')
 
 
-async def _sse_endpoint(request: Request) -> None:
-    auth_info = await _check_auth_request(request)
+async def _sse_endpoint(scope, receive, send):
+    req = Request(scope, receive)
+    auth_info = await _check_auth_request(req)
     if not auth_info:
-        return Response('Unauthorized', status_code=401)
+        await Response('Unauthorized', status_code=401)(scope, receive, send)
+        return
 
     role = auth_info.get('role', 'viewer')
     session_ids: list[str] = []
 
     # Intercept the SSE send to capture the session_id from the endpoint event,
     # then store the role in _SESSION_ROLES so _messages_endpoint can look it up.
-    orig_send = request._send
-
     async def _capturing_send(message):
         if message.get('type') == 'http.response.body' and not session_ids:
             body_str = message.get('body', b'').decode('utf-8', errors='replace')
@@ -315,14 +315,14 @@ async def _sse_endpoint(request: Request) -> None:
                 sid = m.group(1)
                 session_ids.append(sid)
                 _SESSION_ROLES[sid] = role
-        await orig_send(message)
+        await send(message)
 
     cv_token = _mcp_session_role.set(role)
     try:
-        async with sse_transport.connect_sse(
-            request.scope, request.receive, _capturing_send
-        ) as streams:
+        async with sse_transport.connect_sse(scope, receive, _capturing_send) as streams:
             await mcp.run(streams[0], streams[1], mcp.create_initialization_options())
+    except Exception as e:
+        logger.warning(f'SSE error: {e}')
     finally:
         _mcp_session_role.reset(cv_token)
         for sid in session_ids:
@@ -350,6 +350,6 @@ async def _messages_endpoint(scope, receive, send):
 
 def build_mcp_app() -> Starlette:
     return Starlette(routes=[
-        Route('/sse', endpoint=_sse_endpoint),
+        Mount('/sse', app=_sse_endpoint),
         Mount('/messages', app=_messages_endpoint),
     ])

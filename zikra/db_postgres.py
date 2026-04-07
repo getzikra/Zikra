@@ -7,7 +7,7 @@ Activated when DB_BACKEND=postgres. Requires:
 Env vars:
   DB_HOST      (default: localhost)
   DB_PORT      (default: 5432)
-  DB_NAME      (default: ai_zikra)
+  DB_NAME      (default: zikra)
   DB_USER      (default: postgres)
   DB_PASSWORD  (default: '')
 """
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS memories (
     pending_review   INTEGER DEFAULT 0,
     created_at   TIMESTAMPTZ DEFAULT NOW(),
     updated_at   TIMESTAMPTZ DEFAULT NOW(),
-    embedding    vector(1536),
+    embedding    halfvec(3072),
     UNIQUE (title, memory_type, project)
 );
 
@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS access_tokens (
 # Separate so a missing pgvector extension doesn't break table creation
 _PG_VEC_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_memories_embedding
-    ON memories USING hnsw (embedding vector_cosine_ops);
+ON memories USING hnsw (embedding halfvec_cosine_ops);
 """
 
 
@@ -137,8 +137,8 @@ async def init_pg() -> 'asyncpg.Pool':
 
     host = os.getenv('DB_HOST', 'localhost')
     port = int(os.getenv('DB_PORT', '5432'))
-    dbname = os.getenv('DB_NAME', 'ai_zikra')
-    user = os.getenv('DB_USER', 'postgres')
+    dbname = os.getenv('DB_NAME', 'zikra')
+    user = os.getenv('DB_USER', 'zikra')
     password = os.getenv('DB_PASSWORD', '')
 
     _pg_pool = await asyncpg.create_pool(
@@ -175,7 +175,7 @@ async def save_memory_pg(pool: 'asyncpg.Pool', data: dict, embedding: list) -> s
                 INSERT INTO memories
                     (id, project, module, memory_type, title, content_md,
                      tags, resolution, created_by, searchable, pending_review, embedding)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10,$11::vector)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10,$11::halfvec)
                 ON CONFLICT (title, memory_type, project) DO UPDATE SET
                     content_md     = EXCLUDED.content_md,
                     tags           = EXCLUDED.tags,
@@ -226,49 +226,87 @@ async def save_memory_pg(pool: 'asyncpg.Pool', data: dict, embedding: list) -> s
 
 # ── search_memories ───────────────────────────────────────────────────────────
 
-async def _fts_search_pg(conn, query_text: str, project: str, limit: int) -> tuple:
+async def _fts_search_pg(conn, query_text: str, project: str, limit: int,
+                        memory_type: str = None) -> tuple:
     """tsvector FTS with ILIKE fallback. Returns (results, degraded, reason)."""
+    # global → sees ALL memories; specific project → scoped to that project only
+    project_param = None if project == 'global' else project
     rows = []
     degraded = False
     reason = ''
 
     # Level 1 — tsvector FTS MATCH
     try:
-        rows = await conn.fetch("""
-            SELECT id, title,
-                   SUBSTRING(content_md, 1, 500)  AS snippet,
-                   memory_type, project, module,
-                   created_at, access_count, confidence_score,
-                   ts_rank(
-                       to_tsvector('english', title || ' ' || content_md),
-                       plainto_tsquery('english', $1)
-                   ) AS fts_score
-            FROM memories
-            WHERE to_tsvector('english', title || ' ' || content_md)
-                      @@ plainto_tsquery('english', $1)
-              AND searchable = 1
-              AND (project = $2 OR project = 'global')
-            ORDER BY fts_score DESC
-            LIMIT $3
-        """, query_text, project, limit)
+        if memory_type:
+            rows = await conn.fetch("""
+                SELECT id, title,
+                       SUBSTRING(content_md, 1, 500)  AS snippet,
+                       memory_type, project, module,
+                       created_at, access_count, confidence_score,
+                       ts_rank(
+                           to_tsvector('english', title || ' ' || content_md),
+                           plainto_tsquery('english', $1)
+                       ) AS fts_score
+                FROM memories
+                WHERE to_tsvector('english', title || ' ' || content_md)
+                          @@ plainto_tsquery('english', $1)
+                  AND searchable = 1
+                  AND ($2::text IS NULL OR project = $2)
+                  AND memory_type = $4
+                ORDER BY fts_score DESC
+                LIMIT $3
+            """, query_text, project_param, limit, memory_type)
+        else:
+            rows = await conn.fetch("""
+                SELECT id, title,
+                       SUBSTRING(content_md, 1, 500)  AS snippet,
+                       memory_type, project, module,
+                       created_at, access_count, confidence_score,
+                       ts_rank(
+                           to_tsvector('english', title || ' ' || content_md),
+                           plainto_tsquery('english', $1)
+                       ) AS fts_score
+                FROM memories
+                WHERE to_tsvector('english', title || ' ' || content_md)
+                          @@ plainto_tsquery('english', $1)
+                  AND searchable = 1
+                  AND ($2::text IS NULL OR project = $2)
+                ORDER BY fts_score DESC
+                LIMIT $3
+            """, query_text, project_param, limit)
     except Exception as e:
         logger.warning(f'FTS MATCH failed: {e}')
 
     # Level 2 — ILIKE fallback
     if not rows:
         try:
-            rows = await conn.fetch("""
-                SELECT id, title,
-                       SUBSTRING(content_md, 1, 500) AS snippet,
-                       memory_type, project, module,
-                       created_at, access_count, confidence_score,
-                       0.5::float AS fts_score
-                FROM memories
-                WHERE (title ILIKE $1 OR content_md ILIKE $1)
-                  AND searchable = 1
-                  AND (project = $2 OR project = 'global')
-                LIMIT $3
-            """, f'%{query_text}%', project, limit)
+            if memory_type:
+                rows = await conn.fetch("""
+                    SELECT id, title,
+                           SUBSTRING(content_md, 1, 500) AS snippet,
+                           memory_type, project, module,
+                           created_at, access_count, confidence_score,
+                           0.5::float AS fts_score
+                    FROM memories
+                    WHERE (title ILIKE $1 OR content_md ILIKE $1)
+                      AND searchable = 1
+                      AND ($2::text IS NULL OR project = $2)
+                      AND memory_type = $4
+                    LIMIT $3
+                """, f'%{query_text}%', project_param, limit, memory_type)
+            else:
+                rows = await conn.fetch("""
+                    SELECT id, title,
+                           SUBSTRING(content_md, 1, 500) AS snippet,
+                           memory_type, project, module,
+                           created_at, access_count, confidence_score,
+                           0.5::float AS fts_score
+                    FROM memories
+                    WHERE (title ILIKE $1 OR content_md ILIKE $1)
+                      AND searchable = 1
+                      AND ($2::text IS NULL OR project = $2)
+                    LIMIT $3
+                """, f'%{query_text}%', project_param, limit)
             if rows:
                 degraded = True
                 reason = 'like_fallback'
@@ -299,33 +337,49 @@ async def _fts_search_pg(conn, query_text: str, project: str, limit: int) -> tup
 
 
 async def search_memories_pg(pool: 'asyncpg.Pool', query_text: str,
-                              query_embedding: list, project: str, limit: int) -> tuple:
+                              query_embedding: list, project: str, limit: int,
+                              memory_type: str = None) -> tuple:
     """Returns (results, degraded, reason)."""
     is_zero = not query_embedding or all(v == 0.0 for v in query_embedding)
     vec = None if is_zero else _vec_str(query_embedding)
+    # global → sees ALL memories; specific project → scoped to that project only
+    project_param = None if project == 'global' else project
 
     async with pool.acquire() as conn:
         if vec is None:
-            return await _fts_search_pg(conn, query_text, project, limit)
+            return await _fts_search_pg(conn, query_text, project, limit, memory_type=memory_type)
 
         # Vector search — top K candidates
         try:
-            vec_rows = await conn.fetch("""
-                SELECT id,
-                       1.0 - (embedding <=> $1::vector) AS cosine_sim
-                FROM memories
-                WHERE embedding IS NOT NULL
-                  AND searchable = 1
-                  AND (project = $2 OR project = 'global')
-                ORDER BY embedding <=> $1::vector
-                LIMIT $3
-            """, vec, project, VECTOR_SEARCH_K)
+            if memory_type:
+                vec_rows = await conn.fetch("""
+                    SELECT id,
+                           1.0 - (embedding <=> $1::halfvec) AS cosine_sim
+                    FROM memories
+                    WHERE embedding IS NOT NULL
+                      AND searchable = 1
+                      AND ($2::text IS NULL OR project = $2)
+                      AND memory_type = $4
+                    ORDER BY embedding <=> $1::halfvec
+                    LIMIT $3
+                """, vec, project_param, VECTOR_SEARCH_K, memory_type)
+            else:
+                vec_rows = await conn.fetch("""
+                    SELECT id,
+                           1.0 - (embedding <=> $1::halfvec) AS cosine_sim
+                    FROM memories
+                    WHERE embedding IS NOT NULL
+                      AND searchable = 1
+                      AND ($2::text IS NULL OR project = $2)
+                    ORDER BY embedding <=> $1::halfvec
+                    LIMIT $3
+                """, vec, project_param, VECTOR_SEARCH_K)
         except Exception as e:
             logger.warning(f'Vector search failed, falling back to FTS: {e}')
-            return await _fts_search_pg(conn, query_text, project, limit)
+            return await _fts_search_pg(conn, query_text, project, limit, memory_type=memory_type)
 
         if not vec_rows:
-            return await _fts_search_pg(conn, query_text, project, limit)
+            return await _fts_search_pg(conn, query_text, project, limit, memory_type=memory_type)
 
         id_to_cosine = {r['id']: float(r['cosine_sim']) for r in vec_rows}
         ids = list(id_to_cosine.keys())
@@ -512,7 +566,15 @@ async def add_token_pg(pool, token_id: str, token: str, person_name: str, role: 
 
 
 async def list_by_type_pg(pool, memory_type: str, project: str, limit: int,
-                          pending_review=None) -> list:
+                          pending_review=None, status: str = None) -> list:
+    # Map status string to pending_review value
+    if status is not None and pending_review is None:
+        if status == 'pending':
+            pending_review = 1
+        elif status == 'resolved':
+            pending_review = 0
+    # global → sees ALL memories; specific project → scoped to that project only
+    project_param = None if project == 'global' else project
     async with pool.acquire() as conn:
         if pending_review is not None:
             rows = await conn.fetch("""
@@ -521,11 +583,11 @@ async def list_by_type_pg(pool, memory_type: str, project: str, limit: int,
                        project, access_count, created_by, created_at
                 FROM memories
                 WHERE memory_type = $1
-                  AND (project = $2 OR project = 'global')
+                  AND ($2::text IS NULL OR project = $2)
                   AND pending_review = $3
                 ORDER BY access_count DESC, created_at DESC
                 LIMIT $4
-            """, memory_type, project, pending_review, limit)
+            """, memory_type, project_param, pending_review, limit)
         else:
             rows = await conn.fetch("""
                 SELECT id, title,
@@ -533,10 +595,10 @@ async def list_by_type_pg(pool, memory_type: str, project: str, limit: int,
                        project, access_count, created_by, created_at
                 FROM memories
                 WHERE memory_type = $1
-                  AND (project = $2 OR project = 'global')
+                  AND ($2::text IS NULL OR project = $2)
                 ORDER BY access_count DESC, created_at DESC
                 LIMIT $3
-            """, memory_type, project, limit)
+            """, memory_type, project_param, limit)
     return [_row_to_dict(r) for r in rows]
 
 

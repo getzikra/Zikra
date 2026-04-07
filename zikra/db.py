@@ -170,9 +170,10 @@ async def _sqlite_save_memory(db: 'aiosqlite.Connection', data: dict, embedding:
 
 # ── SQLite async: search_memories ─────────────────────────────────────────────
 
-async def _fts_query(db: 'aiosqlite.Connection', match_expr: str, project: str, limit: int):
+async def _fts_query(db: 'aiosqlite.Connection', match_expr: str, project: str, limit: int,
+                    memory_type: str = None):
     """Run a single FTS5 MATCH query. Returns rows or raises."""
-    async with db.execute("""
+    base_sql = """
         SELECT
             m.rowid, m.id, m.title,
             SUBSTR(m.content_md, 1, 500) AS snippet,
@@ -184,13 +185,19 @@ async def _fts_query(db: 'aiosqlite.Connection', match_expr: str, project: str, 
         WHERE memories_fts MATCH ?
           AND m.searchable = 1
           AND (m.project = ? OR m.project = 'global')
-        ORDER BY f.rank
-        LIMIT ?
-    """, [match_expr, project, limit]) as cur:
+    """
+    params = [match_expr, project]
+    if memory_type:
+        base_sql += "  AND m.memory_type = ?\n"
+        params.append(memory_type)
+    base_sql += "ORDER BY f.rank\nLIMIT ?"
+    params.append(limit)
+    async with db.execute(base_sql, params) as cur:
         return await cur.fetchall()
 
 
-async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str, limit: int) -> tuple:
+async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str, limit: int,
+                     memory_type: str = None) -> tuple:
     """Full-text search fallback — AND → OR → LIKE.
     Returns (results, degraded, reason)."""
     rows = []
@@ -199,7 +206,7 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
 
     # Level 1 — FTS MATCH
     try:
-        rows = await _fts_query(db, query_text, project, limit)
+        rows = await _fts_query(db, query_text, project, limit, memory_type=memory_type)
     except Exception as e:
         logger.warning(f'FTS MATCH failed: {e}')
 
@@ -208,7 +215,7 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
         tokens = [t for t in re.sub(r'[^\w\s]', ' ', query_text).split() if t]
         if len(tokens) > 1:
             try:
-                rows = await _fts_query(db, ' OR '.join(tokens), project, limit)
+                rows = await _fts_query(db, ' OR '.join(tokens), project, limit, memory_type=memory_type)
                 if rows:
                     degraded = True
                     reason = 'fts_or_fallback'
@@ -218,7 +225,7 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
     # Level 3 — LIKE
     if not rows:
         try:
-            async with db.execute("""
+            like_sql = """
                 SELECT
                     rowid, id, title,
                     SUBSTR(content_md, 1, 500) AS snippet,
@@ -229,8 +236,14 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
                 WHERE (title LIKE ? OR content_md LIKE ?)
                   AND searchable = 1
                   AND (project = ? OR project = 'global')
-                LIMIT ?
-            """, [f'%{query_text}%', f'%{query_text}%', project, limit]) as cur:
+            """
+            like_params = [f'%{query_text}%', f'%{query_text}%', project]
+            if memory_type:
+                like_sql += "  AND memory_type = ?\n"
+                like_params.append(memory_type)
+            like_sql += "LIMIT ?"
+            like_params.append(limit)
+            async with db.execute(like_sql, like_params) as cur:
                 rows = await cur.fetchall()
             if rows:
                 degraded = True
@@ -263,7 +276,7 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
 
 
 async def search_memories(db: 'aiosqlite.Connection', query_text: str, query_embedding: list,
-                          project: str, limit: int = 5) -> tuple:
+                          project: str, limit: int = 5, memory_type: str = None) -> tuple:
     """Returns (results, degraded, reason)."""
     is_zero = all(v == 0.0 for v in query_embedding)
 
@@ -283,13 +296,13 @@ async def search_memories(db: 'aiosqlite.Connection', query_text: str, query_emb
             vec_results = []
 
     if not vec_results:
-        return await _fts_search(db, query_text, project, limit)
+        return await _fts_search(db, query_text, project, limit, memory_type=memory_type)
 
     rowid_to_distance = {row['rowid']: row['distance'] for row in vec_results}
     rowids = list(rowid_to_distance.keys())
     placeholders = ','.join('?' * len(rowids))
 
-    async with db.execute(f"""
+    vec_sql = f"""
         SELECT
             m.rowid,
             m.id, m.title,
@@ -307,7 +320,12 @@ async def search_memories(db: 'aiosqlite.Connection', query_text: str, query_emb
         WHERE m.rowid IN ({placeholders})
           AND m.searchable = 1
           AND (m.project = ? OR m.project = 'global')
-    """, [query_text] + rowids + [project]) as cur:
+    """
+    vec_params = [query_text] + rowids + [project]
+    if memory_type:
+        vec_sql += "  AND m.memory_type = ?\n"
+        vec_params.append(memory_type)
+    async with db.execute(vec_sql, vec_params) as cur:
         rows = await cur.fetchall()
 
     from zikra.scoring import score as rescore
@@ -351,12 +369,14 @@ async def store_memory(data: dict, embedding: list) -> str:
 
 
 async def find_memories(query_text: str, query_embedding: list,
-                        project: str, limit: int) -> tuple:
+                        project: str, limit: int, memory_type: str = None) -> tuple:
     """Hybrid vector + FTS search. Returns (results, degraded, reason)."""
     if _is_pg:
         from zikra.db_postgres import search_memories_pg, get_pg_pool
-        return await search_memories_pg(get_pg_pool(), query_text, query_embedding, project, limit)
-    return await search_memories(_aio_db, query_text, query_embedding, project, limit)
+        return await search_memories_pg(get_pg_pool(), query_text, query_embedding, project, limit,
+                                        memory_type=memory_type)
+    return await search_memories(_aio_db, query_text, query_embedding, project, limit,
+                                 memory_type=memory_type)
 
 
 async def fetch_memory(memory_id: str = None, title: str = None,
@@ -515,11 +535,22 @@ async def add_token(token_id: str, token: str, person_name: str, role: str) -> N
 
 
 async def list_by_memory_type(memory_type: str, project: str, limit: int,
-                              pending_review: Optional[int] = None) -> list:
-    """List memories filtered by type and project. pending_review=1 filters to pending only."""
+                              pending_review: Optional[int] = None,
+                              status: str = None) -> list:
+    """List memories filtered by type and project.
+    status='pending'|'resolved' maps to pending_review filter.
+    pending_review=1 filters to pending only (legacy param, still accepted).
+    Default (no status, no pending_review): return all."""
     if _is_pg:
         from zikra.db_postgres import list_by_type_pg, get_pg_pool
-        return await list_by_type_pg(get_pg_pool(), memory_type, project, limit, pending_review)
+        return await list_by_type_pg(get_pg_pool(), memory_type, project, limit, pending_review, status)
+
+    # Map status string to pending_review value
+    if status is not None and pending_review is None:
+        if status == 'pending':
+            pending_review = 1
+        elif status == 'resolved':
+            pending_review = 0
 
     if pending_review is not None:
         sql = """

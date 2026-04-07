@@ -312,7 +312,7 @@ async def handle(request: Request):
             status_code=400,
             content={'error': 'Request body is not valid JSON'},
         )
-    command = body.get('command', '').lower().strip()
+    command = str(body.get('command') or '').lower().strip()
     handler = DISPATCH.get(command)
 
     # Resolve alias to canonical name for permission check
@@ -332,11 +332,12 @@ async def handle(request: Request):
         )
 
     if handler is None:
+        display = command[:100] + '...' if len(command) > 100 else command
         help_data = await cmd_zikra_help(body)
         return JSONResponse(
             status_code=400,
             content={
-                'error': f'Unknown command: {command!r}',
+                'error': f'Unknown command: {display!r}',
                 'hint': 'Send {"command": "zikra_help"} for the full reference.',
                 'available_commands': KNOWN_COMMANDS,
                 'commands': help_data['commands'],

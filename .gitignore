@@ -3,15 +3,22 @@ node_modules/
 .env
 .DS_Store
 __pycache__/
+*.py[cod]
+*$py.class
 *.pyc
+*.pyo
 .claude/cache/
 zikra-stats.json
 "workflow/Zikra MCP Router.json"
 *.zip
-zikra.db
+*.db
 *.egg-info/
 dist/
 build/
+.eggs/
+.venv/
+venv/
+env/
 Thumbs.db
 .memory/
 CLAUDE.md

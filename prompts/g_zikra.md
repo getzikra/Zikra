@@ -1,7 +1,6 @@
 # g_zikra
 
 Install or update Zikra persistent memory on this machine.
-Works for both Zikra Lite (localhost) and Zikra Full (n8n server).
 Follow every step in order. Run all bash commands exactly as shown.
 Proceed without asking for confirmation between steps.
 

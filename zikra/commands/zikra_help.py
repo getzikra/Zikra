@@ -90,6 +90,7 @@ async def cmd_zikra_help(body: dict) -> dict:
             'description': 'Generate a new bearer access token.',
             'required': [],
             'optional': ['person_name', 'role'],
+            'notes': 'role: viewer | developer | admin. Default: developer.',
         },
         {
             'command': 'zikra_help',

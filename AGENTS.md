@@ -20,6 +20,10 @@ Read it at session start for your webhook URL, token, and default project.
 
 ```
 search:      {"command":"search","query":"<topic>","project":"<p>","limit":5}
+             Optional: "memory_type":"decision"  — filter results to one type only.
+             Valid memory_type values: conversation, decision, requirement, error, prompt, note
+             Omit memory_type to return all types. Invalid value returns a structured error.
+             Note: include_archived is not currently implemented.
 save_memory: {"command":"save_memory","project":"<p>","memory_type":"decision","title":"<t>","content_md":"...","tags":null,"created_by":"<hostname>"}
 log_error:   {"command":"log_error","project":"<p>","message":"<error message>","context_md":"<detail>"}
 # Field name: use 'message' (not 'title'). Sending 'title' is silently ignored.
@@ -32,6 +36,11 @@ log_run:     {"command":"log_run","project":"<p>","runner":"<hostname>","status"
 ```
 save_prompt:          {"command":"save_prompt","title":"<n>","content_md":"...","project":"<p>"}
 list_prompts:         {"command":"list_prompts","project":"<p>","limit":50}
+list_requirements:    {"command":"list_requirements","project":"<p>","limit":20}
+                      Optional: "status":"pending"|"resolved"  — filter by requirement status.
+                      pending  = pending_review=1 (awaiting action)
+                      resolved = pending_review=0 (actioned/promoted)
+                      Omit status to return all requirements. Invalid value returns a structured error.
 promote_requirement:  {"command":"promote_requirement","id":"<uuid>"}
 create_token:         {"command":"create_token","label":"<name>","role":"viewer|developer|admin"}
 zikra_help:           {"command":"zikra_help"}

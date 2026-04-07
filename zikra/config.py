@@ -10,4 +10,4 @@ SNIPPET_LENGTHS = [500, 300, 200, 150, 150]
 VECTOR_SEARCH_K = 20
 
 # Default role assigned to new tokens when none is specified
-DEFAULT_TOKEN_ROLE = 'admin'
+DEFAULT_TOKEN_ROLE = 'developer'

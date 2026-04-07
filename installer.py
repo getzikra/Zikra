@@ -74,16 +74,19 @@ if db_backend == 'postgres':
     pg_user     = _ask('  Postgres user')
     pg_password = _ask('  Postgres password')
 
-# Q2 — Hook depth (SQLite only)
-zikra_profile = 'webhook'
-if db_backend == 'sqlite':
-    print()
-    print('How deeply should Zikra integrate with Claude Code?')
-    print('  [1] Webhook only — just the API, no file hooks')
-    print('  [2] Auto-log — installs shell hooks that log sessions automatically')
-    print('  [3] Full — auto-log + background watcher daemon + systemd service')
-    hook_choice = _ask_choice('  Choice', ['1', '2', '3'], default='1')
-    zikra_profile = {'1': 'webhook', '2': 'autolog', '3': 'full'}[hook_choice]
+# Q2 — Hook depth
+print()
+print('How deeply should Zikra integrate with Claude Code?')
+print('  [1] Webhook only — just the API, no file hooks')
+print('  [2] Auto-log — installs shell hooks that log sessions automatically')
+print('  [3] Full — auto-log + background watcher daemon + systemd service')
+hook_choice = _ask_choice('  Choice', ['1', '2', '3'], default='1')
+zikra_profile = {'1': 'webhook', '2': 'autolog', '3': 'full'}[hook_choice]
+
+if db_backend == 'postgres':
+    default_model = 'text-embedding-3-large'
+else:
+    default_model = 'text-embedding-3-small'
 
 # Q3 — OpenAI API key
 print()
@@ -94,6 +97,9 @@ openai_key = _ask('  Key', default='',
 if not openai_key:
     print('  WARNING: Running in keyword-only mode. '
           'Add OPENAI_API_KEY to .env later to enable semantic search.')
+elif db_backend == 'sqlite':
+    print('  NOTE: SQLite uses brute-force vector search (no ANN index).')
+    print('  text-embedding-3-small recommended. Switch to Postgres for team use.')
 
 # Q4 — Project name
 print()
@@ -109,12 +115,18 @@ project = _ask('  Default project name for this installation', default='main',
 
 # ── Generate token and write .env ─────────────────────────────────────────────
 
+print()
+zikra_host = _ask(' Zikra bind host', default='0.0.0.0')
+zikra_port = _ask(' Zikra server port', default='8000',
+    validate=lambda v: 'Must be a valid port number' if not v.isdigit() else None)
+
 token = secrets.token_urlsafe(32)
 
 env_lines = [
     f'ZIKRA_TOKEN={token}',
     'ZIKRA_SKIP_ONBOARDING=1',
     f'OPENAI_API_KEY={openai_key}',
+    f'ZIKRA_EMBEDDING_MODEL={default_model}',
     f'DB_BACKEND={db_backend}',
 ]
 
@@ -128,7 +140,8 @@ if db_backend == 'postgres':
     ]
 
 env_lines += [
-    'ZIKRA_HOST=0.0.0.0',
+    f'ZIKRA_HOST={zikra_host}',
+    f'ZIKRA_PORT={zikra_port}',
     f'ZIKRA_PROJECT={project}',
 ]
 
@@ -164,7 +177,7 @@ if zikra_profile in ('autolog', 'full'):
         src = HOOKS_SRC / src_name
         content = src.read_text()
         content = content.replace('ZIKRA_TOKEN_PLACEHOLDER', token)
-        content = content.replace('ZIKRA_URL_PLACEHOLDER', f'http://0.0.0.0:8000/webhook/zikra')
+        content = content.replace('ZIKRA_URL_PLACEHOLDER', f'http://{zikra_host}:{zikra_port}/webhook/zikra')
         content = content.replace('ZIKRA_PROJECT_PLACEHOLDER', project)
         content = content.replace('DEFAULT_PROJECT_PLACEHOLDER', project)
         dst_path.write_text(content)
@@ -186,7 +199,7 @@ if zikra_profile == 'full':
     watcher_content = watcher_src.read_text()
     watcher_content = watcher_content.replace('ZIKRA_TOKEN_PLACEHOLDER', token)
     watcher_content = watcher_content.replace(
-        'ZIKRA_URL_PLACEHOLDER', f'http://0.0.0.0:8000/webhook/zikra')
+        'ZIKRA_URL_PLACEHOLDER', f'http://{zikra_host}:{zikra_port}/webhook/zikra')
     watcher_content = watcher_content.replace('DEFAULT_PROJECT_PLACEHOLDER', project)
     watcher_dst.write_text(watcher_content)
     watcher_dst.chmod(0o755)
@@ -224,7 +237,7 @@ try:
     token_dir.mkdir(parents=True, exist_ok=True)
     (token_dir / 'token').write_text(
         f'ZIKRA_TOKEN={token}\n'
-        f'ZIKRA_URL=http://0.0.0.0:8000/webhook/zikra\n'
+        f'ZIKRA_URL=http://{zikra_host}:{zikra_port}/webhook/zikra\n'
         f'ZIKRA_PROJECT={project}\n'
     )
     print(f'  ✓ token saved to {token_dir}/token')
@@ -245,8 +258,9 @@ try:
         s = {}
 
     s.setdefault('mcpServers', {})
+    mcp_host = 'localhost' if zikra_host in ('0.0.0.0', '') else zikra_host
     s['mcpServers']['zikra'] = {
-        'url': 'http://localhost:8000/mcp/sse',
+        'url': f'http://{mcp_host}:{zikra_port}/mcp/sse',
         'headers': {'Authorization': f'Bearer {token}'},
     }
 
@@ -263,17 +277,23 @@ except Exception as e:
 print(f"""
 Zikra is ready.
 
-  Token:   {token}
-  Server:  http://0.0.0.0:8000
-  Profile: {zikra_profile}
-  DB:      {db_backend}
+  Token:           {token}
+  Server:          http://{zikra_host}:{zikra_port}
+  Profile:         {zikra_profile}
+  DB:              {db_backend}
+  Embedding model: {default_model}
+  Vector index:    {'halfvec HNSW (pgvector)' if db_backend == 'postgres' else 'brute-force (SQLite)'}
 
   Add this to your Claude Code MCP config if not already done:
   {{
     "zikra": {{
-      "url": "http://localhost:8000/mcp/sse"
+      "url": "http://localhost:{zikra_port}/mcp/sse"
     }}
   }}
+
+  Onboarding prompt: prompts/g_zikra.md
+  Run in Claude Code: /prompts then select g_zikra
+  Or: cat prompts/g_zikra.md | pbcopy  (then paste into Claude Code)
 
   Start the server:
     python3 -m zikra --no-onboarding
