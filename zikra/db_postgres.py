@@ -375,11 +375,18 @@ async def search_memories_pg(pool: 'asyncpg.Pool', query_text: str,
 async def get_memory_pg(pool, memory_id=None, title=None, memory_type=None, project=None) -> Optional[dict]:
     async with pool.acquire() as conn:
         if memory_id:
-            row = await conn.fetchrow("""
-                SELECT id, title, content_md, memory_type, project, module,
-                       tags, resolution, access_count, created_at, updated_at
-                FROM memories WHERE id = $1
-            """, memory_id)
+            if project:
+                row = await conn.fetchrow("""
+                    SELECT id, title, content_md, memory_type, project, module,
+                           tags, resolution, access_count, created_at, updated_at
+                    FROM memories WHERE id = $1 AND project = $2
+                """, memory_id, project)
+            else:
+                row = await conn.fetchrow("""
+                    SELECT id, title, content_md, memory_type, project, module,
+                           tags, resolution, access_count, created_at, updated_at
+                    FROM memories WHERE id = $1
+                """, memory_id)
         elif memory_type:
             if project:
                 row = await conn.fetchrow("""

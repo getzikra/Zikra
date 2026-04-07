@@ -15,8 +15,8 @@ mcp.json for teammates:
 """
 
 import json
-import os
 import logging
+import re
 from contextvars import ContextVar
 
 from mcp.server import Server
@@ -46,7 +46,12 @@ from zikra.auth import verify_auth, ROLE_PERMISSIONS
 logger = logging.getLogger(__name__)
 
 mcp = Server('zikra')
-sse_transport = SseServerTransport('/mcp/messages')
+sse_transport = SseServerTransport('/messages')
+
+# Per-connection role: ContextVar (works when call_tool runs in SSE context)
+# + session dict (belt-and-suspenders for POST handler context)
+_mcp_session_role: ContextVar[str] = ContextVar('_mcp_session_role', default='viewer')
+_SESSION_ROLES: dict[str, str] = {}
 
 
 async def _check_auth_request(request: Request) -> dict | None:
@@ -204,7 +209,7 @@ async def list_tools() -> list[types.Tool]:
             inputSchema={
                 'type': 'object',
                 'properties': {
-                    'person_name': {'type': 'string'},
+                    'label': {'type': 'string'},
                     'role': {'type': 'string', 'default': 'admin'},
                 },
             },
@@ -245,13 +250,26 @@ async def list_tools() -> list[types.Tool]:
 
 # ── Tool dispatch ──────────────────────────────────────────────────────────────
 
-# Per-connection role propagated via ContextVar — set in _sse_endpoint before mcp.run()
-_mcp_session_role: ContextVar[str] = ContextVar('_mcp_session_role', default='viewer')
+_MCP_DISPATCH = {
+    'zikra_search':               cmd_search,
+    'zikra_save_memory':          cmd_save_memory,
+    'zikra_get_prompt':           cmd_get_prompt,
+    'zikra_log_run':              cmd_log_run,
+    'zikra_log_error':            cmd_log_error,
+    'zikra_save_requirement':     cmd_save_requirement,
+    'zikra_list_requirements':    cmd_list_requirements,
+    'zikra_get_memory':           cmd_get_memory,
+    'zikra_get_schema':           cmd_get_schema,
+    'zikra_promote_requirement':  cmd_promote_requirement,
+    'zikra_create_token':         cmd_create_token,
+    'zikra_save_prompt':          cmd_save_prompt,
+    'zikra_list_prompts':         cmd_list_prompts,
+    'zikra_help':                 cmd_zikra_help,
+}
 
 
 @mcp.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
-    # Map MCP tool name to webhook command name for permission check
     command = name.replace('zikra_', '', 1)
     caller_role = _mcp_session_role.get()
     blocked = ROLE_PERMISSIONS.get(caller_role, ROLE_PERMISSIONS['viewer'])
@@ -261,38 +279,12 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         )
         return _text({'error': 'insufficient permissions', 'required_role': required})
 
+    handler = _MCP_DISPATCH.get(name)
+    if handler is None:
+        return _text({'error': f'Unknown tool: {name}'})
+
     try:
-        if name == 'zikra_search':
-            result = await cmd_search(arguments)
-        elif name == 'zikra_save_memory':
-            result = await cmd_save_memory(arguments)
-        elif name == 'zikra_get_prompt':
-            result = await cmd_get_prompt(arguments)
-        elif name == 'zikra_log_run':
-            result = await cmd_log_run(arguments)
-        elif name == 'zikra_log_error':
-            result = await cmd_log_error(arguments)
-        elif name == 'zikra_save_requirement':
-            result = await cmd_save_requirement(arguments)
-        elif name == 'zikra_list_requirements':
-            result = await cmd_list_requirements(arguments)
-        elif name == 'zikra_get_memory':
-            result = await cmd_get_memory(arguments)
-        elif name == 'zikra_get_schema':
-            result = await cmd_get_schema(arguments)
-        elif name == 'zikra_promote_requirement':
-            result = await cmd_promote_requirement(arguments)
-        elif name == 'zikra_create_token':
-            result = await cmd_create_token(arguments)
-        elif name == 'zikra_save_prompt':
-            result = await cmd_save_prompt(arguments)
-        elif name == 'zikra_list_prompts':
-            result = await cmd_list_prompts(arguments)
-        elif name == 'zikra_help':
-            result = await cmd_zikra_help(arguments)
-        else:
-            result = {'error': f'Unknown tool: {name}'}
-        return _text(result)
+        return _text(await handler(arguments))
     except Exception as e:
         logger.exception(f'Tool {name} failed')
         return _text({'error': str(e)})
@@ -300,32 +292,60 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
 
 # ── ASGI endpoints ─────────────────────────────────────────────────────────────
 
+_SID_RE = re.compile(r'session_id=([0-9a-f]+)')
+
 
 async def _sse_endpoint(request: Request) -> None:
     auth_info = await _check_auth_request(request)
     if not auth_info:
         return Response('Unauthorized', status_code=401)
-    # Propagate authenticated role into the async context for call_tool()
-    token = _mcp_session_role.set(auth_info.get('role', 'viewer'))
+
+    role = auth_info.get('role', 'viewer')
+    session_ids: list[str] = []
+
+    # Intercept the SSE send to capture the session_id from the endpoint event,
+    # then store the role in _SESSION_ROLES so _messages_endpoint can look it up.
+    orig_send = request._send
+
+    async def _capturing_send(message):
+        if message.get('type') == 'http.response.body' and not session_ids:
+            body_str = message.get('body', b'').decode('utf-8', errors='replace')
+            m = _SID_RE.search(body_str)
+            if m:
+                sid = m.group(1)
+                session_ids.append(sid)
+                _SESSION_ROLES[sid] = role
+        await orig_send(message)
+
+    cv_token = _mcp_session_role.set(role)
     try:
         async with sse_transport.connect_sse(
-            request.scope, request.receive, request._send
+            request.scope, request.receive, _capturing_send
         ) as streams:
             await mcp.run(streams[0], streams[1], mcp.create_initialization_options())
     finally:
-        _mcp_session_role.reset(token)
+        _mcp_session_role.reset(cv_token)
+        for sid in session_ids:
+            _SESSION_ROLES.pop(sid, None)
 
 
 async def _messages_endpoint(scope, receive, send):
-    # Reconstruct a minimal Starlette Request to reuse verify_auth
-    from starlette.requests import Request as StarletteRequest
-    req = StarletteRequest(scope, receive)
+    from urllib.parse import parse_qs
+    req = Request(scope, receive)
     auth_info = await _check_auth_request(req)
     if not auth_info:
-        response = Response('Unauthorized', status_code=401)
-        await response(scope, receive, send)
+        await Response('Unauthorized', status_code=401)(scope, receive, send)
         return
-    await sse_transport.handle_post_message(scope, receive, send)
+
+    # Set ContextVar from session dict so call_tool sees the correct role
+    qs = parse_qs(scope.get('query_string', b'').decode())
+    session_id = (qs.get('session_id') or [''])[0]
+    role = _SESSION_ROLES.get(session_id, auth_info.get('role', 'viewer'))
+    cv_token = _mcp_session_role.set(role)
+    try:
+        await sse_transport.handle_post_message(scope, receive, send)
+    finally:
+        _mcp_session_role.reset(cv_token)
 
 
 def build_mcp_app() -> Starlette:

@@ -1,9 +1,10 @@
 from zikra.db import fetch_prompt_row, bump_access_count
+from zikra.commands import _require_project
 
 
 async def cmd_get_prompt(body: dict) -> dict:
     prompt_name = body.get('prompt_name') or body.get('name') or body.get('title', '')
-    project = body.get('project', 'global')
+    project = _require_project(body)
     if not prompt_name:
         return {'error': 'prompt_name is required'}
 

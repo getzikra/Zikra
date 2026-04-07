@@ -85,6 +85,8 @@ After running the installer, Zikra registers itself in `~/.claude/settings.json`
 | `ZIKRA_SKIP_ONBOARDING` | No | — | Set to `1` for CI/scripted use |
 | `OPENAI_API_BASE` | No | `https://api.openai.com/v1` | Swap for local or compatible embedding endpoint |
 | `ZIKRA_EMBEDDING_MODEL` | No | `text-embedding-3-small` | Embedding model name |
+| `ZIKRA_DECAY_DAYS` | No | `30` | Memory decay half-life in days (scoring) |
+| `ZIKRA_FREQUENCY_WEIGHT` | No | `0.1` | Weight of access-frequency boost in scoring |
 
 ---
 

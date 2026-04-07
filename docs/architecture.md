@@ -42,7 +42,7 @@ searchable memory store.
 │  │                                                              │   │
 │  │   zikra.memories        zikra.active_runs                    │   │
 │  │   zikra.access_tokens   zikra.prompt_runs                   │   │
-│  │   zikra.token_projects  zikra.migrations                    │   │
+│  │   zikra.error_log        zikra.schema_versions               │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 │                                                                      │
 └─────────────────────────────────────────────────────────────────────┘
@@ -197,18 +197,19 @@ validates the token against `zikra.access_tokens` before processing any command.
 Tokens have four roles:
 - `viewer` — may call: search, get_memory, get_prompt, list_requirements, list_prompts
 - `developer` — may call all viewer commands plus: save_memory, log_run, log_error, save_requirement, save_prompt, promote_requirement
-- `admin` — may call all developer commands plus: create_token
-- `owner` — full access including all commands
+- `admin` — may call all developer commands plus: get_schema, debug_protocol
+- `owner` — full access including all commands (create_token requires owner role; admin tokens cannot create new tokens)
 
 ### Project scoping
 
-If a token has rows in `zikra.token_projects`, it can only access those
-specific projects. If no rows exist, the token can access all projects.
+Project isolation is enforced at the query level by the `project` field on
+each memory. All tokens can access all projects.
 
-This allows team setups where:
-- Shared team token has no project restrictions (all projects)
-- Per-project tokens are scoped to one project each
-- CI/CD tokens are scoped to a single project
+Note: per-token project scoping is not currently implemented.
+Tokens have access to all projects.
+
+Note: no additional team-scoping or tenant isolation is currently implemented
+beyond the project field filter applied in queries.
 
 ### Transport security
 

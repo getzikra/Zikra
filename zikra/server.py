@@ -1,12 +1,13 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from json import JSONDecodeError
 
-logger = logging.getLogger(__name__)
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from dotenv import load_dotenv
-from zikra.db import init_db, is_postgres, debug_memory_count
+
+from zikra.db import init_db, is_postgres, debug_memory_count, open_aio_db, set_aio_db
 from zikra.auth import verify_auth, ROLE_PERMISSIONS
 from zikra.commands.search import cmd_search
 from zikra.commands.save_memory import cmd_save_memory
@@ -24,60 +25,146 @@ from zikra.commands.list_prompts import cmd_list_prompts
 from zikra.commands.zikra_help import cmd_zikra_help
 from zikra.mcp_server import build_mcp_app
 
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    if is_postgres():
+    backend = os.getenv('DB_BACKEND', 'sqlite').lower()
+    if backend == 'sqlite':
+        db_path = os.getenv('ZIKRA_DB_PATH', './zikra.db')
+        db_conn = await open_aio_db(db_path)
+        set_aio_db(db_conn)
+        app.state.sqlite_db = db_conn
+    elif backend == 'postgres':
         from zikra.db_postgres import init_pg
         await init_pg()
     host = os.getenv('ZIKRA_HOST', '0.0.0.0')
     port = os.getenv('ZIKRA_PORT', '8000')
-    backend = os.getenv('DB_BACKEND', 'sqlite')
     logger.info(f'Zikra running at http://{host}:{port}/webhook/zikra (backend: {backend})')
     yield
+    if backend == 'sqlite' and hasattr(app.state, 'sqlite_db'):
+        await app.state.sqlite_db.close()
 
 
 app = FastAPI(title='Zikra Lite', version='0.1.0', lifespan=lifespan)
 app.mount('/mcp', build_mcp_app())
 
-ZIKRA_TOKEN = os.getenv('ZIKRA_TOKEN', '')
 
-ALIASES = {
-    'find': 'search', 'query': 'search', 'recall': 'search',
-    'lookup': 'search', 'search_memory': 'search', 'find_memory': 'search',
-    'retrieve': 'search', 'remember': 'search',
-    'save': 'save_memory', 'store': 'save_memory',
-    'write_memory': 'save_memory', 'add_memory': 'save_memory', 'write': 'save_memory',
-    'run_prompt': 'get_prompt', 'fetch_prompt': 'get_prompt',
-    'load_prompt': 'get_prompt', 'execute_prompt': 'get_prompt',
-    'fetch_memory': 'get_memory', 'read_memory': 'get_memory', 'load_memory': 'get_memory',
-    'log_session': 'log_run', 'end_session': 'log_run',
-    'finish_run': 'log_run', 'log_completion': 'log_run',
-    'log_bug': 'log_error', 'report_error': 'log_error',
-    'save_error': 'log_error', 'log_failure': 'log_error',
-    'schema': 'get_schema', 'get_db': 'get_schema',
-    'debug': 'debug_protocol', 'dp': 'debug_protocol',
-    'list_reqs': 'list_requirements', 'get_requirements': 'list_requirements',
-    'promote': 'promote_requirement',
-    'new_token': 'create_token', 'token': 'create_token',
-    'write_prompt': 'save_prompt', 'store_prompt': 'save_prompt',
-    'get_prompts': 'list_prompts',
-    'help': 'zikra_help',
+# ── Minimum role required per command ─────────────────────────────────────────
+
+COMMAND_MIN_ROLE = {
+    'search':               'viewer',
+    'get_memory':           'viewer',
+    'get_prompt':           'viewer',
+    'list_prompts':         'viewer',
+    'list_requirements':    'viewer',
+    'zikra_help':           'viewer',
+    'save_memory':          'developer',
+    'save_prompt':          'developer',
+    'save_requirement':     'developer',
+    'promote_requirement':  'developer',
+    'log_run':              'developer',
+    'log_error':            'developer',
+    'get_schema':           'admin',
+    'debug_protocol':       'admin',
+    'create_token':         'owner',
 }
 
-KNOWN_COMMANDS = sorted({
-    'search', 'save_memory', 'get_prompt', 'get_memory',
-    'log_run', 'log_error', 'get_schema', 'save_requirement',
-    'list_requirements', 'promote_requirement', 'create_token',
-    'save_prompt', 'list_prompts', 'zikra_help', 'debug_protocol',
-})
+
+# ── debug_protocol handler (inline — no separate file needed) ─────────────────
+
+async def _cmd_debug_protocol(_body: dict) -> dict:
+    count = await debug_memory_count()
+    return {
+        'backend':        'postgres' if is_postgres() else 'sqlite',
+        'db_path':        os.getenv('ZIKRA_DB_PATH', './zikra.db') if not is_postgres() else None,
+        'memory_count':   count,
+        'openai_key_set': bool(os.getenv('OPENAI_API_KEY')),
+        'version':        '0.1',
+    }
 
 
-def normalise_command(raw: str) -> str:
-    return ALIASES.get(raw.lower().strip(), raw.lower().strip())
+# ── Single dispatch table: canonical names + all aliases ──────────────────────
+
+DISPATCH: dict = {
+    # canonical
+    'search':               cmd_search,
+    'save_memory':          cmd_save_memory,
+    'get_prompt':           cmd_get_prompt,
+    'get_memory':           cmd_get_memory,
+    'log_run':              cmd_log_run,
+    'log_error':            cmd_log_error,
+    'get_schema':           cmd_get_schema,
+    'save_requirement':     cmd_save_requirement,
+    'list_requirements':    cmd_list_requirements,
+    'promote_requirement':  cmd_promote_requirement,
+    'create_token':         cmd_create_token,
+    'save_prompt':          cmd_save_prompt,
+    'list_prompts':         cmd_list_prompts,
+    'zikra_help':           cmd_zikra_help,
+    'debug_protocol':       _cmd_debug_protocol,
+    # search aliases
+    'find':                 cmd_search,
+    'query':                cmd_search,
+    'recall':               cmd_search,
+    'lookup':               cmd_search,
+    'search_memory':        cmd_search,
+    'find_memory':          cmd_search,
+    'retrieve':             cmd_search,
+    'remember':             cmd_search,
+    # save_memory aliases
+    'save':                 cmd_save_memory,
+    'store':                cmd_save_memory,
+    'write_memory':         cmd_save_memory,
+    'add_memory':           cmd_save_memory,
+    'write':                cmd_save_memory,
+    # get_prompt aliases
+    'run_prompt':           cmd_get_prompt,
+    'fetch_prompt':         cmd_get_prompt,
+    'load_prompt':          cmd_get_prompt,
+    'execute_prompt':       cmd_get_prompt,
+    # get_memory aliases
+    'fetch_memory':         cmd_get_memory,
+    'read_memory':          cmd_get_memory,
+    'load_memory':          cmd_get_memory,
+    # log_run aliases
+    'log_session':          cmd_log_run,
+    'end_session':          cmd_log_run,
+    'finish_run':           cmd_log_run,
+    'log_completion':       cmd_log_run,
+    # log_error aliases
+    'log_bug':              cmd_log_error,
+    'report_error':         cmd_log_error,
+    'save_error':           cmd_log_error,
+    'log_failure':          cmd_log_error,
+    # get_schema aliases
+    'schema':               cmd_get_schema,
+    'get_db':               cmd_get_schema,
+    # debug_protocol aliases
+    'debug':                _cmd_debug_protocol,
+    'dp':                   _cmd_debug_protocol,
+    # list aliases
+    'list_reqs':            cmd_list_requirements,
+    'get_requirements':     cmd_list_requirements,
+    'get_prompts':          cmd_list_prompts,
+    # promote aliases
+    'promote':              cmd_promote_requirement,
+    # create_token aliases
+    'new_token':            cmd_create_token,
+    'token':                cmd_create_token,
+    # save_prompt aliases
+    'write_prompt':         cmd_save_prompt,
+    'store_prompt':         cmd_save_prompt,
+    # zikra_help aliases
+    'help':                 cmd_zikra_help,
+}
+
+# Canonical command names (derived from DISPATCH, no aliases) for error messages
+KNOWN_COMMANDS = sorted(set(COMMAND_MIN_ROLE.keys()))
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
@@ -85,7 +172,7 @@ def normalise_command(raw: str) -> str:
 @app.get('/health')
 async def health():
     return {
-        'status': 'ok',
+        'status':  'ok',
         'version': '1.0',
         'backend': os.getenv('DB_BACKEND', 'sqlite'),
     }
@@ -172,8 +259,6 @@ async function loadStats() {
   if (!t) return;
   const r = await api('get_schema');
   if (!r) return;
-
-  // count via schema — just update labels
   document.getElementById('s-total').textContent = '✓';
 }
 
@@ -220,90 +305,47 @@ async def web_ui():
 @app.post('/webhook/zikra')
 async def handle(request: Request):
     auth_info = await verify_auth(request)
-    body = await request.json()
-    raw_command = body.get('command', '')
-    command = normalise_command(raw_command)
-    was_alias = (raw_command.lower().strip() != command)
+    try:
+        body = await request.json()
+    except (JSONDecodeError, Exception):
+        return JSONResponse(
+            status_code=400,
+            content={'error': 'Request body is not valid JSON'},
+        )
+    command = body.get('command', '').lower().strip()
+    handler = DISPATCH.get(command)
+
+    # Resolve alias to canonical name for permission check
+    canonical = command
+    for name, fn in DISPATCH.items():
+        if fn is handler and name in COMMAND_MIN_ROLE:
+            canonical = name
+            break
 
     caller_role = auth_info.get('role', 'viewer')
     blocked = ROLE_PERMISSIONS.get(caller_role, ROLE_PERMISSIONS['viewer'])
-    if command in blocked:
-        COMMAND_MIN_ROLE = {
-            'search':               'viewer',
-            'get_memory':           'viewer',
-            'get_prompt':           'viewer',
-            'list_prompts':         'viewer',
-            'list_requirements':    'viewer',
-            'save_memory':          'developer',
-            'save_prompt':          'developer',
-            'save_requirement':     'developer',
-            'promote_requirement':  'developer',
-            'log_run':              'developer',
-            'log_error':            'developer',
-            'get_schema':           'admin',
-            'debug_protocol':       'admin',
-            'create_token':         'owner',
-        }
-        required = COMMAND_MIN_ROLE.get(command, 'owner')
+    if canonical in blocked:
+        required = COMMAND_MIN_ROLE.get(canonical, 'owner')
         return JSONResponse(
             status_code=403,
             content={'error': 'insufficient permissions', 'required_role': required},
         )
 
-    if command == 'search':
-        result = await cmd_search(body)
-    elif command == 'save_memory':
-        result = await cmd_save_memory(body)
-    elif command == 'get_prompt':
-        result = await cmd_get_prompt(body)
-    elif command == 'get_memory':
-        result = await cmd_get_memory(body)
-    elif command == 'log_run':
-        result = await cmd_log_run(body)
-    elif command == 'log_error':
-        result = await cmd_log_error(body)
-    elif command == 'get_schema':
-        result = await cmd_get_schema(body)
-    elif command == 'save_requirement':
-        result = await cmd_save_requirement(body)
-    elif command == 'list_requirements':
-        result = await cmd_list_requirements(body)
-    elif command == 'promote_requirement':
-        result = await cmd_promote_requirement(body)
-    elif command == 'create_token':
-        result = await cmd_create_token(body)
-    elif command == 'save_prompt':
-        result = await cmd_save_prompt(body)
-    elif command == 'list_prompts':
-        result = await cmd_list_prompts(body)
-    elif command == 'zikra_help':
-        result = await cmd_zikra_help(body)
-    elif command == 'debug_protocol':
-        count = await debug_memory_count()
-        result = {
-            'backend': 'postgres' if is_postgres() else 'sqlite',
-            'db_path': os.getenv('ZIKRA_DB_PATH', './zikra.db') if not is_postgres() else None,
-            'memory_count': count,
-            'openai_key_set': bool(os.getenv('OPENAI_API_KEY')),
-            'version': '0.1',
-        }
-    else:
+    if handler is None:
         help_data = await cmd_zikra_help(body)
         return JSONResponse(
             status_code=400,
             content={
-                'error': f'Unknown command: {repr(raw_command)}',
-                'hint': 'Send {"command": "zikra_help"} for the full reference, or see available_commands below.',
+                'error': f'Unknown command: {command!r}',
+                'hint': 'Send {"command": "zikra_help"} for the full reference.',
                 'available_commands': KNOWN_COMMANDS,
                 'commands': help_data['commands'],
-                'tip': help_data['tip'],
-                '_received_command': raw_command,
-            }
+            },
         )
 
-    result['_use_command'] = command
-    if was_alias:
+    result = await handler(body)
+    result['_use_command'] = canonical
+    if command != canonical:
         result['_was_alias'] = True
-        result['_raw_command'] = raw_command
-
+        result['_raw_command'] = command
     return result

@@ -29,7 +29,7 @@ Results are ranked by a combined score. Use this at the start of every session.
 - `project` — string, project namespace
 
 **Optional fields:**
-- `limit` — integer (default: 5, max: 20)
+- `limit` — integer (default: 10, max: 100)
 - `memory_type` — filter to a specific type (`"decision"`, `"error"`, etc.)
 - `include_archived` — boolean (default: false)
 
@@ -115,14 +115,12 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
 
 ## get_prompt
 
-Fetch a stored prompt by name. Increments access_count. Also records a
-prompt_run entry and returns a run_id for linking to the subsequent log_run.
+Fetch a stored prompt by name. Increments access_count.
 
 **Required fields:**
 - `command` — `"get_prompt"`
 - `prompt_name` — string, the title of the memory with memory_type=`"prompt"`
 - `project` — string
-- `runner` — string, hostname of the machine executing the prompt
 
 **Example:**
 ```bash
@@ -133,23 +131,21 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
   -d '{
     "command":     "get_prompt",
     "prompt_name": "weekly-code-review",
-    "project":     "myproject",
-    "runner":      "dev-machine-01"
+    "project":     "myproject"
   }'
 ```
 
 **Response:**
 ```json
 {
-  "prompt_name": "weekly-code-review",
-  "content_md":  "Review the diff from the past week. Focus on: ...",
-  "run_id":      "9a3b2c1d-...",
-  "created_at":  "2026-01-10T08:00:00Z"
+  "id":           "9a3b2c1d-...",
+  "title":        "weekly-code-review",
+  "content_md":   "Review the diff from the past week. Focus on: ...",
+  "project":      "myproject",
+  "created_at":   "2026-01-10T08:00:00Z",
+  "access_count": 5
 }
 ```
-
-> Save `run_id` to `/tmp/zikra_prompt_id` before executing the prompt.
-> The Stop hook and watcher will link the resulting log_run to this prompt.
 
 ---
 
@@ -426,38 +422,35 @@ curl -s -X POST "https://n8n.example.com/webhook/zikra" \
 
 ## create_token
 
-Create a new bearer token. Requires an existing admin-role token for authorization.
+Create a new bearer token. Requires an existing owner-role token for authorization.
+
+**Required role:** owner
 
 **Required fields:**
 - `command` — `"create_token"`
 - `label` — string, human-readable description of the token's purpose
-- `role` — `"owner"` | `"admin"` | `"developer"` | `"viewer"`
-
-**Optional fields:**
-- `projects` — array of project names (empty = all projects)
+- `role` — `"admin"` | `"developer"` | `"viewer"`
 
 **Example:**
 ```bash
 curl -s -X POST "https://n8n.example.com/webhook/zikra" \
-  -H "Authorization: Bearer velt-ADMIN-TOKEN" \
+  -H "Authorization: Bearer velt-OWNER-TOKEN" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
   -d '{
-    "command":  "create_token",
-    "label":    "CI/CD pipeline — myproject only",
-    "role":     "developer",
-    "projects": ["myproject"]
+    "command": "create_token",
+    "label":   "CI/CD pipeline",
+    "role":    "developer"
   }'
 ```
 
 **Response:**
 ```json
 {
-  "id":       "d4e5f6a7-...",
-  "token":    "zikra-7f3a9b2c4d1e8f5a",
-  "label":    "CI/CD pipeline — myproject only",
-  "role":     "developer",
-  "projects": ["myproject"]
+  "status": "created",
+  "token":  "token-7f3a9b2c4d1e8f5a",
+  "label":  "CI/CD pipeline",
+  "role":   "developer"
 }
 ```
 

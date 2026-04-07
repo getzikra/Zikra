@@ -1,5 +1,6 @@
 from zikra.db import find_memories
 from zikra.embed import embed
+from zikra.commands import _require_project, _parse_limit
 from zikra.config import SNIPPET_LENGTHS
 
 CHARS_PER_TOKEN = 4
@@ -22,11 +23,11 @@ def apply_token_budget(results: list, max_tokens: int) -> tuple:
 
 async def cmd_search(body: dict) -> dict:
     query = body.get('query') or body.get('q') or body.get('text', '')
-    project = body.get('project', 'global')
-    try:
-        limit = int(body.get('limit', 5))
-    except (ValueError, TypeError):
-        return {'error': 'limit must be an integer', 'results': []}
+    project = _require_project(body)
+    limit = _parse_limit(body, default=10, maximum=100)
+    if isinstance(limit, dict):
+        return {**limit, 'results': []}
+    limit = max(1, limit)
     try:
         max_tokens = int(body.get('max_tokens', 2000))
     except (ValueError, TypeError):
@@ -44,11 +45,7 @@ async def cmd_search(body: dict) -> dict:
     results_list, fts_degraded, fts_reason = await find_memories(query, query_embedding, project, limit)
     results, tokens_used = apply_token_budget(results_list, max_tokens)
 
-    response = {
-        'results': results,
-        'count': len(results),
-        'tokens_used': tokens_used,
-    }
+    response = {'results': results, 'count': len(results), 'tokens_used': tokens_used}
     if embedding_warning:
         response['warning'] = embedding_warning
     if fts_degraded:

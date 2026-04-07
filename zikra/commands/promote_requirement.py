@@ -9,7 +9,8 @@ async def cmd_promote_requirement(body: dict) -> dict:
         return {'error': 'id, requirement_id, or title is required'}
 
     if not req_id:
-        found = await fetch_memory(title=title)
+        project = body.get('project', 'global')
+        found = await fetch_memory(title=title, project=project)
         if not found or found.get('memory_type') != 'requirement':
             return {'error': f'Requirement with title "{title}" not found'}
         req_id = found['id']

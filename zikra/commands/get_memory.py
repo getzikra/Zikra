@@ -1,12 +1,13 @@
 import json
 from zikra.db import fetch_memory
+from zikra.commands import _require_project
 
 
 async def cmd_get_memory(body: dict) -> dict:
     title = body.get('title', '')
     memory_id = body.get('id', '')
     memory_type = body.get('memory_type')
-    project = body.get('project', 'global')
+    project = _require_project(body)
 
     if not title and not memory_id:
         return {'error': 'title or id is required'}
@@ -14,7 +15,7 @@ async def cmd_get_memory(body: dict) -> dict:
     row = await fetch_memory(memory_id=memory_id or None,
                              title=title or None,
                              memory_type=memory_type,
-                             project=project if not memory_id else None)
+                             project=project)
 
     if not row:
         return {'error': 'Memory not found'}

@@ -18,6 +18,7 @@ setup(
         'uvicorn>=0.29.0',
         'httpx>=0.27.0',
         'sqlite-vec>=0.1.1',
+        'aiosqlite>=0.19.0',
         'python-dotenv>=1.0.0',
         'mcp[cli]>=1.0.0',
         'starlette>=0.37.0',

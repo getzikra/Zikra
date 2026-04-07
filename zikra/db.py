@@ -11,12 +11,22 @@ import struct
 from typing import Optional
 from zikra.config import VECTOR_SEARCH_K
 
+try:
+    import aiosqlite
+except ImportError:
+    aiosqlite = None
+
 logger = logging.getLogger(__name__)
 
 # ── Backend state ──────────────────────────────────────────────────────────────
+# _db / _lock: kept for auth.py which does a synchronous token lookup via
+#              get_db_and_lock().  Do NOT use these in the async public API.
+# _aio_db:     aiosqlite connection used by all async public functions so that
+#              no blocking sqlite3 call stalls the event loop.
 
 _db: Optional[sqlite3.Connection] = None
 _lock = threading.Lock()
+_aio_db: Optional['aiosqlite.Connection'] = None
 _is_pg: bool = False
 
 
@@ -28,7 +38,13 @@ def is_postgres() -> bool:
     return _is_pg
 
 
-# ── SQLite internals ───────────────────────────────────────────────────────────
+def set_aio_db(conn: 'aiosqlite.Connection') -> None:
+    """Called once from server.py lifespan after opening the aiosqlite connection."""
+    global _aio_db
+    _aio_db = conn
+
+
+# ── SQLite internals (sync — for init_db / auth only) ─────────────────────────
 
 def _make_connection(path: str) -> sqlite3.Connection:
     db = sqlite3.connect(path, check_same_thread=False)
@@ -52,10 +68,12 @@ def _make_connection(path: str) -> sqlite3.Connection:
 def init_db() -> tuple:
     """Initialise the active backend.
 
-    SQLite (default):  opens db, runs migrations, returns (db, lock).
+    SQLite (default):  opens sync db, runs migrations, returns (db, lock).
     Postgres:          sets the _is_pg flag; actual async pool init is
                        done by server.py startup via db_postgres.init_pg().
                        Returns (None, None).
+
+    Safe to call multiple times — skips setup if already initialised.
     """
     global _db, _is_pg
     backend = os.getenv('DB_BACKEND', 'sqlite').lower()
@@ -63,6 +81,9 @@ def init_db() -> tuple:
     if backend == 'postgres':
         _is_pg = True
         return None, None
+
+    if _db is not None:   # already initialised (e.g. by __main__.py before uvicorn)
+        return _db, _lock
 
     from zikra.migrate import run_migrations
     path = os.getenv('ZIKRA_DB_PATH', './zikra.db')
@@ -72,72 +93,86 @@ def init_db() -> tuple:
 
 
 def get_db_and_lock() -> tuple:
-    """Return the raw SQLite (db, lock) — SQLite-only internal use."""
+    """Return the raw SQLite (db, lock) — used by auth.py for sync token lookup."""
     return _db, _lock
 
 
-# ── SQLite: save_memory ────────────────────────────────────────────────────────
+# ── aiosqlite helpers ──────────────────────────────────────────────────────────
 
-def _sqlite_save_memory(db, lock, data: dict, embedding: list) -> str:
+async def open_aio_db(path: str) -> 'aiosqlite.Connection':
+    """Open an aiosqlite connection with WAL, foreign keys, and sqlite-vec loaded."""
+    db = await aiosqlite.connect(path)
+    db.row_factory = aiosqlite.Row
+    await db.execute("PRAGMA journal_mode=WAL")
+    await db.execute("PRAGMA foreign_keys=ON")
+    await db.enable_load_extension(True)
+    await db.load_extension(sqlite_vec.loadable_path())
+    await db.enable_load_extension(False)
+    return db
+
+
+# ── SQLite async: save_memory ──────────────────────────────────────────────────
+
+async def _sqlite_save_memory(db: 'aiosqlite.Connection', data: dict, embedding: list) -> str:
     memory_id = new_id()
     vec_bytes = struct.pack(f'{len(embedding)}f', *embedding)
 
-    with lock:
-        db.execute("""
-            INSERT INTO memories
-                (id, project, module, memory_type, title, content_md,
-                 tags, resolution, created_by, searchable, pending_review)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-            ON CONFLICT(title, memory_type, project) DO UPDATE SET
-                content_md = excluded.content_md,
-                tags = excluded.tags,
-                pending_review = excluded.pending_review,
-                updated_at = CURRENT_TIMESTAMP
-        """, [
-            memory_id,
-            data.get('project', 'global'),
-            data.get('module'),
-            data.get('memory_type', 'conversation'),
-            data.get('title', ''),
-            data.get('content_md') or data.get('content', ''),
-            json.dumps(data.get('tags', [])),
-            data.get('resolution'),
-            data.get('created_by'),
-            data.get('pending_review', 0),
-        ])
+    await db.execute("""
+        INSERT INTO memories
+            (id, project, module, memory_type, title, content_md,
+             tags, resolution, created_by, searchable, pending_review)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        ON CONFLICT(title, memory_type, project) DO UPDATE SET
+            content_md = excluded.content_md,
+            tags = excluded.tags,
+            pending_review = excluded.pending_review,
+            updated_at = CURRENT_TIMESTAMP
+    """, [
+        memory_id,
+        data.get('project', 'global'),
+        data.get('module'),
+        data.get('memory_type', 'conversation'),
+        data.get('title', ''),
+        data.get('content_md') or data.get('content', ''),
+        json.dumps(data.get('tags', [])),
+        data.get('resolution'),
+        data.get('created_by'),
+        data.get('pending_review', 0),
+    ])
 
-        row = db.execute(
-            "SELECT rowid FROM memories WHERE title=? AND memory_type=? AND project=?",
-            [data.get('title', ''), data.get('memory_type', 'conversation'), data.get('project', 'global')]
-        ).fetchone()
+    async with db.execute(
+        "SELECT rowid FROM memories WHERE title=? AND memory_type=? AND project=?",
+        [data.get('title', ''), data.get('memory_type', 'conversation'), data.get('project', 'global')]
+    ) as cur:
+        row = await cur.fetchone()
 
-        if row:
-            rowid = row['rowid']
-            db.execute("DELETE FROM memories_vec WHERE rowid = ?", [rowid])
-            db.execute(
-                "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
-                [rowid, vec_bytes]
-            )
-            db.execute(
-                "INSERT OR REPLACE INTO memories_fts(rowid, title, content_md) VALUES (?, ?, ?)",
-                [rowid, data.get('title', ''), data.get('content_md') or data.get('content', '')]
-            )
+    if row:
+        rowid = row['rowid']
+        await db.execute("DELETE FROM memories_vec WHERE rowid = ?", [rowid])
+        await db.execute(
+            "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
+            [rowid, vec_bytes]
+        )
+        await db.execute(
+            "INSERT OR REPLACE INTO memories_fts(rowid, title, content_md) VALUES (?, ?, ?)",
+            [rowid, data.get('title', ''), data.get('content_md') or data.get('content', '')]
+        )
 
-        db.commit()
+    await db.commit()
 
-    row = db.execute(
+    async with db.execute(
         "SELECT id FROM memories WHERE title=? AND memory_type=? AND project=?",
         [data.get('title', ''), data.get('memory_type', 'conversation'), data.get('project', 'global')]
-    ).fetchone()
+    ) as cur:
+        row = await cur.fetchone()
     return row['id'] if row else memory_id
 
 
+# ── SQLite async: search_memories ─────────────────────────────────────────────
 
-# ── SQLite: search_memories ────────────────────────────────────────────────────
-
-def _fts_query(db, match_expr: str, project: str, limit: int):
+async def _fts_query(db: 'aiosqlite.Connection', match_expr: str, project: str, limit: int):
     """Run a single FTS5 MATCH query. Returns rows or raises."""
-    return db.execute("""
+    async with db.execute("""
         SELECT
             m.rowid, m.id, m.title,
             SUBSTR(m.content_md, 1, 500) AS snippet,
@@ -151,10 +186,11 @@ def _fts_query(db, match_expr: str, project: str, limit: int):
           AND (m.project = ? OR m.project = 'global')
         ORDER BY f.rank
         LIMIT ?
-    """, [match_expr, project, limit]).fetchall()
+    """, [match_expr, project, limit]) as cur:
+        return await cur.fetchall()
 
 
-def _fts_search(db, query_text: str, project: str, limit: int) -> tuple:
+async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str, limit: int) -> tuple:
     """Full-text search fallback — AND → OR → LIKE.
     Returns (results, degraded, reason)."""
     rows = []
@@ -163,28 +199,26 @@ def _fts_search(db, query_text: str, project: str, limit: int) -> tuple:
 
     # Level 1 — FTS MATCH
     try:
-        rows = _fts_query(db, query_text, project, limit)
+        rows = await _fts_query(db, query_text, project, limit)
     except Exception as e:
         logger.warning(f'FTS MATCH failed: {e}')
-        # fall through to OR tokens
 
     # Level 2 — OR token MATCH
     if not rows:
         tokens = [t for t in re.sub(r'[^\w\s]', ' ', query_text).split() if t]
         if len(tokens) > 1:
             try:
-                rows = _fts_query(db, ' OR '.join(tokens), project, limit)
+                rows = await _fts_query(db, ' OR '.join(tokens), project, limit)
                 if rows:
                     degraded = True
                     reason = 'fts_or_fallback'
             except Exception as e:
                 logger.warning(f'FTS OR fallback failed: {e}')
-                # fall through to LIKE
 
     # Level 3 — LIKE
     if not rows:
         try:
-            rows = db.execute("""
+            async with db.execute("""
                 SELECT
                     rowid, id, title,
                     SUBSTR(content_md, 1, 500) AS snippet,
@@ -196,7 +230,8 @@ def _fts_search(db, query_text: str, project: str, limit: int) -> tuple:
                   AND searchable = 1
                   AND (project = ? OR project = 'global')
                 LIMIT ?
-            """, [f'%{query_text}%', f'%{query_text}%', project, limit]).fetchall()
+            """, [f'%{query_text}%', f'%{query_text}%', project, limit]) as cur:
+                rows = await cur.fetchall()
             if rows:
                 degraded = True
                 reason = 'like_fallback'
@@ -227,8 +262,8 @@ def _fts_search(db, query_text: str, project: str, limit: int) -> tuple:
     return results, degraded, reason
 
 
-def search_memories(db, query_text: str, query_embedding: list,
-                    project: str, limit: int = 5) -> tuple:
+async def search_memories(db: 'aiosqlite.Connection', query_text: str, query_embedding: list,
+                          project: str, limit: int = 5) -> tuple:
     """Returns (results, degraded, reason)."""
     is_zero = all(v == 0.0 for v in query_embedding)
 
@@ -236,24 +271,25 @@ def search_memories(db, query_text: str, query_embedding: list,
     if not is_zero:
         try:
             vec_bytes = struct.pack(f'{len(query_embedding)}f', *query_embedding)
-            vec_results = db.execute("""
+            async with db.execute("""
                 SELECT rowid, distance
                 FROM memories_vec
                 WHERE embedding MATCH ?
                   AND k = ?
-            """, [vec_bytes, VECTOR_SEARCH_K]).fetchall()
+            """, [vec_bytes, VECTOR_SEARCH_K]) as cur:
+                vec_results = await cur.fetchall()
         except Exception as e:
             logger.warning(f'Vector search failed, falling back to FTS: {e}')
             vec_results = []
 
     if not vec_results:
-        return _fts_search(db, query_text, project, limit)
+        return await _fts_search(db, query_text, project, limit)
 
     rowid_to_distance = {row['rowid']: row['distance'] for row in vec_results}
     rowids = list(rowid_to_distance.keys())
     placeholders = ','.join('?' * len(rowids))
 
-    rows = db.execute(f"""
+    async with db.execute(f"""
         SELECT
             m.rowid,
             m.id, m.title,
@@ -271,7 +307,8 @@ def search_memories(db, query_text: str, query_embedding: list,
         WHERE m.rowid IN ({placeholders})
           AND m.searchable = 1
           AND (m.project = ? OR m.project = 'global')
-    """, [query_text] + rowids + [project]).fetchall()
+    """, [query_text] + rowids + [project]) as cur:
+        rows = await cur.fetchall()
 
     from zikra.scoring import score as rescore
     results = []
@@ -302,15 +339,15 @@ def search_memories(db, query_text: str, query_embedding: list,
 
 # ── Async public API — dispatches to SQLite or Postgres ───────────────────────
 #
-# Commands should call these instead of touching _db / get_db_and_lock()
-# directly, so they work transparently with both backends.
+# Commands call these functions; they work transparently with both backends.
+# SQLite path uses _aio_db (aiosqlite) — no blocking, no threading.
 
 async def store_memory(data: dict, embedding: list) -> str:
     """Upsert a memory and its embedding."""
     if _is_pg:
         from zikra.db_postgres import save_memory_pg, get_pg_pool
         return await save_memory_pg(get_pg_pool(), data, embedding)
-    return _sqlite_save_memory(_db, _lock, data, embedding)
+    return await _sqlite_save_memory(_aio_db, data, embedding)
 
 
 async def find_memories(query_text: str, query_embedding: list,
@@ -319,7 +356,7 @@ async def find_memories(query_text: str, query_embedding: list,
     if _is_pg:
         from zikra.db_postgres import search_memories_pg, get_pg_pool
         return await search_memories_pg(get_pg_pool(), query_text, query_embedding, project, limit)
-    return search_memories(_db, query_text, query_embedding, project, limit)
+    return await search_memories(_aio_db, query_text, query_embedding, project, limit)
 
 
 async def fetch_memory(memory_id: str = None, title: str = None,
@@ -329,42 +366,33 @@ async def fetch_memory(memory_id: str = None, title: str = None,
         from zikra.db_postgres import get_memory_pg, get_pg_pool
         return await get_memory_pg(get_pg_pool(), memory_id, title, memory_type, project)
 
-    # SQLite
+    _COLS = ("id, title, content_md, memory_type, project, module, "
+             "tags, resolution, access_count, created_at, updated_at")
+
     if memory_id:
-        row = _db.execute(
-            "SELECT id, title, content_md, memory_type, project, module, "
-            "tags, resolution, access_count, created_at, updated_at "
-            "FROM memories WHERE id = ?", [memory_id]
-        ).fetchone()
+        if project:
+            sql = f"SELECT {_COLS} FROM memories WHERE id = ? AND project = ?"
+            params = [memory_id, project]
+        else:
+            sql = f"SELECT {_COLS} FROM memories WHERE id = ?"
+            params = [memory_id]
     elif memory_type:
         if project:
-            row = _db.execute(
-                "SELECT id, title, content_md, memory_type, project, module, "
-                "tags, resolution, access_count, created_at, updated_at "
-                "FROM memories WHERE title = ? AND memory_type = ? AND project = ?",
-                [title, memory_type, project]
-            ).fetchone()
+            sql = f"SELECT {_COLS} FROM memories WHERE title = ? AND memory_type = ? AND project = ?"
+            params = [title, memory_type, project]
         else:
-            row = _db.execute(
-                "SELECT id, title, content_md, memory_type, project, module, "
-                "tags, resolution, access_count, created_at, updated_at "
-                "FROM memories WHERE title = ? AND memory_type = ?",
-                [title, memory_type]
-            ).fetchone()
+            sql = f"SELECT {_COLS} FROM memories WHERE title = ? AND memory_type = ?"
+            params = [title, memory_type]
     else:
         if project:
-            row = _db.execute(
-                "SELECT id, title, content_md, memory_type, project, module, "
-                "tags, resolution, access_count, created_at, updated_at "
-                "FROM memories WHERE title = ? AND project = ? LIMIT 1",
-                [title, project]
-            ).fetchone()
+            sql = f"SELECT {_COLS} FROM memories WHERE title = ? AND project = ? LIMIT 1"
+            params = [title, project]
         else:
-            row = _db.execute(
-                "SELECT id, title, content_md, memory_type, project, module, "
-                "tags, resolution, access_count, created_at, updated_at "
-                "FROM memories WHERE title = ? LIMIT 1", [title]
-            ).fetchone()
+            sql = f"SELECT {_COLS} FROM memories WHERE title = ? LIMIT 1"
+            params = [title]
+
+    async with _aio_db.execute(sql, params) as cur:
+        row = await cur.fetchone()
     return dict(row) if row else None
 
 
@@ -375,25 +403,24 @@ async def record_run(data: dict, run_id: str) -> None:
         await log_run_pg(get_pg_pool(), data, run_id)
         return
 
-    with _lock:
-        _db.execute(
-            """INSERT INTO prompt_runs
-               (id, project, runner, prompt_name, status, output_summary,
-                tokens_input, tokens_output, cost_usd)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            [
-                run_id,
-                data.get('project', 'global'),
-                data.get('runner'),
-                data.get('prompt_name'),
-                data.get('status', 'success'),
-                data.get('output_summary'),
-                data.get('tokens_input'),
-                data.get('tokens_output'),
-                data.get('cost_usd'),
-            ]
-        )
-        _db.commit()
+    await _aio_db.execute(
+        """INSERT INTO prompt_runs
+           (id, project, runner, prompt_name, status, output_summary,
+            tokens_input, tokens_output, cost_usd)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        [
+            run_id,
+            data.get('project', 'global'),
+            data.get('runner'),
+            data.get('prompt_name'),
+            data.get('status', 'success'),
+            data.get('output_summary'),
+            data.get('tokens_input'),
+            data.get('tokens_output'),
+            data.get('cost_usd'),
+        ]
+    )
+    await _aio_db.commit()
 
 
 async def record_error(data: dict, error_id: str) -> None:
@@ -403,22 +430,21 @@ async def record_error(data: dict, error_id: str) -> None:
         await log_error_pg(get_pg_pool(), data, error_id)
         return
 
-    with _lock:
-        _db.execute(
-            """INSERT INTO error_log
-               (id, project, runner, error_type, message, stack_trace, context_md)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            [
-                error_id,
-                data.get('project', 'global'),
-                data.get('runner'),
-                data.get('error_type'),
-                data.get('message') or data.get('error', ''),
-                data.get('stack_trace'),
-                data.get('context_md'),
-            ]
-        )
-        _db.commit()
+    await _aio_db.execute(
+        """INSERT INTO error_log
+           (id, project, runner, error_type, message, stack_trace, context_md)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        [
+            error_id,
+            data.get('project', 'global'),
+            data.get('runner'),
+            data.get('error_type'),
+            data.get('message') or data.get('error', ''),
+            data.get('stack_trace'),
+            data.get('context_md'),
+        ]
+    )
+    await _aio_db.commit()
 
 
 async def get_schema_info() -> dict:
@@ -427,13 +453,14 @@ async def get_schema_info() -> dict:
         from zikra.db_postgres import get_schema_pg, get_pg_pool
         return await get_schema_pg(get_pg_pool())
 
-    tables = _db.execute(
+    async with _aio_db.execute(
         "SELECT name, sql FROM sqlite_master "
         "WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
-    ).fetchall()
+    ) as cur:
+        tables = await cur.fetchall()
     schema = {t['name']: t['sql'] for t in tables if t['sql']}
     return {
-        'engine': 'sqlite3 + sqlite-vec',
+        'engine': 'sqlite3 + sqlite-vec (aiosqlite)',
         'tables': list(schema.keys()),
         'schema': schema,
     }
@@ -446,17 +473,16 @@ async def fetch_prompt_row(prompt_name: str, project: str = None) -> Optional[di
         return await get_prompt_pg(get_pg_pool(), prompt_name, project)
 
     if project:
-        row = _db.execute(
-            "SELECT id, title, content_md, project, access_count, created_at "
-            "FROM memories WHERE title = ? AND memory_type = 'prompt' AND project = ?",
-            [prompt_name, project]
-        ).fetchone()
+        sql = ("SELECT id, title, content_md, project, access_count, created_at "
+               "FROM memories WHERE title = ? AND memory_type = 'prompt' AND project = ?")
+        params = [prompt_name, project]
     else:
-        row = _db.execute(
-            "SELECT id, title, content_md, project, access_count, created_at "
-            "FROM memories WHERE title = ? AND memory_type = 'prompt'",
-            [prompt_name]
-        ).fetchone()
+        sql = ("SELECT id, title, content_md, project, access_count, created_at "
+               "FROM memories WHERE title = ? AND memory_type = 'prompt'")
+        params = [prompt_name]
+
+    async with _aio_db.execute(sql, params) as cur:
+        row = await cur.fetchone()
     return dict(row) if row else None
 
 
@@ -467,12 +493,11 @@ async def bump_access_count(memory_id: str) -> None:
         await bump_access_count_pg(get_pg_pool(), memory_id)
         return
 
-    with _lock:
-        _db.execute(
-            "UPDATE memories SET access_count = access_count + 1 WHERE id = ?",
-            [memory_id]
-        )
-        _db.commit()
+    await _aio_db.execute(
+        "UPDATE memories SET access_count = access_count + 1 WHERE id = ?",
+        [memory_id]
+    )
+    await _aio_db.commit()
 
 
 async def add_token(token_id: str, token: str, person_name: str, role: str) -> None:
@@ -482,12 +507,11 @@ async def add_token(token_id: str, token: str, person_name: str, role: str) -> N
         await add_token_pg(get_pg_pool(), token_id, token, person_name, role)
         return
 
-    with _lock:
-        _db.execute(
-            "INSERT INTO access_tokens (id, token, person_name, role, active) VALUES (?, ?, ?, ?, 1)",
-            [token_id, token, person_name, role]
-        )
-        _db.commit()
+    await _aio_db.execute(
+        "INSERT INTO access_tokens (id, token, person_name, role, active) VALUES (?, ?, ?, ?, 1)",
+        [token_id, token, person_name, role]
+    )
+    await _aio_db.commit()
 
 
 async def list_by_memory_type(memory_type: str, project: str, limit: int,
@@ -497,28 +521,32 @@ async def list_by_memory_type(memory_type: str, project: str, limit: int,
         from zikra.db_postgres import list_by_type_pg, get_pg_pool
         return await list_by_type_pg(get_pg_pool(), memory_type, project, limit, pending_review)
 
-    with _lock:
-        if pending_review is not None:
-            rows = _db.execute("""
-                SELECT id, title, SUBSTR(content_md, 1, 300) AS snippet,
-                       project, access_count, created_by, created_at
-                FROM memories
-                WHERE memory_type = ?
-                  AND (project = ? OR project = 'global')
-                  AND pending_review = ?
-                ORDER BY access_count DESC, created_at DESC
-                LIMIT ?
-            """, [memory_type, project, pending_review, limit]).fetchall()
-        else:
-            rows = _db.execute("""
-                SELECT id, title, SUBSTR(content_md, 1, 300) AS snippet,
-                       project, access_count, created_by, created_at
-                FROM memories
-                WHERE memory_type = ?
-                  AND (project = ? OR project = 'global')
-                ORDER BY access_count DESC, created_at DESC
-                LIMIT ?
-            """, [memory_type, project, limit]).fetchall()
+    if pending_review is not None:
+        sql = """
+            SELECT id, title, SUBSTR(content_md, 1, 300) AS snippet,
+                   project, access_count, created_by, created_at
+            FROM memories
+            WHERE memory_type = ?
+              AND (project = ? OR project = 'global')
+              AND pending_review = ?
+            ORDER BY access_count DESC, created_at DESC
+            LIMIT ?
+        """
+        params = [memory_type, project, pending_review, limit]
+    else:
+        sql = """
+            SELECT id, title, SUBSTR(content_md, 1, 300) AS snippet,
+                   project, access_count, created_by, created_at
+            FROM memories
+            WHERE memory_type = ?
+              AND (project = ? OR project = 'global')
+            ORDER BY access_count DESC, created_at DESC
+            LIMIT ?
+        """
+        params = [memory_type, project, limit]
+
+    async with _aio_db.execute(sql, params) as cur:
+        rows = await cur.fetchall()
     return [dict(r) for r in rows]
 
 
@@ -528,19 +556,19 @@ async def change_memory_type(memory_id: str, new_type: str) -> Optional[dict]:
         from zikra.db_postgres import change_memory_type_pg, get_pg_pool
         return await change_memory_type_pg(get_pg_pool(), memory_id, new_type)
 
-    with _lock:
-        row = _db.execute(
-            "SELECT id, title FROM memories WHERE id = ? AND memory_type = 'requirement'",
-            [memory_id]
-        ).fetchone()
-        if not row:
-            return None
-        _db.execute("""
-            UPDATE memories
-            SET memory_type = ?, pending_review = 0, updated_at = datetime('now')
-            WHERE id = ?
-        """, [new_type, memory_id])
-        _db.commit()
+    async with _aio_db.execute(
+        "SELECT id, title FROM memories WHERE id = ? AND memory_type = 'requirement'",
+        [memory_id]
+    ) as cur:
+        row = await cur.fetchone()
+    if not row:
+        return None
+    await _aio_db.execute("""
+        UPDATE memories
+        SET memory_type = ?, pending_review = 0, updated_at = datetime('now')
+        WHERE id = ?
+    """, [new_type, memory_id])
+    await _aio_db.commit()
     return dict(row) if row else None
 
 
@@ -550,6 +578,6 @@ async def debug_memory_count() -> int:
         from zikra.db_postgres import debug_count_pg, get_pg_pool
         return await debug_count_pg(get_pg_pool())
 
-    with _lock:
-        row = _db.execute('SELECT COUNT(*) FROM memories').fetchone()
+    async with _aio_db.execute('SELECT COUNT(*) FROM memories') as cur:
+        row = await cur.fetchone()
     return row[0] if row else 0
