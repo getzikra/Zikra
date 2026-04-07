@@ -173,20 +173,36 @@ async def _sqlite_save_memory(db: 'aiosqlite.Connection', data: dict, embedding:
 async def _fts_query(db: 'aiosqlite.Connection', match_expr: str, project: str, limit: int,
                     memory_type: str = None):
     """Run a single FTS5 MATCH query. Returns rows or raises."""
-    base_sql = """
-        SELECT
-            m.rowid, m.id, m.title,
-            SUBSTR(m.content_md, 1, 500) AS snippet,
-            m.memory_type, m.project, m.module,
-            m.created_at, f.rank AS fts_score,
-            m.access_count, m.confidence_score
-        FROM memories m
-        JOIN memories_fts f ON f.rowid = m.rowid
-        WHERE memories_fts MATCH ?
-          AND m.searchable = 1
-          AND (m.project = ? OR m.project = 'global')
-    """
-    params = [match_expr, project]
+    # global → sees ALL memories; specific project → scoped to that project only
+    if project == 'global':
+        base_sql = """
+            SELECT
+                m.rowid, m.id, m.title,
+                SUBSTR(m.content_md, 1, 500) AS snippet,
+                m.memory_type, m.project, m.module,
+                m.created_at, f.rank AS fts_score,
+                m.access_count, m.confidence_score
+            FROM memories m
+            JOIN memories_fts f ON f.rowid = m.rowid
+            WHERE memories_fts MATCH ?
+              AND m.searchable = 1
+        """
+        params = [match_expr]
+    else:
+        base_sql = """
+            SELECT
+                m.rowid, m.id, m.title,
+                SUBSTR(m.content_md, 1, 500) AS snippet,
+                m.memory_type, m.project, m.module,
+                m.created_at, f.rank AS fts_score,
+                m.access_count, m.confidence_score
+            FROM memories m
+            JOIN memories_fts f ON f.rowid = m.rowid
+            WHERE memories_fts MATCH ?
+              AND m.searchable = 1
+              AND m.project = ?
+        """
+        params = [match_expr, project]
     if memory_type:
         base_sql += "  AND m.memory_type = ?\n"
         params.append(memory_type)
@@ -225,19 +241,34 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
     # Level 3 — LIKE
     if not rows:
         try:
-            like_sql = """
-                SELECT
-                    rowid, id, title,
-                    SUBSTR(content_md, 1, 500) AS snippet,
-                    memory_type, project, module, created_at,
-                    -0.5 AS fts_score,
-                    access_count, confidence_score
-                FROM memories
-                WHERE (title LIKE ? OR content_md LIKE ?)
-                  AND searchable = 1
-                  AND (project = ? OR project = 'global')
-            """
-            like_params = [f'%{query_text}%', f'%{query_text}%', project]
+            # global → sees ALL memories; specific project → scoped to that project only
+            if project == 'global':
+                like_sql = """
+                    SELECT
+                        rowid, id, title,
+                        SUBSTR(content_md, 1, 500) AS snippet,
+                        memory_type, project, module, created_at,
+                        -0.5 AS fts_score,
+                        access_count, confidence_score
+                    FROM memories
+                    WHERE (title LIKE ? OR content_md LIKE ?)
+                      AND searchable = 1
+                """
+                like_params = [f'%{query_text}%', f'%{query_text}%']
+            else:
+                like_sql = """
+                    SELECT
+                        rowid, id, title,
+                        SUBSTR(content_md, 1, 500) AS snippet,
+                        memory_type, project, module, created_at,
+                        -0.5 AS fts_score,
+                        access_count, confidence_score
+                    FROM memories
+                    WHERE (title LIKE ? OR content_md LIKE ?)
+                      AND searchable = 1
+                      AND project = ?
+                """
+                like_params = [f'%{query_text}%', f'%{query_text}%', project]
             if memory_type:
                 like_sql += "  AND memory_type = ?\n"
                 like_params.append(memory_type)
@@ -302,26 +333,48 @@ async def search_memories(db: 'aiosqlite.Connection', query_text: str, query_emb
     rowids = list(rowid_to_distance.keys())
     placeholders = ','.join('?' * len(rowids))
 
-    vec_sql = f"""
-        SELECT
-            m.rowid,
-            m.id, m.title,
-            SUBSTR(m.content_md, 1, 500) AS snippet,
-            m.memory_type, m.project, m.module,
-            m.created_at,
-            COALESCE(f.rank, 0.0) AS fts_score,
-            m.access_count, m.confidence_score
-        FROM memories m
-        LEFT JOIN (
-            SELECT rowid, rank
-            FROM memories_fts
-            WHERE memories_fts MATCH ?
-        ) f ON f.rowid = m.rowid
-        WHERE m.rowid IN ({placeholders})
-          AND m.searchable = 1
-          AND (m.project = ? OR m.project = 'global')
-    """
-    vec_params = [query_text] + rowids + [project]
+    # global → sees ALL memories; specific project → scoped to that project only
+    if project == 'global':
+        vec_sql = f"""
+            SELECT
+                m.rowid,
+                m.id, m.title,
+                SUBSTR(m.content_md, 1, 500) AS snippet,
+                m.memory_type, m.project, m.module,
+                m.created_at,
+                COALESCE(f.rank, 0.0) AS fts_score,
+                m.access_count, m.confidence_score
+            FROM memories m
+            LEFT JOIN (
+                SELECT rowid, rank
+                FROM memories_fts
+                WHERE memories_fts MATCH ?
+            ) f ON f.rowid = m.rowid
+            WHERE m.rowid IN ({placeholders})
+              AND m.searchable = 1
+        """
+        vec_params = [query_text] + rowids
+    else:
+        vec_sql = f"""
+            SELECT
+                m.rowid,
+                m.id, m.title,
+                SUBSTR(m.content_md, 1, 500) AS snippet,
+                m.memory_type, m.project, m.module,
+                m.created_at,
+                COALESCE(f.rank, 0.0) AS fts_score,
+                m.access_count, m.confidence_score
+            FROM memories m
+            LEFT JOIN (
+                SELECT rowid, rank
+                FROM memories_fts
+                WHERE memories_fts MATCH ?
+            ) f ON f.rowid = m.rowid
+            WHERE m.rowid IN ({placeholders})
+              AND m.searchable = 1
+              AND m.project = ?
+        """
+        vec_params = [query_text] + rowids + [project]
     if memory_type:
         vec_sql += "  AND m.memory_type = ?\n"
         vec_params.append(memory_type)
