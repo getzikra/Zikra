@@ -22,9 +22,10 @@ ROLE_PERMISSIONS = {
 
 async def verify_auth(request: Request) -> dict:
     auth = request.headers.get('Authorization', '')
-    if not auth.startswith('Bearer '):
-        raise HTTPException(status_code=401, detail='Unauthorized')
-    token = auth[7:].strip()
+    if auth.startswith('Bearer '):
+        token = auth[7:].strip()
+    else:
+        token = request.query_params.get('token', '').strip()
     if not token:
         raise HTTPException(status_code=401, detail='Unauthorized')
 
