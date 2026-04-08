@@ -4,7 +4,7 @@
 // Keep in sync with zikra-lite/hooks/zikra-statusline.js
 //
 // Output format:
-//   Zikra (8m ago) │ 17 runs · 847 memories │ veltisai │ Opus 4.6 │ 💀 650K/1M ████░░░░ 65%
+//   Zikra (v0.1.0) │ 17 runs · 847 memories │ veltisai │ Opus 4.6 │ 💀 650K/1M ████░░░░ 65%
 
 'use strict';
 
@@ -33,31 +33,17 @@ function getStats() {
   const cachePath = path.join(os.homedir(), '.claude', 'cache', 'zikra-stats.json');
   try {
     const raw = silentRead(cachePath);
-    if (!raw) return { runs: 0, memories: 0, lastSaved: null, project: 'global' };
+    if (!raw) return { runs: 0, memories: 0, project: 'global' };
     const d = JSON.parse(raw);
     return {
-      runs:      typeof d.runs_today   === 'number' ? d.runs_today   : 0,
-      memories:  typeof d.memory_count === 'number' ? d.memory_count :
-                 typeof d.memories_approx === 'number' ? d.memories_approx : 0,
-      lastSaved: d.last_saved || null,
-      project:   d.project    || 'global',
+      runs:     typeof d.runs_today   === 'number' ? d.runs_today   : 0,
+      memories: typeof d.memory_count === 'number' ? d.memory_count :
+                typeof d.memories_approx === 'number' ? d.memories_approx : 0,
+      project:  d.project || 'global',
     };
   } catch {
-    return { runs: 0, memories: 0, lastSaved: null, project: 'global' };
+    return { runs: 0, memories: 0, project: 'global' };
   }
-}
-
-function formatAge(isoString) {
-  if (!isoString) return 'never';
-  try {
-    const diffMs  = Date.now() - new Date(isoString).getTime();
-    const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 1)  return 'just now';
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr  < 24) return `${diffHr}h ago`;
-    return `${Math.floor(diffHr / 24)}d ago`;
-  } catch { return '?'; }
 }
 
 function formatTokens(n) {
@@ -78,10 +64,35 @@ function getModelLabel(model) {
 }
 
 function tokenBar(payload) {
-  const ctx = payload && payload.context_window;
-  if (!ctx) return '';
-  const pct = (ctx.used_percentage || 0) / 100;
-  if (pct === 0) return '';
+  if (!payload) return '';
+
+  // Determine max tokens — context_window may be a number or an object
+  let maxTokens = null;
+  if (typeof payload.context_window === 'number') {
+    maxTokens = payload.context_window;
+  } else if (payload.context_window && typeof payload.context_window === 'object') {
+    maxTokens = payload.context_window.size || null;
+  } else if (typeof payload.context_window_size === 'number') {
+    maxTokens = payload.context_window_size;
+  }
+  if (!maxTokens) return '';
+
+  // Determine tokens used and percentage
+  let tokensUsed = null;
+  let pct = 0;
+  if (typeof payload.context_tokens_used === 'number') {
+    tokensUsed = payload.context_tokens_used;
+    pct = tokensUsed / maxTokens;
+  } else if (typeof payload.tokens_used === 'number') {
+    tokensUsed = payload.tokens_used;
+    pct = tokensUsed / maxTokens;
+  } else if (payload.context_window && typeof payload.context_window === 'object' &&
+             typeof payload.context_window.used_percentage === 'number') {
+    pct = payload.context_window.used_percentage / 100;
+    tokensUsed = Math.round(pct * maxTokens);
+  }
+
+  if (pct === 0 && tokensUsed === null) return '';
 
   const BLOCKS = 8;
   const filled = Math.round(pct * BLOCKS);
@@ -96,7 +107,14 @@ function tokenBar(payload) {
   const pctColor = pct >= 0.85 ? RED : pct >= 0.65 ? YELLOW : GREEN;
   const icon     = skull ? '💀 ' : '   ';
 
-  return ` ${W}${icon}${Math.round(pct * 100)}%${RESET} ${bar} ${pctColor}${Math.round(pct * 100)}%${RESET}`;
+  // Left label: tokensUsedK / maxTokensDisplay
+  const usedStr = tokensUsed !== null ? Math.round(tokensUsed / 1000) + 'K' : '?';
+  let maxStr;
+  if      (maxTokens >= 1900000) maxStr = '2M';
+  else if (maxTokens >= 900000)  maxStr = '1M';
+  else                           maxStr = Math.round(maxTokens / 1000) + 'K';
+
+  return ` ${W}${icon}${usedStr}/${maxStr}${RESET} ${bar} ${pctColor}${Math.round(pct * 100)}%${RESET}`;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -111,13 +129,13 @@ function render(payload) {
   if (rendered) return;
   rendered = true;
   try {
-    const { runs, memories, lastSaved, project } = getStats();
-    const age   = formatAge(lastSaved);
-    const model = getModelLabel(payload && (payload.model || payload.model_id));
-    const bar   = tokenBar(payload);
+    const { runs, memories, project } = getStats();
+    const version = process.env.ZIKRA_VERSION || 'v0.1.0';
+    const model   = getModelLabel(payload && (payload.model || payload.model_id));
+    const bar     = tokenBar(payload);
 
     const line =
-      `${R}Zikra${RESET} ${D}(${age})${RESET} ${G}│${RESET} ` +
+      `${G}Zikra (${version})${RESET} ${G}│${RESET} ` +
       `${R}${runs}${RESET}${G} runs · ${RESET}${R}${memories}${RESET}${G} memories${RESET} ${G}│${RESET} ` +
       `${W}${project}${RESET} ${G}│${RESET} ` +
       `${W}${model}${RESET}` +
