@@ -22,10 +22,8 @@ from contextvars import ContextVar
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp import types
-from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.routing import Mount
 
 from zikra.commands.search import cmd_search
 from zikra.commands.save_memory import cmd_save_memory
@@ -348,8 +346,28 @@ async def _messages_endpoint(scope, receive, send):
         _mcp_session_role.reset(cv_token)
 
 
-def build_mcp_app() -> Starlette:
-    return Starlette(routes=[
-        Mount('/sse', app=_sse_endpoint),
-        Mount('/messages', app=_messages_endpoint),
-    ])
+def build_mcp_app():
+    """Raw ASGI app for MCP endpoints.
+
+    Uses a flat path router instead of Starlette Mounts to avoid:
+    1. Mount('/sse') forcing a 307 trailing-slash redirect that
+       MCP clients (Claude.ai, Gemini web) do not follow on SSE.
+    2. Mount('/sse') nesting root_path to /mcp/sse, causing
+       SseServerTransport to advertise /mcp/sse/messages instead
+       of /mcp/messages as the POST target.
+    """
+    async def _app(scope, receive, send):
+        if scope['type'] != 'http':
+            return
+        path = scope.get('path', '')
+        # Strip mount prefix if FastAPI has not already done so
+        root = scope.get('root_path', '')
+        if root and path.startswith(root):
+            path = path[len(root):] or '/'
+        if path in ('/sse', '/sse/'):
+            await _sse_endpoint(scope, receive, send)
+        elif path.startswith('/messages'):
+            await _messages_endpoint(scope, receive, send)
+        else:
+            await Response('Not found', status_code=404)(scope, receive, send)
+    return _app
