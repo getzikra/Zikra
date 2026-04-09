@@ -175,18 +175,57 @@ if [[ -n "$TRANSCRIPT_PATH" && -f "$TRANSCRIPT_PATH" ]]; then
   touch "$TRANSCRIPT_PATH" 2>/dev/null || true
 fi
 
-(
-  # Sentinel: skip if a diary was already saved in the last 60 seconds
-  NOW="$(date +%s)"
-  if [[ -f "$SENTINEL" ]]; then
-    LAST="$(cat "$SENTINEL" 2>/dev/null || echo 0)"
-    DIFF=$(( NOW - LAST ))
-    if [[ $DIFF -lt 60 ]]; then
+# ── Portable lock: fail-fast if another Stop hook is already running ──────────
+LOCKFILE="${ZIKRA_TMP}/.zikra_diary.lock"
+if command -v flock >/dev/null 2>&1; then
+  # Linux / WSL: flock is atomic and fd-based
+  exec 9>"$LOCKFILE"
+  flock -n 9 || exit 0
+else
+  # macOS fallback: mkdir is atomic
+  if ! mkdir "${LOCKFILE}.d" 2>/dev/null; then
+    # Release stale lock if older than 5 minutes
+    if [[ -d "${LOCKFILE}.d" ]]; then
+      LOCK_AGE=$(( $(date +%s) - $(stat -f %m "${LOCKFILE}.d" 2>/dev/null || echo 0) ))
+      if [[ $LOCK_AGE -gt 300 ]]; then
+        rm -rf "${LOCKFILE}.d" && mkdir "${LOCKFILE}.d" 2>/dev/null || exit 0
+      else
+        exit 0
+      fi
+    else
       exit 0
     fi
   fi
-  echo "$NOW" > "$SENTINEL"
+  trap 'rm -rf "${LOCKFILE}.d"' EXIT
+fi
 
+# ── Sentinel cooldown: skip if a diary was saved in the last 120 seconds ─────
+NOW="$(date +%s)"
+if [[ -f "$SENTINEL" ]]; then
+  LAST="$(cat "$SENTINEL" 2>/dev/null || echo 0)"
+  DIFF=$(( NOW - LAST ))
+  if [[ $DIFF -lt 120 ]]; then
+    # Release lock before early exit
+    if command -v flock >/dev/null 2>&1; then
+      exec 9>&-
+    else
+      rm -rf "${LOCKFILE}.d" 2>/dev/null
+      trap - EXIT
+    fi
+    exit 0
+  fi
+fi
+echo "$NOW" > "$SENTINEL"
+
+# ── Portable timeout — GNU coreutils on Linux/WSL, gtimeout on macOS ─────────
+_TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+  _TIMEOUT_CMD="timeout 120"
+elif command -v gtimeout >/dev/null 2>&1; then
+  _TIMEOUT_CMD="gtimeout 120"
+fi
+
+(
   # Find the most recently modified transcript (space-safe)
   LATEST=""
   if command -v find >/dev/null 2>&1; then
@@ -196,11 +235,24 @@ fi
 
   [[ -z "$LATEST" || ! -f "$LATEST" ]] && exit 0
 
-  DIARY="$(tail -80 "$LATEST" 2>/dev/null | "$CLAUDE_BIN" -p \
-    'From this Claude Code session transcript, write a concise diary entry covering: what was built or fixed, key decisions made and WHY, problems solved, and any failures or blockers encountered. Max 250 words. Factual, first-person, present tense.' \
-    2>/dev/null || echo "Session diary generation failed.")"
+  # Adaptive transcript length with 200KB byte cap
+  LINE_COUNT="$(wc -l < "$LATEST" 2>/dev/null || echo 0)"
+  TAIL_LINES=200
+  [[ "$LINE_COUNT" -lt 200 ]] && TAIL_LINES="$LINE_COUNT"
+  [[ "$TAIL_LINES" -lt 80 ]] && TAIL_LINES=80
 
-  TITLE="diary:$(date +%Y-%m-%d):${HOSTNAME_SHORT}"
+  DIARY="$(tail -"$TAIL_LINES" "$LATEST" 2>/dev/null \
+    | head -c 200000 \
+    | $_TIMEOUT_CMD "$CLAUDE_BIN" -p \
+      'From this Claude Code session transcript, write a complete diary entry. Include:
+1. What was built, fixed, or deployed (with file names and specifics)
+2. Key decisions made and WHY
+3. Problems encountered and how they were resolved
+4. Current state — what works now, what is left
+Be thorough — this is the only record of this session. 300-500 words. Factual, first-person, present tense.' \
+      2>/dev/null || echo "Session diary generation failed.")"
+
+  TITLE="diary:$(date +%Y-%m-%d-%H%M):${HOSTNAME_SHORT}"
 
   BODY="$(python3 -c "
 import json, sys
