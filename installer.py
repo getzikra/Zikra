@@ -260,7 +260,7 @@ try:
     s.setdefault('mcpServers', {})
     mcp_host = 'localhost' if zikra_host in ('0.0.0.0', '') else zikra_host
     s['mcpServers']['zikra'] = {
-        'url': f'http://{mcp_host}:{zikra_port}/mcp/sse',
+        'url': f'http://{mcp_host}:{zikra_port}/mcp',
         'headers': {'Authorization': f'Bearer {token}'},
     }
 
@@ -287,7 +287,7 @@ Zikra is ready.
   Add this to your Claude Code MCP config if not already done:
   {{
     "zikra": {{
-      "url": "http://localhost:{zikra_port}/mcp/sse"
+      "url": "http://localhost:{zikra_port}/mcp"
     }}
   }}
 

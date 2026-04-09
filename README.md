@@ -47,7 +47,7 @@ Open **Claude Code → Settings → MCP → Add Server** and paste:
 {
   "mcpServers": {
     "zikra": {
-      "url": "http://your-server:8000/mcp/sse",
+      "url": "http://your-server:8000/mcp",
       "headers": { "Authorization": "Bearer YOUR_ZIKRA_TOKEN" }
     }
   }

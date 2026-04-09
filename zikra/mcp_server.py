@@ -1,13 +1,23 @@
 """
 MCP server for Zikra — mounts at /mcp on the same FastAPI app.
-SSE endpoint: GET  /mcp/sse
-Messages:     POST /mcp/messages
 
-mcp.json for teammates:
+Transports (primary first):
+
+  Streamable HTTP (MCP spec 2025-03-26) — POST /mcp
+      Stateless. No sessions. No in-process state.
+      Container restarts are completely invisible to connected clients.
+      Use this URL in mcp.json / settings.json:
+        http://<host>:<port>/mcp
+
+  SSE (deprecated) — GET /mcp/sse + POST /mcp/messages
+      Legacy. Sessions stored in-process; container restart orphans all clients.
+      Kept for backwards-compat only. Will be removed in a future release.
+
+mcp.json example:
 {
   "mcpServers": {
     "zikra": {
-      "url": "http://<host-ip>:8000/mcp/sse",
+      "url": "http://<host-ip>:8000/mcp",
       "headers": { "Authorization": "Bearer <ZIKRA_TOKEN>" }
     }
   }
@@ -40,20 +50,20 @@ from zikra.commands.save_prompt import cmd_save_prompt
 from zikra.commands.list_prompts import cmd_list_prompts
 from zikra.commands.zikra_help import cmd_zikra_help
 from zikra.auth import verify_auth, ROLE_PERMISSIONS
+from zikra.version import __version__
 
 logger = logging.getLogger(__name__)
 
 mcp = Server('zikra')
 sse_transport = SseServerTransport('/messages')
 
-# Per-connection role: ContextVar (works when call_tool runs in SSE context)
-# + session dict (belt-and-suspenders for POST handler context)
+# Per-connection role — ContextVar (SSE) + session dict (belt-and-suspenders)
 _mcp_session_role: ContextVar[str] = ContextVar('_mcp_session_role', default='viewer')
 _SESSION_ROLES: dict[str, str] = {}
 
 
 async def _check_auth_request(request: Request) -> dict | None:
-    """Auth check for Starlette Request objects. Returns auth_info dict or None."""
+    """Auth check for Starlette Request. Returns auth_info or None."""
     try:
         return await verify_auth(request)
     except Exception as e:
@@ -65,188 +75,183 @@ def _text(data: dict) -> list[types.TextContent]:
     return [types.TextContent(type='text', text=json.dumps(data, ensure_ascii=False))]
 
 
-# ── Tool definitions ───────────────────────────────────────────────────────────
+# ── Tool registry (single source of truth — used by both transports) ──────────
 
-@mcp.list_tools()
-async def list_tools() -> list[types.Tool]:
-    return [
-        types.Tool(
-            name='zikra_search',
-            description='Search memories using hybrid semantic + keyword search',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'query': {'type': 'string', 'description': 'Search query'},
-                    'project': {'type': 'string', 'description': 'Project scope'},
-                    'limit': {'type': 'integer', 'default': 5},
-                    'max_tokens': {'type': 'integer', 'default': 2000},
-                },
-                'required': ['query'],
+_TOOLS: list[types.Tool] = [
+    types.Tool(
+        name='zikra_search',
+        description='Search memories using hybrid semantic + keyword search',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'query': {'type': 'string', 'description': 'Search query'},
+                'project': {'type': 'string', 'description': 'Project scope'},
+                'limit': {'type': 'integer', 'default': 5},
+                'max_tokens': {'type': 'integer', 'default': 2000},
             },
-        ),
-        types.Tool(
-            name='zikra_save_memory',
-            description='Save a new memory or knowledge entry',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'title': {'type': 'string'},
-                    'content_md': {'type': 'string'},
-                    'project': {'type': 'string'},
-                    'module': {'type': 'string'},
-                    'memory_type': {'type': 'string', 'default': 'conversation'},
-                    'tags': {'type': 'array', 'items': {'type': 'string'}},
-                    'resolution': {'type': 'string'},
-                    'created_by': {'type': 'string'},
-                },
-                'required': ['title'],
+            'required': ['query'],
+        },
+    ),
+    types.Tool(
+        name='zikra_save_memory',
+        description='Save a new memory or knowledge entry',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'title': {'type': 'string'},
+                'content_md': {'type': 'string'},
+                'project': {'type': 'string'},
+                'module': {'type': 'string'},
+                'memory_type': {'type': 'string', 'default': 'conversation'},
+                'tags': {'type': 'array', 'items': {'type': 'string'}},
+                'resolution': {'type': 'string'},
+                'created_by': {'type': 'string'},
             },
-        ),
-        types.Tool(
-            name='zikra_get_prompt',
-            description='Fetch a saved prompt by name',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'prompt_name': {'type': 'string'},
-                    'project': {'type': 'string'},
-                },
-                'required': ['prompt_name'],
+            'required': ['title'],
+        },
+    ),
+    types.Tool(
+        name='zikra_get_prompt',
+        description='Fetch a saved prompt by name',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'prompt_name': {'type': 'string'},
+                'project': {'type': 'string'},
             },
-        ),
-        types.Tool(
-            name='zikra_log_run',
-            description='Log a completed prompt run with token usage',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'project': {'type': 'string'},
-                    'runner': {'type': 'string'},
-                    'prompt_name': {'type': 'string'},
-                    'status': {'type': 'string', 'default': 'success'},
-                    'output_summary': {'type': 'string'},
-                    'tokens_input': {'type': 'integer'},
-                    'tokens_output': {'type': 'integer'},
-                    'cost_usd': {'type': 'number'},
-                },
+            'required': ['prompt_name'],
+        },
+    ),
+    types.Tool(
+        name='zikra_log_run',
+        description='Log a completed prompt run with token usage',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'project': {'type': 'string'},
+                'runner': {'type': 'string'},
+                'prompt_name': {'type': 'string'},
+                'status': {'type': 'string', 'default': 'success'},
+                'output_summary': {'type': 'string'},
+                'tokens_input': {'type': 'integer'},
+                'tokens_output': {'type': 'integer'},
+                'cost_usd': {'type': 'number'},
             },
-        ),
-        types.Tool(
-            name='zikra_log_error',
-            description='Log an error or failure event',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'project': {'type': 'string'},
-                    'runner': {'type': 'string'},
-                    'error_type': {'type': 'string'},
-                    'message': {'type': 'string'},
-                    'stack_trace': {'type': 'string'},
-                    'context_md': {'type': 'string'},
-                },
+        },
+    ),
+    types.Tool(
+        name='zikra_log_error',
+        description='Log an error or failure event',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'project': {'type': 'string'},
+                'runner': {'type': 'string'},
+                'error_type': {'type': 'string'},
+                'message': {'type': 'string'},
+                'stack_trace': {'type': 'string'},
+                'context_md': {'type': 'string'},
             },
-        ),
-        types.Tool(
-            name='zikra_save_requirement',
-            description='Save a project requirement (memory_type=requirement)',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'title': {'type': 'string'},
-                    'content_md': {'type': 'string'},
-                    'project': {'type': 'string'},
-                    'tags': {'type': 'array', 'items': {'type': 'string'}},
-                },
-                'required': ['title'],
+        },
+    ),
+    types.Tool(
+        name='zikra_save_requirement',
+        description='Save a project requirement (memory_type=requirement)',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'title': {'type': 'string'},
+                'content_md': {'type': 'string'},
+                'project': {'type': 'string'},
+                'tags': {'type': 'array', 'items': {'type': 'string'}},
             },
-        ),
-        types.Tool(
-            name='zikra_list_requirements',
-            description='List saved requirements, optionally filtered by project or status',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'project': {'type': 'string'},
-                    'status': {'type': 'string', 'enum': ['open', 'resolved']},
-                    'limit': {'type': 'integer', 'default': 50},
-                },
+            'required': ['title'],
+        },
+    ),
+    types.Tool(
+        name='zikra_list_requirements',
+        description='List saved requirements, optionally filtered by project or status',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'project': {'type': 'string'},
+                'status': {'type': 'string', 'enum': ['open', 'resolved']},
+                'limit': {'type': 'integer', 'default': 50},
             },
-        ),
-        types.Tool(
-            name='zikra_get_memory',
-            description='Fetch a memory by title or ID',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'title': {'type': 'string'},
-                    'id': {'type': 'string'},
-                    'memory_type': {'type': 'string'},
-                },
+        },
+    ),
+    types.Tool(
+        name='zikra_get_memory',
+        description='Fetch a memory by title or ID',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'title': {'type': 'string'},
+                'id': {'type': 'string'},
+                'memory_type': {'type': 'string'},
             },
-        ),
-        types.Tool(
-            name='zikra_get_schema',
-            description='Return the database schema and table definitions',
-            inputSchema={'type': 'object', 'properties': {}},
-        ),
-        types.Tool(
-            name='zikra_promote_requirement',
-            description='Promote a requirement to a decision or other type',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'id': {'type': 'string'},
-                    'title': {'type': 'string'},
-                    'promote_to': {'type': 'string', 'default': 'decision'},
-                },
+        },
+    ),
+    types.Tool(
+        name='zikra_get_schema',
+        description='Return the database schema and table definitions',
+        inputSchema={'type': 'object', 'properties': {}},
+    ),
+    types.Tool(
+        name='zikra_promote_requirement',
+        description='Promote a requirement to a decision or other type',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'id': {'type': 'string'},
+                'title': {'type': 'string'},
+                'promote_to': {'type': 'string', 'default': 'decision'},
             },
-        ),
-        types.Tool(
-            name='zikra_create_token',
-            description='Generate a new access token',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'label': {'type': 'string'},
-                    'role': {'type': 'string', 'default': 'developer'},
-                },
+        },
+    ),
+    types.Tool(
+        name='zikra_create_token',
+        description='Generate a new access token',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'label': {'type': 'string'},
+                'role': {'type': 'string', 'default': 'developer'},
             },
-        ),
-        types.Tool(
-            name='zikra_save_prompt',
-            description='Save a new prompt with semantic embedding (memory_type=prompt)',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'title': {'type': 'string'},
-                    'content_md': {'type': 'string'},
-                    'project': {'type': 'string'},
-                    'created_by': {'type': 'string'},
-                    'tags': {'type': 'array', 'items': {'type': 'string'}},
-                },
-                'required': ['title'],
+        },
+    ),
+    types.Tool(
+        name='zikra_save_prompt',
+        description='Save a new prompt with semantic embedding (memory_type=prompt)',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'title': {'type': 'string'},
+                'content_md': {'type': 'string'},
+                'project': {'type': 'string'},
+                'created_by': {'type': 'string'},
+                'tags': {'type': 'array', 'items': {'type': 'string'}},
             },
-        ),
-        types.Tool(
-            name='zikra_list_prompts',
-            description='List all saved prompts, optionally filtered by project',
-            inputSchema={
-                'type': 'object',
-                'properties': {
-                    'project': {'type': 'string'},
-                    'limit': {'type': 'integer', 'default': 50},
-                },
+            'required': ['title'],
+        },
+    ),
+    types.Tool(
+        name='zikra_list_prompts',
+        description='List all saved prompts, optionally filtered by project',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'project': {'type': 'string'},
+                'limit': {'type': 'integer', 'default': 50},
             },
-        ),
-        types.Tool(
-            name='zikra_help',
-            description='Return all available Zikra commands with descriptions and aliases',
-            inputSchema={'type': 'object', 'properties': {}},
-        ),
-    ]
-
-
-# ── Tool dispatch ──────────────────────────────────────────────────────────────
+        },
+    ),
+    types.Tool(
+        name='zikra_help',
+        description='Return all available Zikra commands with descriptions and aliases',
+        inputSchema={'type': 'object', 'properties': {}},
+    ),
+]
 
 _MCP_DISPATCH = {
     'zikra_search':               cmd_search,
@@ -266,14 +271,13 @@ _MCP_DISPATCH = {
 }
 
 
-@mcp.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+async def _run_tool(name: str, arguments: dict, role: str) -> list[types.TextContent]:
+    """Auth-check, authorise, and execute a named tool. Used by both transports."""
     command = name.replace('zikra_', '', 1)
-    caller_role = _mcp_session_role.get()
-    blocked = ROLE_PERMISSIONS.get(caller_role, ROLE_PERMISSIONS['viewer'])
+    blocked = ROLE_PERMISSIONS.get(role, ROLE_PERMISSIONS['viewer'])
     if command in blocked:
         required = next(
-            role for role, bl in ROLE_PERMISSIONS.items() if command not in bl
+            (r for r, bl in ROLE_PERMISSIONS.items() if command not in bl), 'owner'
         )
         return _text({'error': 'insufficient permissions', 'required_role': required})
 
@@ -288,12 +292,133 @@ async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
         return _text({'error': str(e)})
 
 
-# ── ASGI endpoints ─────────────────────────────────────────────────────────────
+# ── SSE-compat decorators (keep the mcp.Server happy for the legacy transport) ─
+
+@mcp.list_tools()
+async def list_tools() -> list[types.Tool]:
+    return _TOOLS
+
+
+@mcp.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[types.TextContent]:
+    role = _mcp_session_role.get()
+    return await _run_tool(name, arguments, role)
+
+
+# ── Streamable HTTP transport — MCP spec 2025-03-26 ───────────────────────────
+
+async def _dispatch_rpc(method: str, params: dict, rpc_id, role: str):
+    """Route one JSON-RPC 2.0 call. Returns response dict, or None for notifications."""
+
+    if method == 'initialize':
+        return {
+            'jsonrpc': '2.0', 'id': rpc_id,
+            'result': {
+                'protocolVersion': '2025-03-26',
+                'serverInfo': {'name': 'zikra', 'version': __version__},
+                'capabilities': {'tools': {'listChanged': False}},
+            },
+        }
+
+    if method == 'tools/list':
+        return {
+            'jsonrpc': '2.0', 'id': rpc_id,
+            'result': {
+                'tools': [
+                    {
+                        'name': t.name,
+                        'description': t.description or '',
+                        'inputSchema': t.inputSchema,
+                    }
+                    for t in _TOOLS
+                ],
+            },
+        }
+
+    if method == 'tools/call':
+        tool_name = params.get('name', '')
+        arguments  = params.get('arguments') or {}
+        content    = await _run_tool(tool_name, arguments, role)
+        return {
+            'jsonrpc': '2.0', 'id': rpc_id,
+            'result': {
+                'content': [{'type': c.type, 'text': c.text} for c in content],
+                'isError': False,
+            },
+        }
+
+    if method == 'ping':
+        return {'jsonrpc': '2.0', 'id': rpc_id, 'result': {}}
+
+    if method.startswith('notifications/'):
+        return None  # notifications require no response
+
+    return {
+        'jsonrpc': '2.0', 'id': rpc_id,
+        'error': {'code': -32601, 'message': f'Method not found: {method}'},
+    }
+
+
+async def _streamable_http_endpoint(scope, receive, send):
+    """
+    POST /mcp — Streamable HTTP transport (MCP spec 2025-03-26).
+    Stateless: no sessions, no in-process state.
+    Container restarts are transparent to all connected clients.
+    """
+    req = Request(scope, receive)
+
+    auth_info = await _check_auth_request(req)
+    if not auth_info:
+        await Response('Unauthorized', status_code=401)(scope, receive, send)
+        return
+
+    role     = auth_info.get('role', 'viewer')
+    cv_token = _mcp_session_role.set(role)
+
+    try:
+        body_bytes = await req.body()
+        if not body_bytes:
+            err = json.dumps({'jsonrpc': '2.0', 'id': None,
+                              'error': {'code': -32700, 'message': 'Empty request body'}})
+            await Response(err, status_code=400, media_type='application/json')(scope, receive, send)
+            return
+
+        rpc    = json.loads(body_bytes)
+        method = rpc.get('method', '')
+        rpc_id = rpc.get('id')
+        params = rpc.get('params') or {}
+
+        result = await _dispatch_rpc(method, params, rpc_id, role)
+
+        if result is None:
+            await Response('', status_code=204)(scope, receive, send)
+        else:
+            body = json.dumps(result, ensure_ascii=False)
+            await Response(body, media_type='application/json')(scope, receive, send)
+
+    except json.JSONDecodeError:
+        err = json.dumps({'jsonrpc': '2.0', 'id': None,
+                          'error': {'code': -32700, 'message': 'Parse error'}})
+        await Response(err, status_code=400, media_type='application/json')(scope, receive, send)
+    except Exception as e:
+        logger.exception('Streamable HTTP endpoint error')
+        err = json.dumps({'jsonrpc': '2.0', 'id': None,
+                          'error': {'code': -32603, 'message': str(e)}})
+        await Response(err, status_code=500, media_type='application/json')(scope, receive, send)
+    finally:
+        _mcp_session_role.reset(cv_token)
+
+
+# ── SSE transport — deprecated, kept for backwards-compat ─────────────────────
 
 _SID_RE = re.compile(r'session_id=([0-9a-f]+)')
 
 
 async def _sse_endpoint(scope, receive, send):
+    logger.warning(
+        'SSE transport is deprecated — migrate MCP clients to POST /mcp '
+        '(Streamable HTTP, MCP spec 2025-03-26). /mcp/sse will be removed in a future release.'
+    )
     req = Request(scope, receive)
     auth_info = await _check_auth_request(req)
     if not auth_info:
@@ -303,8 +428,6 @@ async def _sse_endpoint(scope, receive, send):
     role = auth_info.get('role', 'viewer')
     session_ids: list[str] = []
 
-    # Intercept the SSE send to capture the session_id from the endpoint event,
-    # then store the role in _SESSION_ROLES so _messages_endpoint can look it up.
     async def _capturing_send(message):
         if message.get('type') == 'http.response.body' and not session_ids:
             body_str = message.get('body', b'').decode('utf-8', errors='replace')
@@ -335,7 +458,6 @@ async def _messages_endpoint(scope, receive, send):
         await Response('Unauthorized', status_code=401)(scope, receive, send)
         return
 
-    # Set ContextVar from session dict so call_tool sees the correct role
     qs = parse_qs(scope.get('query_string', b'').decode())
     session_id = (qs.get('session_id') or [''])[0]
     role = _SESSION_ROLES.get(session_id, auth_info.get('role', 'viewer'))
@@ -346,28 +468,38 @@ async def _messages_endpoint(scope, receive, send):
         _mcp_session_role.reset(cv_token)
 
 
+# ── ASGI router ────────────────────────────────────────────────────────────────
+
 def build_mcp_app():
-    """Raw ASGI app for MCP endpoints.
+    """Raw ASGI app routing both transports.
 
     Uses a flat path router instead of Starlette Mounts to avoid:
     1. Mount('/sse') forcing a 307 trailing-slash redirect that
        MCP clients (Claude.ai, Gemini web) do not follow on SSE.
-    2. Mount('/sse') nesting root_path to /mcp/sse, causing
-       SseServerTransport to advertise /mcp/sse/messages instead
-       of /mcp/messages as the POST target.
+    2. Mount('/sse') nesting root_path, causing SseServerTransport to
+       advertise /mcp/sse/messages instead of /mcp/messages as the POST target.
     """
     async def _app(scope, receive, send):
         if scope['type'] != 'http':
             return
         path = scope.get('path', '')
-        # Strip mount prefix if FastAPI has not already done so
         root = scope.get('root_path', '')
         if root and path.startswith(root):
             path = path[len(root):] or '/'
-        if path in ('/sse', '/sse/'):
+
+        method = scope.get('method', 'GET').upper()
+
+        # Primary: Streamable HTTP (MCP spec 2025-03-26) — stateless POST
+        if path in ('/', '') and method == 'POST':
+            await _streamable_http_endpoint(scope, receive, send)
+
+        # Deprecated: SSE legacy transport
+        elif path in ('/sse', '/sse/'):
             await _sse_endpoint(scope, receive, send)
         elif path.startswith('/messages'):
             await _messages_endpoint(scope, receive, send)
+
         else:
             await Response('Not found', status_code=404)(scope, receive, send)
+
     return _app
