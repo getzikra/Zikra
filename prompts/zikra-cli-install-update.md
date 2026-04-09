@@ -1,4 +1,7 @@
-# g_zikra
+> This prompt configures your **Claude Code client** only — hooks, statusline, MCP token.
+> To update the Zikra server, see `prompts/zikra-server-update.md` or run `./update.sh` on your server.
+
+# zikra-cli-install-update
 
 Install or update Zikra persistent memory on this machine.
 Follow every step in order. Run all bash commands exactly as shown.

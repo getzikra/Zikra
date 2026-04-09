@@ -61,7 +61,7 @@ The installer does this automatically when run locally. For remote servers, past
 Paste this into any Claude Code session:
 
 ```
-Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/g_zikra.md
+Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/zikra-cli-install-update.md
 and follow every instruction in it.
 ```
 

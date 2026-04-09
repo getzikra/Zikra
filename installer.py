@@ -291,9 +291,9 @@ Zikra is ready.
     }}
   }}
 
-  Onboarding prompt: prompts/g_zikra.md
-  Run in Claude Code: /prompts then select g_zikra
-  Or: cat prompts/g_zikra.md | pbcopy  (then paste into Claude Code)
+  Onboarding prompt: prompts/zikra-cli-install-update.md
+  Run in Claude Code: /prompts then select zikra-cli-install-update
+  Or: cat prompts/zikra-cli-install-update.md | pbcopy  (then paste into Claude Code)
 
   Start the server:
     python3 -m zikra --no-onboarding

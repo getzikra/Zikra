@@ -121,7 +121,7 @@ def run_onboarding(conn: sqlite3.Connection, port: int = 8000):
     print('  Connect Claude Code to Zikra:')
     print('-' * 60)
     print(f"""
-  Fetch https://raw.githubusercontent.com/getzikra/zikra/main/prompts/g_zikra.md
+  Fetch https://raw.githubusercontent.com/getzikra/zikra/main/prompts/zikra-cli-install-update.md
   and follow every instruction in it.
 
   When it asks for your Zikra URL enter:  {zikra_url}
