@@ -42,7 +42,9 @@ if [ -n "$DIRTY" ]; then
     warn "Uncommitted local changes detected — snapshotting to branch: $WIP_BRANCH"
     git checkout -b "$WIP_BRANCH" --quiet
     git add -A
-    git commit -m "wip: local snapshot before update $(date +%Y-%m-%d)" --quiet
+    # Use inline identity so the commit works on servers with no global git config
+    git -c user.name="Zikra Updater" -c user.email="zikra@localhost" \
+        commit -m "wip: local snapshot before update $(date +%Y-%m-%d)" --quiet
     git checkout main --quiet
     echo "  ✓ Local changes saved to branch: $WIP_BRANCH"
 fi
@@ -68,7 +70,10 @@ if docker inspect zikra &>/dev/null 2>&1; then
         echo "  ✓ Container restarted — health: $CONTAINER_STATUS"
     else
         info "Docker container (image-baked) detected — rebuilding …"
-        if [ -f docker-compose.yml ] || [ -f docker-compose.yaml ]; then
+        # Prefer local override compose file if present
+        if [ -f docker-compose.local.yml ]; then
+            docker compose -f docker-compose.local.yml up -d --build zikra
+        elif [ -f docker-compose.yml ] || [ -f docker-compose.yaml ]; then
             docker compose up -d --build zikra
         else
             docker build -t zikra . && docker restart zikra
