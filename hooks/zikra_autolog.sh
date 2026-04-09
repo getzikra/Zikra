@@ -271,6 +271,46 @@ print(json.dumps({
 }))" "$TITLE" "$DIARY" "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" 2>/dev/null)"
 
   [[ -n "$BODY" ]] && zikra_post "$BODY"
+
+  # ── Auto-log prompt run if a prompt_id is queued ──────────────────────
+  PROMPT_ID_FILE="/tmp/zikra_prompt_id"
+  if [[ -s "$PROMPT_ID_FILE" ]]; then
+    PROMPT_ID="$(tr -d '[:space:]' < "$PROMPT_ID_FILE")"
+    : > "$PROMPT_ID_FILE"   # clear immediately — prevent double-logging
+    if [[ -n "$PROMPT_ID" ]]; then
+      read T_IN T_OUT <<< $(python3 -c "
+import json, sys
+ti, to = 0, 0
+for line in open(sys.argv[1]):
+    try:
+        u = json.loads(line).get('message', {}).get('usage', {})
+        ti += u.get('input_tokens', 0)
+        to += u.get('output_tokens', 0)
+    except: pass
+print(ti, to)
+" "$LATEST" 2>/dev/null)
+      T_IN=${T_IN:-0}; T_OUT=${T_OUT:-0}
+
+      RUN_BODY="$(python3 -c "
+import json, sys
+print(json.dumps({
+  'command':        'log_run',
+  'project':        sys.argv[1],
+  'runner':         sys.argv[2],
+  'prompt_name':    sys.argv[3],
+  'status':         'success',
+  'output_summary': 'auto-logged by zikra_autolog.sh',
+  'tokens_input':   int(sys.argv[4]),
+  'tokens_output':  int(sys.argv[5]),
+}))" \
+        "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" "$PROMPT_ID" \
+        "$T_IN" "$T_OUT" 2>/dev/null)"
+
+      [[ -n "$RUN_BODY" ]] && zikra_post "$RUN_BODY"
+    fi
+  fi
+  # ──────────────────────────────────────────────────────────────────────
+
   zikra_notify "Session logged"
 ) >> "$HOME/.zikra/hook_errors.log" 2>&1 &
 disown
