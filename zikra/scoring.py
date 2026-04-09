@@ -10,6 +10,26 @@ DECAY_DAYS       = max(1, int(float(os.getenv('ZIKRA_DECAY_DAYS', '30'))))
 FREQUENCY_WEIGHT = float(os.getenv('ZIKRA_FREQUENCY_WEIGHT', '0.1'))
 
 
+def compute_score(mem: dict) -> float:
+    """
+    Absolute memory health score (0–1), independent of search query.
+    Used for the UI decay gauge.
+    """
+    try:
+        created = datetime.fromisoformat(mem["created_at"].replace("Z", "+00:00"))
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        age_days = max(0, (datetime.now(timezone.utc) - created).days)
+    except Exception:
+        age_days = 0
+
+    decay = max(0.05, math.exp(-0.693 * age_days / DECAY_DAYS))
+    freq  = 1.0 + FREQUENCY_WEIGHT * math.log1p(mem.get("access_count") or 0)
+    conf  = float(mem.get("confidence_score") or 1.0)
+    pin   = 1.5 if mem.get("pinned") else 1.0
+    return min(1.0, decay * freq * conf * pin)
+
+
 def score(raw: float, mem: dict) -> float:
     """
     Re-ranks search results using decay, frequency, and confidence.

@@ -302,6 +302,8 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
             'module': row['module'],
             'score': round(rescore(raw, mem), 4),
             'created_at': row['created_at'],
+            'access_count': row['access_count'],
+            'confidence_score': row['confidence_score'],
         })
     return results, degraded, reason
 
@@ -402,6 +404,8 @@ async def search_memories(db: 'aiosqlite.Connection', query_text: str, query_emb
             'module': row['module'],
             'score': round(rescore(raw, mem), 4),
             'created_at': row['created_at'],
+            'access_count': row['access_count'],
+            'confidence_score': row['confidence_score'],
         })
 
     results.sort(key=lambda x: x['score'], reverse=True)

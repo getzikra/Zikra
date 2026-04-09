@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>zikra.memory</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23534AB7'/><text x='16' y='22' text-anchor='middle' font-family='system-ui,sans-serif' font-size='18' font-weight='700' fill='white'>Z</text></svg>">
+<link rel="alternate icon" href="favicon.ico">
 <style>
 :root {
   --bg:       #0c0d14;
@@ -291,7 +293,7 @@ button { cursor: pointer; border: none; background: none; }
 .mc-title {
   font-size: 12px; font-weight: 500; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  flex: 1; min-width: 0;
+  max-width: 100%; min-width: 0;
 }
 .mc-meta { font-size: 10px; color: var(--tmuted); margin-top: 3px; }
 
@@ -621,6 +623,7 @@ button { cursor: pointer; border: none; background: none; }
 'use strict';
 
 // ── Constants ──────────────────────────────────────────────────────
+const ZIKRA_VERSION = '1.0.3';
 const K_TOKEN   = 'zikra_token';
 const K_URL     = 'zikra_url';
 const K_PROJECT = 'zikra_project';
@@ -686,6 +689,16 @@ function daysAgo(v) {
   if (days === 0) return 'today';
   if (days === 1) return '1d ago';
   return days + 'd ago';
+}
+
+function cmpVer(a, b) {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i]||0) > (pb[i]||0)) return 1;
+    if ((pa[i]||0) < (pb[i]||0)) return -1;
+  }
+  return 0;
 }
 
 function typeColor(t) { return TYPE_COLORS[t] || '#888780'; }
@@ -902,7 +915,7 @@ async function connect() {
         const current = h.version.replace(/^v/, '');
         const latest  = (h.latest_version || '').replace(/^v/, '');
         el.textContent = 'v' + current;
-        if (latest && latest !== current) {
+        if (latest && cmpVer(latest, current) > 0) {
           el.classList.add('outdated');
           el.title = 'Update available: v' + latest;
           el.textContent = 'v' + current + ' → v' + latest;
@@ -938,7 +951,8 @@ function renderSearchSidebar() {
   }
   list.innerHTML = S.searchResults.map((m, i) => {
     const c   = typeColor(m.memory_type);
-    const sc  = m.confidence_score != null ? Math.round(m.confidence_score) : null;
+    const scoreRaw = m.score != null ? m.score : null;
+    const sc  = scoreRaw != null ? Math.round(scoreRaw * 100) : null;
     const scColor = sc != null ? scoreColor(sc) : '#888780';
     const pct = sc != null ? Math.min(100, sc) : 0;
     const active = S.searchSelected && S.searchSelected.id === m.id ? 'active' : '';
@@ -970,7 +984,7 @@ function renderSearchSidebar() {
 
 function renderSearchDetail(m) {
   const panel = document.getElementById('search-detail');
-  const sc  = m.confidence_score != null ? Math.round(m.confidence_score) : 0;
+  const sc  = m.score != null ? Math.round(m.score * 100) : 0;
   const scC = scoreColor(sc);
   const acc = m.access_count || 0;
   const R = 26, circ = 2 * Math.PI * R;
@@ -978,10 +992,12 @@ function renderSearchDetail(m) {
   const tags = (m.tags || []);
   const tagHtml = tags.map(t => `<span class="tag-pill">${esc(t)}</span>`).join('');
 
-  // Signal values (derived from score)
-  const recency  = Math.min(100, Math.max(0, Math.round(sc * 0.9 + (acc > 0 ? 10 : 0))));
-  const frequency= Math.min(100, Math.round(Math.log(acc + 1) * 25));
-  const conf     = sc;
+  // Signal bars computed independently from first principles
+  const ageMs     = m.created_at ? Date.now() - new Date(m.created_at).getTime() : 0;
+  const ageDays   = ageMs / 86400000;
+  const recency   = Math.round(Math.max(0.05, Math.exp(-0.693 * ageDays / 30)) * 100);
+  const frequency = Math.round(Math.min(1.0, Math.log1p(acc) / Math.log1p(100)) * 100);
+  const conf      = Math.round((m.confidence_score != null ? m.confidence_score : 1.0) * 100);
 
   function sigBar(val) {
     const c = scoreColor(val);

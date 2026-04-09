@@ -1,5 +1,5 @@
 import json
-from zikra.db import fetch_memory
+from zikra.db import fetch_memory, bump_access_count
 from zikra.commands import _require_project
 
 
@@ -19,6 +19,8 @@ async def cmd_get_memory(body: dict) -> dict:
 
     if not row:
         return {'error': 'Memory not found'}
+
+    await bump_access_count(row['id'])
 
     tags = row['tags']
     if isinstance(tags, str):
