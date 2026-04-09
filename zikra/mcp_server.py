@@ -478,8 +478,13 @@ def build_mcp_app():
        MCP clients (Claude.ai, Gemini web) do not follow on SSE.
     2. Mount('/sse') nesting root_path, causing SseServerTransport to
        advertise /mcp/sse/messages instead of /mcp/messages as the POST target.
+
+    Wrapped in CORSMiddleware because mounted ASGI sub-apps sit outside the
+    parent FastAPI middleware chain — CORS headers must be applied here directly.
     """
-    async def _app(scope, receive, send):
+    from starlette.middleware.cors import CORSMiddleware
+
+    async def _inner(scope, receive, send):
         if scope['type'] != 'http':
             return
         path = scope.get('path', '')
@@ -502,4 +507,10 @@ def build_mcp_app():
         else:
             await Response('Not found', status_code=404)(scope, receive, send)
 
-    return _app
+    return CORSMiddleware(
+        app=_inner,
+        allow_origins=['*'],
+        allow_credentials=False,
+        allow_methods=['POST', 'GET', 'OPTIONS'],
+        allow_headers=['*'],
+    )
