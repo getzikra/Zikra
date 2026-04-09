@@ -789,6 +789,42 @@ function renderMd(raw) {
 }
 
 // ── API ────────────────────────────────────────────────────────────
+
+// Base URL without the /webhook/zikra suffix
+function baseUrl() {
+  return (S.url || DEFAULT_URL).replace(/\/webhook\/zikra\/?$/, '');
+}
+
+// GET to a dedicated /api/ui/* endpoint — cleaner than POST through webhook
+async function apiGet(path, params = {}) {
+  const qs = new URLSearchParams({ project: S.project, ...params }).toString();
+  const url = baseUrl() + path + (qs ? '?' + qs : '');
+  try {
+    const res = await fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + S.token }
+    });
+    if (res.status === 401) {
+      openGear();
+      document.getElementById('token-error').textContent = 'Token invalid or expired';
+      setConnected(false);
+      return null;
+    }
+    if (res.status >= 500) {
+      showBanner('Server error — check logs');
+      return null;
+    }
+    if (!res.ok) {
+      showBanner('Request failed: ' + res.status);
+      return null;
+    }
+    return await res.json();
+  } catch (e) {
+    showBanner('Cannot reach ' + baseUrl() + ' — is the server running?');
+    return null;
+  }
+}
+
+// POST to /webhook/zikra — still used for write operations and bootstrap
 async function apiPost(command, extra = {}) {
   const url = S.url || DEFAULT_URL;
   try {
@@ -913,11 +949,11 @@ async function connect() {
   hideBanner();
   document.getElementById('token-error').textContent = '';
 
-  // ping with debug_protocol to get projects+role
-  const info = await apiPost('debug_protocol');
+  // Bootstrap: get role + project list directly from server (no webhook dispatch)
+  const info = await apiGet('/api/ui/bootstrap');
   if (!info) return;
 
-  S.role     = info.role || 'viewer';
+  S.role     = info.role     || 'viewer';
   S.projects = info.projects || [];
 
   setConnected(true);
@@ -956,14 +992,14 @@ async function connect() {
 async function loadSearch(query) {
   const type   = document.getElementById('filter-type').value;
   const status = document.getElementById('filter-status').value;
-  const extra  = { query: query || '*', limit: 50, include_confidence: true };
-  if (type)   extra.memory_type = type;
-  if (status) extra.status = status;
+  const params = { q: query || '*', limit: 50 };
+  if (type)   params.type   = type;
+  if (status) params.status = status;
 
-  const res = await apiPost('search', extra);
+  const res = await apiGet('/api/ui/memories', params);
   if (!res) return;
 
-  S.searchResults = res.results || res.memories || [];
+  S.searchResults = res.memories || [];
   renderSearchSidebar();
 }
 
@@ -1022,11 +1058,13 @@ async function renderSearchDetail(m) {
       <div class="detail-empty" style="padding:24px 0;color:var(--tfaint);font-size:12px">Loading content…</div>
     </div>`;
 
-  // Fetch the full memory record to get complete content_md + tags
-  const full = await apiPost('get_memory', { id: m.id });
-  if (full && !full.error) {
-    // Merge fetched fields into m (keep score etc from search result)
-    m = { ...m, ...full };
+  // If the list endpoint already returned content_md (list_all_memories path),
+  // skip the extra fetch. Only fetch when content is missing (search path returns snippet only).
+  if (m.content_md == null) {
+    const full = await apiGet('/api/ui/memories/' + encodeURIComponent(m.id));
+    if (full && !full.error) {
+      m = { ...m, ...full };
+    }
   }
 
   const sc  = m.score != null ? Math.round(m.score * 100) : 0;
@@ -1116,9 +1154,9 @@ async function renderSearchDetail(m) {
 
 // ── Graph Tab ─────────────────────────────────────────────────────
 async function loadGraph() {
-  const res = await apiPost('search', { query: '*', limit: 100 });
+  const res = await apiGet('/api/ui/memories', { q: '*', limit: 100 });
   if (!res) return;
-  const mems = res.results || res.memories || [];
+  const mems = res.memories || [];
   buildGraphData(mems);
 }
 
@@ -1424,9 +1462,9 @@ function showNodeDetail(n) {
 
 // ── Prompts Tab ───────────────────────────────────────────────────
 async function loadPrompts() {
-  const res = await apiPost('list_prompts');
+  const res = await apiGet('/api/ui/prompts');
   if (!res) return;
-  S.allPrompts = res.prompts || res.results || [];
+  S.allPrompts = res.prompts || [];
   renderPromptsSidebar();
 }
 
@@ -1481,10 +1519,11 @@ function renderPromptsSidebar() {
   }).join('');
 
   list.querySelectorAll('.prompt-card').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', async () => {
       const p = filteredSortedPrompts()[+el.dataset.pidx];
       S.selPrompt = p;
       renderPromptsSidebar();
+      // These are independent async ops — run in parallel
       renderPromptsDetail(p);
       loadRunHistory(p);
     });
@@ -1492,19 +1531,12 @@ function renderPromptsSidebar() {
 }
 
 async function loadRunHistory(prompt) {
-  const res = await apiPost('search', {
-    memory_type: 'conversation',
-    query: prompt.title || '',
-    limit: 20
+  const res = await apiGet('/api/ui/run-history', {
+    prompt: prompt.title || '',
+    limit: 30
   });
   if (!res) return;
-  const all = res.results || res.memories || [];
-  S.promptHistory = all.filter(m => {
-    const title = (m.title || '').toLowerCase();
-    const tags  = (m.tags || []).map(t => t.toLowerCase());
-    const pname = (prompt.title || '').toLowerCase();
-    return title.startsWith('diary:') || tags.includes(pname) || title.includes(pname);
-  });
+  S.promptHistory = res.runs || [];
   renderRunHistory();
 }
 
@@ -1554,14 +1586,15 @@ function renderRunHistory() {
   });
 }
 
-function renderPromptsDetail(p) {
+async function renderPromptsDetail(p) {
   const panel = document.getElementById('prompts-detail');
   const runs  = p.access_count || 0;
   const isRun = runs > 0;
   const tok   = p.token_count || 0;
-  const ts    = daysAgo(p.last_accessed);
-  const machine = p.created_by || p.last_machine || '—';
+  const ts    = daysAgo(p.last_accessed || p.created_at);
+  const machine = p.created_by || '—';
 
+  // Show header immediately while content loads
   panel.innerHTML = `
     <div class="detail-header">
       <div class="dh-r1">
@@ -1580,20 +1613,31 @@ function renderPromptsDetail(p) {
     <div class="prompts-detail-body">
       <div class="prompt-content-sec">
         <span class="slabel">Prompt Content</span>
-        ${renderMd(p.content || '')}
+        <div style="color:var(--tfaint);font-size:12px;padding:8px 0">Loading…</div>
       </div>
       <div class="run-hist-sec" id="run-hist-section">
         <span class="slabel">Run History</span>
         <div class="empty-msg">Loading run history…</div>
       </div>
     </div>`;
+
+  // Fetch full content directly from DB (list endpoint returns 300-char snippet only)
+  if (p.id) {
+    const full = await apiGet('/api/ui/memories/' + encodeURIComponent(p.id));
+    if (full && !full.error) {
+      const contentSec = panel.querySelector('.prompt-content-sec');
+      if (contentSec) {
+        contentSec.innerHTML = `<span class="slabel">Prompt Content</span>${renderMd(full.content_md || '')}`;
+      }
+    }
+  }
 }
 
 // ── Requirements Tab ──────────────────────────────────────────────
 async function loadRequirements() {
-  const res = await apiPost('list_requirements');
+  const res = await apiGet('/api/ui/requirements');
   if (!res) return;
-  S.allReqs = res.requirements || res.results || [];
+  S.allReqs = res.requirements || [];
   renderReqSidebar();
 }
 

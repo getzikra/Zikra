@@ -10,7 +10,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from dotenv import load_dotenv
 
 from zikra.db import (
+    bump_access_count,
     debug_memory_count,
+    fetch_memory,
+    find_memories,
     init_db,
     is_postgres,
     list_all_memories,
@@ -354,6 +357,119 @@ async def ui_graph(request: Request):
     limit = min(int(request.query_params.get('limit', '180')), 300)
     memories = await list_all_memories(project, limit)
     return _build_graph_payload(memories)
+
+
+# ── Dedicated UI read endpoints (bypass webhook dispatch) ──────────────────────
+
+import json as _json
+
+def _prep_memories(rows: list) -> list:
+    """Attach computed score and parse tags JSON for a list of memory dicts."""
+    from zikra.scoring import compute_score
+    out = []
+    for r in rows:
+        tags = r.get('tags', [])
+        if isinstance(tags, str):
+            try:
+                tags = _json.loads(tags or '[]')
+            except Exception:
+                tags = []
+        r = {**r, 'tags': tags, 'score': round(compute_score(r), 4)}
+        out.append(r)
+    return out
+
+
+@app.get('/api/ui/memories')
+async def ui_memories(request: Request):
+    """
+    List or search memories for the UI.
+    - q=*  (or omitted) → list_all_memories (includes full content_md — no second fetch needed)
+    - q=<text>          → hybrid vector+FTS search via find_memories (snippet only)
+    Query params: project, q, type, status, limit
+    """
+    await verify_auth(request)
+    project = request.query_params.get('project') or 'global'
+    q       = (request.query_params.get('q') or '').strip()
+    mtype   = request.query_params.get('type') or None
+    status  = request.query_params.get('status') or None
+    limit   = min(int(request.query_params.get('limit', '50')), 200)
+
+    if q and q != '*':
+        from zikra.embed import embed
+        emb = await embed(q) or [0.0] * 1536
+        rows, _, _ = await find_memories(q, emb, project, limit, memory_type=mtype)
+    else:
+        rows = await list_all_memories(project, limit)
+        if mtype:
+            rows = [r for r in rows if r.get('memory_type') == mtype]
+
+    if status:
+        rows = [r for r in rows if r.get('status') == status]
+
+    total = await debug_memory_count()
+    return {'memories': _prep_memories(rows), 'count': len(rows), 'total': total}
+
+
+@app.get('/api/ui/memories/{memory_id}')
+async def ui_memory_get(memory_id: str, request: Request):
+    """
+    Fetch a single memory with full content_md. Read-only — does NOT bump access count.
+    Access count is only incremented when Claude (or an API client) calls get_memory
+    via the webhook. The UI is a read-only observer.
+    Query params: project (optional scope filter)
+    """
+    await verify_auth(request)
+    project = request.query_params.get('project') or None
+    row = await fetch_memory(memory_id=memory_id, project=project)
+    if not row:
+        return JSONResponse(status_code=404, content={'error': 'Memory not found'})
+    # NOTE: no bump_access_count — UI browsing does not count as memory access
+    row = _prep_memories([row])[0]
+    return row
+
+
+@app.get('/api/ui/prompts')
+async def ui_prompts(request: Request):
+    """List prompts for the UI."""
+    await verify_auth(request)
+    project = request.query_params.get('project') or 'global'
+    limit   = min(int(request.query_params.get('limit', '100')), 500)
+    rows = await list_by_memory_type('prompt', project, limit)
+    return {'prompts': _prep_memories(rows), 'count': len(rows)}
+
+
+@app.get('/api/ui/requirements')
+async def ui_requirements(request: Request):
+    """List requirements for the UI, optionally filtered by status."""
+    await verify_auth(request)
+    project = request.query_params.get('project') or 'global'
+    status  = request.query_params.get('status') or None
+    limit   = min(int(request.query_params.get('limit', '100')), 500)
+    rows = await list_by_memory_type('requirement', project, limit, status=status)
+    return {'requirements': _prep_memories(rows), 'count': len(rows)}
+
+
+@app.get('/api/ui/run-history')
+async def ui_run_history(request: Request):
+    """
+    List conversation memories (run diary entries) for a prompt's history panel.
+    Filters by prompt name in title/tags.
+    Query params: project, prompt (prompt title to filter by), limit
+    """
+    await verify_auth(request)
+    project     = request.query_params.get('project') or 'global'
+    prompt_name = (request.query_params.get('prompt') or '').lower().strip()
+    limit       = min(int(request.query_params.get('limit', '30')), 100)
+
+    rows = await list_by_memory_type('conversation', project, limit)
+    if prompt_name:
+        def _matches(r: dict) -> bool:
+            title = (r.get('title') or '').lower()
+            tags  = str(r.get('tags') or '').lower()
+            return title.startswith('diary:') or prompt_name in title or prompt_name in tags
+        rows = [r for r in rows if _matches(r)]
+
+    return {'runs': _prep_memories(rows), 'count': len(rows)}
 
 
 # ── Webhook ────────────────────────────────────────────────────────────────────
