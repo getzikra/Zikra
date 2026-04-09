@@ -21,7 +21,9 @@ Zikra fixes that. It's a **MCP-native memory server** that all your agents conne
 
 ---
 
-## Install
+## Getting Started
+
+### Step 1 — Install the server
 
 ```bash
 git clone https://github.com/getzikra/zikra
@@ -29,30 +31,62 @@ cd zikra
 python3 -m venv .venv
 source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -e .
-python3 installer.py   # interactive setup, ~2 minutes
+python3 installer.py         # interactive setup, ~2 minutes
 python3 -m zikra
-# To skip the onboarding wizard:
-python3 -m zikra --no-onboarding
 ```
 
-Note: python3 -m zikra must be run from the same directory as your .env file.
+The installer creates a `.env` file and generates your admin token. The server binds to `http://localhost:8000` by default. `python3 -m zikra` must be run from the same directory as your `.env` file.
 
-Docker is not required. The server is a single Python process.
+> To reach it from other machines, run `cloudflared tunnel --url http://localhost:8000` (free, gives you a permanent public URL like `https://zikra.yourteam.com`).
 
-## MCP Setup (Claude Code)
+### Step 2 — Enable MCP in Claude Code
 
-After running the installer, Zikra registers itself in `~/.claude/settings.json` automatically. To add it manually:
+Open **Claude Code → Settings → MCP → Add Server** and paste:
 
 ```json
 {
   "mcpServers": {
     "zikra": {
-      "url": "http://localhost:8000/mcp/sse",
+      "url": "http://your-server:8000/mcp/sse",
       "headers": { "Authorization": "Bearer YOUR_ZIKRA_TOKEN" }
     }
   }
 }
 ```
+
+The installer does this automatically when run locally. For remote servers, paste your public URL instead of `localhost:8000`.
+
+### Step 3 — Onboard Claude Code (hooks + statusline)
+
+Paste this into any Claude Code session:
+
+```
+Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/g_zikra.md
+and follow every instruction in it.
+```
+
+This installs the **Stop hook** (auto-saves every session), **PreCompact hook**, and the live **statusline bar** showing run counts and memory stats. Claude Code will ask for your server URL and token, then configure everything automatically.
+
+---
+
+## Updating Zikra
+
+**Server** — pull latest and restart:
+
+```bash
+git pull origin main
+pip install -e .
+python3 -m zikra   # or restart your service
+```
+
+**Claude Code hooks** — re-run the same onboarding prompt:
+
+```
+Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/g_zikra.md
+and follow every instruction in it.
+```
+
+The prompt detects your existing install and only refreshes what changed. Your token and config are preserved. The MCP server in Claude Code settings never needs to be updated manually — it reads from your server dynamically.
 
 ---
 
