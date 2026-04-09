@@ -95,9 +95,11 @@ The prompt detects your existing install and only refreshes what changed. Your t
 
 | Profile | Storage | Hooks | Extra deps |
 |---------|---------|-------|------------|
-| Webhook (default) | SQLite | none | none |
-| Auto-log | SQLite | session hooks | none |
-| Full | SQLite or Postgres | hooks + daemon | asyncpg (Postgres only) |
+| Webhook (default) | SQLite ¹ | none | none |
+| Auto-log | SQLite ¹ | session hooks | none |
+| Full | SQLite ¹ or Postgres | hooks + daemon | asyncpg (Postgres only) |
+
+¹ **SQLite is for local / single-user development only.** SQLite is single-writer; concurrent saves from multiple agents or machines will queue and may fail under load. For team or multi-user deployments set `DB_BACKEND=postgres`.
 
 ---
 

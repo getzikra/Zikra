@@ -122,6 +122,15 @@ zikra_port = _ask(' Zikra server port', default='8000',
 
 token = secrets.token_urlsafe(32)
 
+# ── Warn about SQLite under team/remote deployments ───────────────────────────
+if db_backend == 'sqlite' and zikra_host not in ('localhost', '127.0.0.1'):
+    print()
+    print('  ⚠  WARNING: SQLite is not recommended for team or remote deployments.')
+    print('     SQLite is single-writer. Concurrent saves from multiple agents or')
+    print('     machines may fail under load.')
+    print('     Re-run the installer and choose PostgreSQL (option 2) for team use.')
+    print()
+
 env_lines = [
     f'ZIKRA_TOKEN={token}',
     'ZIKRA_SKIP_ONBOARDING=1',
