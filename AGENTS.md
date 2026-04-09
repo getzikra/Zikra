@@ -29,6 +29,11 @@ log_error:   {"command":"log_error","project":"<p>","message":"<error message>",
 # Field name: use 'message' (not 'title'). Sending 'title' is silently ignored.
 get_prompt:  {"command":"get_prompt","prompt_name":"<n>","project":"<p>","runner":"<hostname>"}
 log_run:     {"command":"log_run","project":"<p>","runner":"<hostname>","status":"success","output_summary":"<2 sentences>","tokens_input":<n>,"tokens_output":<n>}
+# prompt_name is optional — include it only when you fetched a named prompt via get_prompt.
+# Ad-hoc sessions (no saved prompt fetched): omit prompt_name entirely (stored as NULL, not an error).
+# Named prompt run example:
+log_run:     {"command":"log_run","project":"<p>","runner":"<hostname>","prompt_name":"g:health_check","status":"success","output_summary":"<2 sentences>","tokens_input":<n>,"tokens_output":<n>}
+# Never fabricate a prompt_name. If you did not call get_prompt, leave it out.
 ```
 
 ## Additional commands
