@@ -149,6 +149,15 @@ async def init_pg() -> 'asyncpg.Pool':
 
     async with _pg_pool.acquire() as conn:
         await conn.execute(_PG_TABLES)
+        # Migration guards — safe to run on every startup (IF NOT EXISTS / no-ops on current schema)
+        _migrations = [
+            "ALTER TABLE prompt_runs ADD COLUMN IF NOT EXISTS prompt_name TEXT NULL",
+        ]
+        for stmt in _migrations:
+            try:
+                await conn.execute(stmt)
+            except Exception as e:
+                logger.warning(f'Migration skipped ({stmt[:60]}...): {e}')
         try:
             await conn.execute(_PG_VEC_INDEX)
         except Exception as e:
