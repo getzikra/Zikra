@@ -15,7 +15,7 @@
 
 ## User roles
 
-> **Zikra Full only.** The full role matrix below is enforced by Zikra Full (n8n + PostgreSQL). Zikra Lite enforces only one restriction: `create_token` requires `owner` or `admin` role. All other role distinctions are metadata only in Lite.
+> The role matrix below is enforced by Zikra. `create_token` requires `owner` or `admin` role.
 
 | Role | Search | Save memories | Save prompts | Create tokens | Delete |
 |------|--------|--------------|-------------|--------------|--------|
@@ -73,7 +73,7 @@ The installer wires up the Stop hook, PreCompact hook, CLAUDE.md context injecti
 3. Share the token with your teammate
 4. They paste the Claude Code install prompt above and enter the token when prompted
 
-Zikra Full runs on your server — teammates connect directly to your webhook URL. No tunnel needed.
+Zikra runs on your server — teammates connect directly to your webhook URL. No tunnel needed.
 
 ---
 

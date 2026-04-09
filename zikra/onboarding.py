@@ -8,7 +8,7 @@ from pathlib import Path
 
 BANNER = """
 ╔══════════════════════════════════════════╗
-║         Welcome to Zikra Lite            ║
+║              Welcome to Zikra             ║
 ║   Your local AI memory and prompt store  ║
 ╚══════════════════════════════════════════╝
 """
@@ -121,7 +121,7 @@ def run_onboarding(conn: sqlite3.Connection, port: int = 8000):
     print('  Connect Claude Code to Zikra:')
     print('-' * 60)
     print(f"""
-  Fetch https://raw.githubusercontent.com/getzikra/zikra-lite/main/prompts/g_zikra.md
+  Fetch https://raw.githubusercontent.com/getzikra/zikra/main/prompts/g_zikra.md
   and follow every instruction in it.
 
   When it asks for your Zikra URL enter:  {zikra_url}

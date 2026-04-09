@@ -6,8 +6,7 @@
 # Invoked automatically by Claude Code hooks — never run manually.
 # Works on: WSL, native Linux, macOS, Git Bash / MSYS on Windows.
 #
-# Canonical source: zikra-lite/hooks/zikra_autolog.sh — sync manually on changes.
-# This file (zikra/hooks/zikra_autolog.sh) must stay identical to the lite version.
+# Canonical source: zikra/hooks/zikra_autolog.sh
 
 ZIKRA_URL="ZIKRA_URL_PLACEHOLDER"
 ZIKRA_TOKEN="ZIKRA_TOKEN_PLACEHOLDER"

@@ -1,5 +1,5 @@
 """
-Zikra Lite — shared constants.
+Zikra — shared constants.
 Import from here instead of hardcoding values in search.py and db.py.
 """
 

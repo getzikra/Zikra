@@ -1,5 +1,5 @@
 """
-MCP server for Zikra Lite — mounts at /mcp on the same FastAPI app.
+MCP server for Zikra — mounts at /mcp on the same FastAPI app.
 SSE endpoint: GET  /mcp/sse
 Messages:     POST /mcp/messages
 

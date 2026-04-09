@@ -28,7 +28,7 @@ Ask these four questions one at a time. Wait for each answer.
 **Q1 — Zikra URL**
 Where is your Zikra server running?
 - Zikra (local): `http://localhost:8000`
-- Zikra Full (remote): `https://n8n.yourserver.com/webhook/zikra`
+- Zikra (remote): `https://yourserver.com/webhook/zikra`
 
 **Q2 — Admin token**
 The token from your server admin, or the value of `ZIKRA_TOKEN` in `.env` on the server.
@@ -100,11 +100,7 @@ Confirm by printing: `cat ~/.zikra/token`
 Determine which raw GitHub URL to use:
 
 ```bash
-if [[ "$ZIKRA_URL" == *"localhost"* || "$ZIKRA_URL" == *"127.0.0.1"* ]]; then
-  ZIKRA_RAW="https://raw.githubusercontent.com/getzikra/zikra-lite/main"
-else
-  ZIKRA_RAW="https://raw.githubusercontent.com/getzikra/zikra/main"
-fi
+ZIKRA_RAW="https://raw.githubusercontent.com/getzikra/zikra/main"
 ```
 
 Download and install the autolog hook:

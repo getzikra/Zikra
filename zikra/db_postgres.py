@@ -1,4 +1,4 @@
-"""PostgreSQL backend for zikra-lite using asyncpg + pgvector.
+"""PostgreSQL backend for Zikra using asyncpg + pgvector.
 
 Activated when DB_BACKEND=postgres. Requires:
   - PostgreSQL with pgvector extension
