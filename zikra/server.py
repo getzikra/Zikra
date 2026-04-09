@@ -35,6 +35,7 @@ from zikra.commands.list_prompts import cmd_list_prompts
 from zikra.commands.zikra_help import cmd_zikra_help
 from zikra.commands.version import cmd_version
 from zikra.mcp_server import build_mcp_app
+from zikra.version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ async def lifespan(app: FastAPI):
         await app.state.sqlite_db.close()
 
 
-app = FastAPI(title='Zikra', version='1.0.1', lifespan=lifespan)
+app = FastAPI(title='Zikra', version=__version__, lifespan=lifespan)
 app.mount('/mcp', build_mcp_app())
 
 
@@ -96,7 +97,7 @@ async def _cmd_debug_protocol(_body: dict) -> dict:
         'db_path':        os.getenv('ZIKRA_DB_PATH', './zikra.db') if not is_postgres() else None,
         'memory_count':   count,
         'openai_key_set': bool(os.getenv('OPENAI_API_KEY')),
-        'version':        '0.1',
+        'version':        __version__,
     }
 
 
@@ -183,15 +184,46 @@ DISPATCH: dict = {
 KNOWN_COMMANDS = sorted(set(COMMAND_MIN_ROLE.keys()))
 
 
+# ── GitHub version cache ───────────────────────────────────────────────────────
+
+_github_version_cache: dict = {'version': None, 'checked': ''}
+
+
+async def _get_latest_github_version() -> str | None:
+    import datetime
+    today = datetime.date.today().isoformat()
+    if _github_version_cache['checked'] == today and _github_version_cache['version']:
+        return _github_version_cache['version']
+    try:
+        import urllib.request
+        import json as _json
+        req = urllib.request.Request(
+            'https://api.github.com/repos/getzikra/zikra/tags',
+            headers={'User-Agent': f'zikra-server/{__version__}'},
+        )
+        resp = urllib.request.urlopen(req, timeout=5)
+        tags = _json.loads(resp.read().decode())
+        if tags and isinstance(tags, list) and 'name' in tags[0]:
+            _github_version_cache['version'] = tags[0]['name'].lstrip('v')
+        _github_version_cache['checked'] = today
+    except Exception:
+        pass
+    return _github_version_cache['version']
+
+
 # ── Health ─────────────────────────────────────────────────────────────────────
 
 @app.get('/health')
 async def health():
-    return {
+    latest = await _get_latest_github_version()
+    result = {
         'status':  'ok',
-        'version': '1.0',
+        'version': __version__,
         'backend': os.getenv('DB_BACKEND', 'sqlite'),
     }
+    if latest:
+        result['latest_version'] = latest
+    return result
 
 
 # ── Web UI ─────────────────────────────────────────────────────────────────────

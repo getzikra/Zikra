@@ -60,6 +60,8 @@ button { cursor: pointer; border: none; background: none; }
 }
 .brand { font-size: 13px; font-weight: 500; white-space: nowrap; }
 .brand .dim { color: var(--tmuted); font-weight: 400; }
+.brand .ver { font-size: 11px; color: var(--tmuted); font-weight: 400; }
+.brand .ver.outdated { color: #BA7517; }
 
 .project-pill {
   display: flex; align-items: center; gap: 6px;
@@ -455,7 +457,7 @@ button { cursor: pointer; border: none; background: none; }
   <!-- TOPBAR -->
   <header class="topbar">
     <div class="topbar-left">
-      <span class="brand">zikra<span class="dim">.memory</span></span>
+      <span class="brand">zikra<span class="dim">.memory</span> <span class="ver" id="server-version"></span></span>
     </div>
     <div class="topbar-center" style="flex:1;display:flex;justify-content:center">
       <div class="project-pill">
@@ -888,6 +890,26 @@ async function connect() {
   renderProjSelector(S.projects, S.role);
 
   closeGear();
+
+  // Fetch server version from /health (no auth required) and show update indicator
+  try {
+    const base = (S.url || DEFAULT_URL).replace(/\/webhook\/zikra\/?$/, '');
+    const hres = await fetch(base + '/health');
+    if (hres.ok) {
+      const h = await hres.json();
+      const el = document.getElementById('server-version');
+      if (h.version) {
+        const current = h.version.replace(/^v/, '');
+        const latest  = (h.latest_version || '').replace(/^v/, '');
+        el.textContent = 'v' + current;
+        if (latest && latest !== current) {
+          el.classList.add('outdated');
+          el.title = 'Update available: v' + latest;
+          el.textContent = 'v' + current + ' → v' + latest;
+        }
+      }
+    }
+  } catch (_) {}
 
   // Load current tab
   reloadActiveTab();
