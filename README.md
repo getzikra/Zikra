@@ -61,7 +61,7 @@ The installer does this automatically when run locally. For remote servers, past
 Paste this into any Claude Code session:
 
 ```
-Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/zikra-cli-install-update.md
+Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/zikra-claude-code-setup.md
 and follow every instruction in it.
 ```
 
@@ -83,7 +83,7 @@ The script detects Docker or bare Python automatically, snapshots any local edit
 **Claude Code hooks** — re-run the onboarding prompt:
 
 ```
-Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/zikra-cli-install-update.md
+Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/zikra-claude-code-setup.md
 and follow every instruction in it.
 ```
 

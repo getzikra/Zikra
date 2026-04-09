@@ -57,7 +57,7 @@ Set a persona when creating a token in the Web UI or via `create_token`.
 Paste this into Claude Code to install Zikra automatically:
 
 ```
-Fetch https://raw.githubusercontent.com/getzikra/zikra/main/prompts/zikra-cli-install-update.md
+Fetch https://raw.githubusercontent.com/getzikra/zikra/main/prompts/zikra-claude-code-setup.md
 and follow every instruction in it.
 URL: https://n8n.yourdomain.com/webhook/zikra, Token: from your admin, Project: global
 ```

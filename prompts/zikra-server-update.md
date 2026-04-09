@@ -1,7 +1,7 @@
 # zikra-server-update
 
 > This prompt updates the **Zikra server** (the Docker container or bare-Python process).
-> To configure your Claude Code client (hooks, statusline, MCP token), use `prompts/zikra-cli-install-update.md` instead.
+> To configure your Claude Code client (hooks, statusline, MCP token), use `prompts/zikra-claude-code-setup.md` instead.
 
 Update the Zikra server safely — detects Docker or bare Python automatically.
 Follow every step in order. Run all bash commands exactly as shown.
@@ -129,4 +129,4 @@ Report:
 | Run this script automatically | `./update.sh` from the server host |
 | Check current version | `curl http://localhost:8000/health` |
 | View logs (Docker) | `docker logs zikra --tail 50` |
-| Update Claude Code hooks only | Run `prompts/zikra-cli-install-update.md` |
+| Update Claude Code hooks only | Run `prompts/zikra-claude-code-setup.md` |
