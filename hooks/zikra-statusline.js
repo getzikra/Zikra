@@ -4,7 +4,7 @@
 // Keep in sync with zikra-lite/hooks/zikra-statusline.js
 //
 // Output format:
-//   Zikra (v0.1.0) │ 17 runs · 847 memories │ veltisai │ Opus 4.6 │ 💀 650K/1M ████░░░░ 65%
+//   Zikra (v1.0.1) │ 17 runs · 847 memories │ veltisai │ Opus 4.6 │ 💀 650K/1M ████░░░░ 65%
 
 'use strict';
 
@@ -130,7 +130,7 @@ function render(payload) {
   rendered = true;
   try {
     const { runs, memories, project } = getStats();
-    const version = process.env.ZIKRA_VERSION || 'v0.1.0';
+    const version = process.env.ZIKRA_VERSION || 'v1.0.1';
     const model   = getModelLabel(payload && (payload.model || payload.model_id));
     const bar     = tokenBar(payload);
 

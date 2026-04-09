@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
         await app.state.sqlite_db.close()
 
 
-app = FastAPI(title='Zikra', version='0.1.0', lifespan=lifespan)
+app = FastAPI(title='Zikra', version='1.0.1', lifespan=lifespan)
 app.mount('/mcp', build_mcp_app())
 
 
