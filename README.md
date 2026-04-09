@@ -71,22 +71,23 @@ This installs the **Stop hook** (auto-saves every session), **PreCompact hook**,
 
 ## Updating Zikra
 
-**Server** — pull latest and restart:
+**Server** — run `./update.sh` on your server host:
 
 ```bash
-git pull origin main
-pip install -e .
-python3 -m zikra   # or restart your service
+cd ~/zikra
+./update.sh
 ```
 
-**Claude Code hooks** — re-run the same onboarding prompt:
+The script detects Docker or bare Python automatically, snapshots any local edits to a WIP branch before pulling, then restarts the right runtime. See `prompts/zikra-server-update.md` for the full runbook or to run the update via Claude Code.
+
+**Claude Code hooks** — re-run the onboarding prompt:
 
 ```
-Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/g_zikra.md
+Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/zikra-cli-install-update.md
 and follow every instruction in it.
 ```
 
-The prompt detects your existing install and only refreshes what changed. Your token and config are preserved. The MCP server in Claude Code settings never needs to be updated manually — it reads from your server dynamically.
+The prompt detects your existing install and only refreshes what changed. Your token and config are preserved.
 
 ---
 
