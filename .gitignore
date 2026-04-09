@@ -12,6 +12,8 @@ zikra-stats.json
 "workflow/Zikra MCP Router.json"
 *.zip
 *.db
+*.db-shm
+*.db-wal
 *.egg-info/
 dist/
 build/
