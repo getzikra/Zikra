@@ -272,13 +272,15 @@ print(json.dumps({
 
   [[ -n "$BODY" ]] && zikra_post "$BODY"
 
-  # ── Auto-log prompt run if a prompt_id is queued ──────────────────────
+  # ── Log run for every session — prompt_name only when a named prompt was run ──
   PROMPT_ID_FILE="/tmp/zikra_prompt_id"
+  PROMPT_ID=""
   if [[ -s "$PROMPT_ID_FILE" ]]; then
     PROMPT_ID="$(tr -d '[:space:]' < "$PROMPT_ID_FILE")"
     : > "$PROMPT_ID_FILE"   # clear immediately — prevent double-logging
-    if [[ -n "$PROMPT_ID" ]]; then
-      read T_IN T_OUT <<< $(python3 -c "
+  fi
+
+  read T_IN T_OUT <<< $(python3 -c "
 import json, sys
 ti, to = 0, 0
 for line in open(sys.argv[1]):
@@ -289,26 +291,26 @@ for line in open(sys.argv[1]):
     except: pass
 print(ti, to)
 " "$LATEST" 2>/dev/null)
-      T_IN=${T_IN:-0}; T_OUT=${T_OUT:-0}
+  T_IN=${T_IN:-0}; T_OUT=${T_OUT:-0}
 
-      RUN_BODY="$(python3 -c "
+  RUN_BODY="$(python3 -c "
 import json, sys
-print(json.dumps({
+payload = {
   'command':        'log_run',
   'project':        sys.argv[1],
   'runner':         sys.argv[2],
-  'prompt_name':    sys.argv[3],
   'status':         'success',
   'output_summary': 'auto-logged by zikra_autolog.sh',
   'tokens_input':   int(sys.argv[4]),
   'tokens_output':  int(sys.argv[5]),
-}))" \
-        "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" "$PROMPT_ID" \
-        "$T_IN" "$T_OUT" 2>/dev/null)"
+}
+if sys.argv[3]:
+    payload['prompt_name'] = sys.argv[3]
+print(json.dumps(payload))" \
+    "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" "$PROMPT_ID" \
+    "$T_IN" "$T_OUT" 2>/dev/null)"
 
-      [[ -n "$RUN_BODY" ]] && zikra_post "$RUN_BODY"
-    fi
-  fi
+  [[ -n "$RUN_BODY" ]] && zikra_post "$RUN_BODY"
   # ──────────────────────────────────────────────────────────────────────
 
   zikra_notify "Session logged"
