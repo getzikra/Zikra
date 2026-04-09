@@ -65,34 +65,39 @@ function getModelLabel(model) {
 
 function tokenBar(payload) {
   if (!payload) return '';
+  const ctx = payload.context_window;
+  if (!ctx || typeof ctx !== 'object') return '';
 
-  // Determine max tokens — context_window may be a number or an object
-  let maxTokens = null;
-  if (typeof payload.context_window === 'number') {
-    maxTokens = payload.context_window;
-  } else if (payload.context_window && typeof payload.context_window === 'object') {
-    maxTokens = payload.context_window.size || null;
-  } else if (typeof payload.context_window_size === 'number') {
-    maxTokens = payload.context_window_size;
-  }
-  if (!maxTokens) return '';
+  // Get max tokens from context_window_size (Claude Code provides this)
+  const maxTokens = ctx.context_window_size || ctx.size || null;
 
-  // Determine tokens used and percentage
+  // Get actual tokens used from current_usage breakdown
   let tokensUsed = null;
-  let pct = 0;
-  if (typeof payload.context_tokens_used === 'number') {
-    tokensUsed = payload.context_tokens_used;
-    pct = tokensUsed / maxTokens;
-  } else if (typeof payload.tokens_used === 'number') {
-    tokensUsed = payload.tokens_used;
-    pct = tokensUsed / maxTokens;
-  } else if (payload.context_window && typeof payload.context_window === 'object' &&
-             typeof payload.context_window.used_percentage === 'number') {
-    pct = payload.context_window.used_percentage / 100;
-    tokensUsed = Math.round(pct * maxTokens);
+  if (ctx.current_usage && typeof ctx.current_usage === 'object') {
+    const u = ctx.current_usage;
+    tokensUsed = (u.input_tokens || 0)
+               + (u.cache_creation_input_tokens || 0)
+               + (u.cache_read_input_tokens || 0);
   }
 
-  if (pct === 0 && tokensUsed === null) return '';
+  // Fallback to cumulative input tokens
+  if (tokensUsed === null && typeof ctx.total_input_tokens === 'number') {
+    tokensUsed = ctx.total_input_tokens;
+  }
+
+  // Hardcoded to 1M — Claude Code CLI session limit.
+  // Claude Code reports context_window_size: 200K (per-call window) which is misleading.
+  const sessionMax = 1000000;
+  const callMax = maxTokens || 200000;
+
+  // Back-calculate actual tokens from used_percentage * per-call window
+  if (tokensUsed === null && typeof ctx.used_percentage === 'number') {
+    tokensUsed = Math.round((ctx.used_percentage / 100) * callMax);
+  }
+
+  if (tokensUsed === null || tokensUsed === 0) return '';
+
+  const pct = tokensUsed / sessionMax;
 
   const BLOCKS = 8;
   const filled = Math.round(pct * BLOCKS);
@@ -107,14 +112,42 @@ function tokenBar(payload) {
   const pctColor = pct >= 0.85 ? RED : pct >= 0.65 ? YELLOW : GREEN;
   const icon     = skull ? '💀 ' : '   ';
 
-  // Left label: tokensUsedK / maxTokensDisplay
-  const usedStr = tokensUsed !== null ? Math.round(tokensUsed / 1000) + 'K' : '?';
-  let maxStr;
-  if      (maxTokens >= 1900000) maxStr = '2M';
-  else if (maxTokens >= 900000)  maxStr = '1M';
-  else                           maxStr = Math.round(maxTokens / 1000) + 'K';
+  const usedStr = formatTokens(tokensUsed);
 
-  return ` ${W}${icon}${usedStr}/${maxStr}${RESET} ${bar} ${pctColor}${Math.round(pct * 100)}%${RESET}`;
+  return ` ${W}${icon}${usedStr}/1M${RESET} ${bar} ${pctColor}${Math.round(pct * 100)}%${RESET}`;
+}
+
+function formatVersion(local, latest) {
+  const parse = (v) => (v || '').replace(/^v/, '').split('.').map(Number);
+  const lv = parse(local);
+  const rv = parse(latest);
+
+  if (!latest || rv.length < 3 || lv.length < 3) {
+    return `${G}(${local})${RESET}`;
+  }
+
+  if (rv[0] > lv[0]) {
+    // Major update: highlight all three
+    return `${G}(v${R}${lv[0]}${G}.${R}${lv[1]}${G}.${R}${lv[2]}${G})${RESET}`;
+  } else if (rv[1] > lv[1]) {
+    // Minor update: highlight minor and patch
+    return `${G}(v${lv[0]}.${R}${lv[1]}${G}.${R}${lv[2]}${G})${RESET}`;
+  } else if (rv[2] > lv[2]) {
+    // Patch update: highlight patch only
+    return `${G}(v${lv[0]}.${lv[1]}.${R}${lv[2]}${G})${RESET}`;
+  }
+
+  return `${G}(${local})${RESET}`;
+}
+
+function getLatestVersion() {
+  const cachePath = path.join(os.homedir(), '.claude', 'cache', 'zikra-stats.json');
+  try {
+    const raw = silentRead(cachePath);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    return d.latest_version || null;
+  } catch { return null; }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -131,11 +164,13 @@ function render(payload) {
   try {
     const { runs, memories, project } = getStats();
     const version = process.env.ZIKRA_VERSION || 'v1.0.1';
+    const latest  = getLatestVersion();
     const model   = getModelLabel(payload && (payload.model || payload.model_id));
     const bar     = tokenBar(payload);
+    const vLabel  = formatVersion(version, latest);
 
     const line =
-      `${G}Zikra (${version})${RESET} ${G}│${RESET} ` +
+      `${R}Zikra${RESET} ${vLabel} ${G}│${RESET} ` +
       `${R}${runs}${RESET}${G} runs · ${RESET}${R}${memories}${RESET}${G} memories${RESET} ${G}│${RESET} ` +
       `${W}${project}${RESET} ${G}│${RESET} ` +
       `${W}${model}${RESET}` +

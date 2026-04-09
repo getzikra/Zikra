@@ -63,6 +63,23 @@ stats["project"]    = project
 if memory_count_arg > 0:
     stats["memory_count"] = memory_count_arg
 
+# Check latest Zikra version from GitHub once per day
+version_checked = stats.get("version_checked", "")
+if version_checked != today:
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            "https://api.github.com/repos/getzikra/zikra/tags",
+            headers={"User-Agent": "zikra-stats/1.0"}
+        )
+        resp = urllib.request.urlopen(req, timeout=5)
+        tags = json.loads(resp.read().decode())
+        if tags and isinstance(tags, list) and "name" in tags[0]:
+            stats["latest_version"] = tags[0]["name"]
+        stats["version_checked"] = today
+    except:
+        pass  # silent fail — keep previous cached value
+
 with open(cache_path, 'w') as f:
     json.dump(stats, f)
 PYEOF
