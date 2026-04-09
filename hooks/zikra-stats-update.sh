@@ -25,13 +25,21 @@ MEMORY_COUNT=$(curl -s -X POST "$ZIKRA_URL" \
   -d '{"command":"search","query":"*","limit":1}' \
   | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('total', d.get('count', 0)))" 2>/dev/null || echo "0")
 
-python3 - "$MEMORY_COUNT" "$HOOK_CWD" "${ZIKRA_PROJECT:-global}" <<'PYEOF'
+# Fetch server version
+SERVER_VERSION=$(curl -s -X POST "$ZIKRA_URL" \
+  -H "Authorization: Bearer $ZIKRA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"version"}' \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('version',''))" 2>/dev/null || echo "")
+
+python3 - "$MEMORY_COUNT" "$HOOK_CWD" "${ZIKRA_PROJECT:-global}" "$SERVER_VERSION" <<'PYEOF'
 import json, os, datetime, sys, socket
 
 cache_path = os.path.expanduser('~/.claude/cache/zikra-stats.json')
 memory_count_arg   = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 0
 hook_cwd           = sys.argv[2] if len(sys.argv) > 2 else ''
 default_project    = sys.argv[3] if len(sys.argv) > 3 else 'global'
+server_version_arg = sys.argv[4].strip() if len(sys.argv) > 4 else ''
 
 def detect_project(cwd, fallback):
     c = cwd.lower()
@@ -63,7 +71,12 @@ stats["project"]    = project
 if memory_count_arg > 0:
     stats["memory_count"] = memory_count_arg
 
-# Check latest Zikra version from GitHub once per day
+# Cache server version if we got one
+if server_version_arg:
+    v = server_version_arg if server_version_arg.startswith('v') else f'v{server_version_arg}'
+    stats["server_version"] = v
+
+# Check latest Zikra version from GitHub once per day (for update comparison)
 version_checked = stats.get("version_checked", "")
 if version_checked != today:
     try:

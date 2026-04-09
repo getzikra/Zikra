@@ -140,14 +140,17 @@ function formatVersion(local, latest) {
   return `${G}(${local})${RESET}`;
 }
 
-function getLatestVersion() {
+function getVersions() {
   const cachePath = path.join(os.homedir(), '.claude', 'cache', 'zikra-stats.json');
   try {
     const raw = silentRead(cachePath);
-    if (!raw) return null;
+    if (!raw) return { server: null, latest: null };
     const d = JSON.parse(raw);
-    return d.latest_version || null;
-  } catch { return null; }
+    return {
+      server: d.server_version || null,
+      latest: d.latest_version || null,
+    };
+  } catch { return { server: null, latest: null }; }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -163,11 +166,11 @@ function render(payload) {
   rendered = true;
   try {
     const { runs, memories, project } = getStats();
-    const version = process.env.ZIKRA_VERSION || 'v1.0.1';
-    const latest  = getLatestVersion();
+    const { server, latest } = getVersions();
+    const version = server || 'zikra';
     const model   = getModelLabel(payload && (payload.model || payload.model_id));
     const bar     = tokenBar(payload);
-    const vLabel  = formatVersion(version, latest);
+    const vLabel  = server ? formatVersion(server, latest) : `${G}(update if ${R}●${G})${RESET}`;
 
     const line =
       `${R}Zikra${RESET} ${vLabel} ${G}│${RESET} ` +

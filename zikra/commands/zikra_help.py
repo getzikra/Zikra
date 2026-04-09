@@ -93,6 +93,13 @@ async def cmd_zikra_help(body: dict) -> dict:
             'notes': 'role: viewer | developer | admin. Default: developer.',
         },
         {
+            'command': 'version',
+            'aliases': ['ver', 'server_version'],
+            'description': 'Return the running server version.',
+            'required': [],
+            'optional': [],
+        },
+        {
             'command': 'zikra_help',
             'aliases': ['help'],
             'description': 'Return this list of all available commands and their descriptions.',

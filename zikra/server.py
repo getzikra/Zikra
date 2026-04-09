@@ -33,6 +33,7 @@ from zikra.commands.create_token import cmd_create_token
 from zikra.commands.save_prompt import cmd_save_prompt
 from zikra.commands.list_prompts import cmd_list_prompts
 from zikra.commands.zikra_help import cmd_zikra_help
+from zikra.commands.version import cmd_version
 from zikra.mcp_server import build_mcp_app
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ COMMAND_MIN_ROLE = {
     'list_prompts':         'viewer',
     'list_requirements':    'viewer',
     'zikra_help':           'viewer',
+    'version':              'viewer',
     'save_memory':          'developer',
     'save_prompt':          'developer',
     'save_requirement':     'developer',
@@ -116,6 +118,7 @@ DISPATCH: dict = {
     'save_prompt':          cmd_save_prompt,
     'list_prompts':         cmd_list_prompts,
     'zikra_help':           cmd_zikra_help,
+    'version':              cmd_version,
     'debug_protocol':       _cmd_debug_protocol,
     # search aliases
     'find':                 cmd_search,
@@ -171,6 +174,9 @@ DISPATCH: dict = {
     'store_prompt':         cmd_save_prompt,
     # zikra_help aliases
     'help':                 cmd_zikra_help,
+    # version aliases
+    'ver':                  cmd_version,
+    'server_version':       cmd_version,
 }
 
 # Canonical command names (derived from DISPATCH, no aliases) for error messages
