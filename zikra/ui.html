@@ -281,21 +281,27 @@ button { cursor: pointer; border: none; background: none; }
 /* ── Memory Cards ── */
 .mem-card {
   border: 1px solid var(--border); border-left-width: 3px;
-  border-radius: 7px; padding: 8px 9px; cursor: pointer;
-  margin-bottom: 4px; background: rgba(12,13,20,0.5);
-  transition: background 0.1s;
+  border-radius: 7px; padding: 9px 10px; cursor: pointer;
+  margin-bottom: 5px; background: rgba(12,13,20,0.5);
+  transition: background 0.1s, box-shadow 0.1s;
 }
-.mem-card:hover, .mem-card.active { background: var(--bgsec); }
+.mem-card:hover { background: var(--bgsec); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.mem-card.active { background: var(--bgsec); box-shadow: inset 0 0 0 1px rgba(83,74,183,0.3); }
 .mc-top {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 6px; margin-bottom: 3px;
+  gap: 6px; margin-bottom: 4px;
 }
 .mc-title {
   font-size: 12px; font-weight: 500; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   max-width: 100%; min-width: 0;
 }
-.mc-meta { font-size: 10px; color: var(--tmuted); margin-top: 3px; }
+.mc-snippet {
+  font-size: 11px; color: var(--tmuted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.4;
+}
+.mc-meta { font-size: 10px; color: var(--tfaint); margin-top: 4px; }
 
 /* ── Prompt Cards ── */
 .prompt-card {
@@ -371,7 +377,11 @@ button { cursor: pointer; border: none; background: none; }
 }
 
 /* ── Content Body ── */
-.content-text { font-size: 12px; line-height: 1.6; color: var(--text2); white-space: pre-wrap; word-break: break-word; }
+.content-text {
+  font-size: 12px; line-height: 1.6; color: var(--text2);
+  white-space: pre-wrap; word-break: break-word;
+  overflow-y: auto; max-height: 55vh;
+}
 
 /* ── Markdown ── */
 .mdr { font-size: 12px; line-height: 1.6; color: var(--text2); }
@@ -675,16 +685,30 @@ function esc(v) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// SQLite stores dates as "YYYY-MM-DD HH:MM:SS" (space, no T, no Z).
+// Without this, browsers parse them as local time → wrong age calculations.
+function parseUTCDate(s) {
+  if (!s) return new Date();
+  // Normalize: space→T, then append Z if no tz offset present
+  let n = String(s).replace(' ', 'T');
+  if (!n.endsWith('Z') && !n.includes('+') && !/\d{2}:\d{2}$/.test(n.slice(-6).replace(/\d/g,''))) {
+    // Simple check: if last char is a digit (no tz suffix), add Z
+    if (/\d$/.test(n)) n += 'Z';
+  }
+  const d = new Date(n);
+  return isNaN(d.getTime()) ? new Date() : d;
+}
+
 function fmtDate(v) {
   if (!v) return '';
-  const d = new Date(v);
+  const d = parseUTCDate(v);
   if (isNaN(d)) return String(v);
   return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
 }
 
 function daysAgo(v) {
   if (!v) return '';
-  const diff = Date.now() - new Date(v);
+  const diff = Date.now() - parseUTCDate(v).getTime();
   const days = Math.floor(diff / 86400000);
   if (days === 0) return 'today';
   if (days === 1) return '1d ago';
@@ -958,14 +982,17 @@ function renderSearchSidebar() {
     const active = S.searchSelected && S.searchSelected.id === m.id ? 'active' : '';
     const ts  = daysAgo(m.last_accessed || m.created_at);
     const acc = m.access_count || 0;
+    const snippet = (m.snippet || '').replace(/\n+/g, ' ').trim().slice(0, 90);
 
     return `<div class="mem-card ${active}" style="border-left-color:${c}" data-idx="${i}">
       <div class="mc-top">
         ${typeBadge(m.memory_type)}
-        ${sc != null ? `<span style="font-size:10px;color:${scColor}">${sc}%</span>` : ''}
+        ${sc != null ? `<span style="font-size:10px;color:${scColor};font-weight:500">${sc}%</span>` : ''}
       </div>
       <div class="mc-title">${esc(m.title || 'Untitled')}</div>
-      <svg width="100%" height="3" style="display:block;margin-top:4px" xmlns="http://www.w3.org/2000/svg">
+      ${snippet ? `<div class="mc-snippet">${esc(snippet)}</div>` : ''}
+      <svg width="100%" height="3" style="display:block;margin-top:5px" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="100%" height="3" fill="var(--border)" rx="1.5"/>
         <rect x="0" y="0" width="${pct}%" height="3" fill="${scColor}" rx="1.5"/>
       </svg>
       <div class="mc-meta">accessed ${acc}×${ts ? '  ·  ' + ts : ''}</div>
@@ -982,18 +1009,36 @@ function renderSearchSidebar() {
   });
 }
 
-function renderSearchDetail(m) {
+async function renderSearchDetail(m) {
   const panel = document.getElementById('search-detail');
+
+  // Show skeleton immediately while fetching full content
+  panel.innerHTML = `
+    <div class="detail-header">
+      <div class="dh-r1">${typeBadge(m.memory_type)} ${statusPill(m.status || 'active')}</div>
+      <div class="dh-title">${esc(m.title || 'Untitled')}</div>
+    </div>
+    <div class="detail-body">
+      <div class="detail-empty" style="padding:24px 0;color:var(--tfaint);font-size:12px">Loading content…</div>
+    </div>`;
+
+  // Fetch the full memory record to get complete content_md + tags
+  const full = await apiPost('get_memory', { id: m.id });
+  if (full && !full.error) {
+    // Merge fetched fields into m (keep score etc from search result)
+    m = { ...m, ...full };
+  }
+
   const sc  = m.score != null ? Math.round(m.score * 100) : 0;
   const scC = scoreColor(sc);
   const acc = m.access_count || 0;
   const R = 26, circ = 2 * Math.PI * R;
   const offset = circ * (1 - sc / 100);
-  const tags = (m.tags || []);
+  const tags = Array.isArray(m.tags) ? m.tags : [];
   const tagHtml = tags.map(t => `<span class="tag-pill">${esc(t)}</span>`).join('');
 
-  // Signal bars computed independently from first principles
-  const ageMs     = m.created_at ? Date.now() - new Date(m.created_at).getTime() : 0;
+  // Timezone-safe age: SQLite returns "YYYY-MM-DD HH:MM:SS" (no Z) → treated as local without fix
+  const ageMs     = Math.max(0, Date.now() - parseUTCDate(m.created_at).getTime());
   const ageDays   = ageMs / 86400000;
   const recency   = Math.round(Math.max(0.05, Math.exp(-0.693 * ageDays / 30)) * 100);
   const frequency = Math.round(Math.min(1.0, Math.log1p(acc) / Math.log1p(100)) * 100);
@@ -1001,10 +1046,15 @@ function renderSearchDetail(m) {
 
   function sigBar(val) {
     const c = scoreColor(val);
-    return `<div class="signal-track"><svg width="100%" height="4" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${val}%" height="4" fill="${c}" rx="2"/></svg></div>`;
+    return `<div class="signal-track">
+      <svg width="100%" height="4" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="100%" height="4" fill="var(--border)" rx="2"/>
+        <rect x="0" y="0" width="${val}%" height="4" fill="${c}" rx="2"/>
+      </svg></div>`;
   }
 
-  const content = m.content || m.snippet || '';
+  // content_md is the full text; snippet is truncated fallback
+  const content = m.content_md || m.snippet || '';
 
   panel.innerHTML = `
     <div class="detail-header">
@@ -1051,13 +1101,15 @@ function renderSearchDetail(m) {
     </div>
     <div class="detail-body">
       <span class="slabel">Content</span>
-      <div class="content-text">${esc(content)}</div>
-      ${tags.length > 0 ? `<span class="slabel">Tags</span><div>${tagHtml}</div>` : ''}
+      ${content ? renderMd(content) : '<p style="color:var(--tfaint);font-size:12px">No content.</p>'}
+      ${tags.length > 0 ? `<span class="slabel">Tags</span><div style="margin-bottom:10px">${tagHtml}</div>` : ''}
       <span class="slabel">Meta</span>
       <div class="meta-row">
         <span>Created ${fmtDate(m.created_at)}</span>
+        ${m.updated_at ? `<span>Updated ${fmtDate(m.updated_at)}</span>` : ''}
         <span>Project: ${esc(m.project || S.project)}</span>
         ${m.created_by ? `<span>By: ${esc(m.created_by)}</span>` : ''}
+        ${m.module ? `<span>Module: ${esc(m.module)}</span>` : ''}
       </div>
     </div>`;
 }
