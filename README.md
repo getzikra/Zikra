@@ -56,14 +56,20 @@ Open **Claude Code → Settings → MCP → Add Server** and paste:
 
 The installer does this automatically when run locally. For remote servers, paste your public URL instead of `localhost:8000`.
 
-### Step 3 — Onboard Claude Code (hooks + statusline)
+### Step 3 — Connect your AI coding agent
 
-Paste this into any Claude Code session:
+Paste the prompt for your agent into a session. It handles both first install and updates —
+run the same prompt any time to install or refresh.
 
+**Claude Code:**
 ```
 Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/zikra-claude-code-setup.md
 and follow every instruction in it.
 ```
+
+**Gemini CLI** — coming soon
+
+**Codex** — coming soon
 
 This installs the **Stop hook** (auto-saves every session), **PreCompact hook**, and the live **statusline bar** showing run counts and memory stats. Claude Code will ask for your server URL and token, then configure everything automatically.
 
