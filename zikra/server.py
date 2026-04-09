@@ -35,7 +35,7 @@ from zikra.commands.save_prompt import cmd_save_prompt
 from zikra.commands.list_prompts import cmd_list_prompts
 from zikra.commands.zikra_help import cmd_zikra_help
 from zikra.commands.version import cmd_version
-from zikra.mcp_server import build_mcp_app
+from zikra.mcp_server import build_mcp_app, handle_streamable_http
 from zikra.version import __version__
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,17 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
+# ── MCP — Streamable HTTP (primary transport, MCP spec 2025-03-26) ────────────
+# Registered as a direct FastAPI route so Starlette's Mount never issues a
+# 307 redirect on POST /mcp → /mcp/. MCP clients (claude.ai, Cursor) do not
+# follow 307 redirects on POST, causing silent "couldn't reach MCP server" errors.
+@app.post('/mcp')
+async def mcp_streamable_http(request: Request):
+    return await handle_streamable_http(request)
+
+
+# ── MCP — SSE legacy transport (deprecated, kept for backwards compat) ────────
+# Mount handles /mcp/sse and /mcp/messages only.
 app.mount('/mcp', build_mcp_app())
 
 

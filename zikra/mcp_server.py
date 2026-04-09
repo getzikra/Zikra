@@ -359,29 +359,29 @@ async def _dispatch_rpc(method: str, params: dict, rpc_id, role: str):
     }
 
 
-async def _streamable_http_endpoint(scope, receive, send):
+async def handle_streamable_http(request: Request) -> Response:
     """
     POST /mcp — Streamable HTTP transport (MCP spec 2025-03-26).
     Stateless: no sessions, no in-process state.
     Container restarts are transparent to all connected clients.
-    """
-    req = Request(scope, receive)
 
-    auth_info = await _check_auth_request(req)
+    Called directly as a FastAPI route handler (not via ASGI scope) so that
+    Starlette's Mount never issues a 307 redirect on POST /mcp → /mcp/,
+    which MCP clients (claude.ai, Cursor) do not follow.
+    """
+    auth_info = await _check_auth_request(request)
     if not auth_info:
-        await Response('Unauthorized', status_code=401)(scope, receive, send)
-        return
+        return Response('Unauthorized', status_code=401)
 
     role     = auth_info.get('role', 'viewer')
     cv_token = _mcp_session_role.set(role)
 
     try:
-        body_bytes = await req.body()
+        body_bytes = await request.body()
         if not body_bytes:
             err = json.dumps({'jsonrpc': '2.0', 'id': None,
                               'error': {'code': -32700, 'message': 'Empty request body'}})
-            await Response(err, status_code=400, media_type='application/json')(scope, receive, send)
-            return
+            return Response(err, status_code=400, media_type='application/json')
 
         rpc    = json.loads(body_bytes)
         method = rpc.get('method', '')
@@ -391,22 +391,28 @@ async def _streamable_http_endpoint(scope, receive, send):
         result = await _dispatch_rpc(method, params, rpc_id, role)
 
         if result is None:
-            await Response('', status_code=204)(scope, receive, send)
-        else:
-            body = json.dumps(result, ensure_ascii=False)
-            await Response(body, media_type='application/json')(scope, receive, send)
+            return Response('', status_code=204)
+        body = json.dumps(result, ensure_ascii=False)
+        return Response(body, media_type='application/json')
 
     except json.JSONDecodeError:
         err = json.dumps({'jsonrpc': '2.0', 'id': None,
                           'error': {'code': -32700, 'message': 'Parse error'}})
-        await Response(err, status_code=400, media_type='application/json')(scope, receive, send)
+        return Response(err, status_code=400, media_type='application/json')
     except Exception as e:
         logger.exception('Streamable HTTP endpoint error')
         err = json.dumps({'jsonrpc': '2.0', 'id': None,
                           'error': {'code': -32603, 'message': str(e)}})
-        await Response(err, status_code=500, media_type='application/json')(scope, receive, send)
+        return Response(err, status_code=500, media_type='application/json')
     finally:
         _mcp_session_role.reset(cv_token)
+
+
+async def _streamable_http_endpoint(scope, receive, send):
+    """ASGI shim — used by the mounted sub-app only. Delegates to handle_streamable_http."""
+    req = Request(scope, receive)
+    response = await handle_streamable_http(req)
+    await response(scope, receive, send)
 
 
 # ── SSE transport — deprecated, kept for backwards-compat ─────────────────────
