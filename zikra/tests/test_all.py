@@ -128,6 +128,67 @@ def log_run_plain():
     assert 'id' in r
 
 
+def log_run_auto_links_prompt_id():
+    """v1.0.6 server-side handshake: get_prompt(runner=X) records pending_runs,
+    and the next log_run(runner=X) auto-links prompt_id without the client
+    ever having to know the UUID."""
+    # Save a prompt to fetch
+    post('save_memory', {
+        'title': 'test:auto_link_prompt',
+        'content_md': '# linked\nBody of the prompt under test.',
+        'memory_type': 'prompt',
+    })
+
+    # Fetch with a runner — server records the handshake
+    p = post('get_prompt', {
+        'prompt_name': 'test:auto_link_prompt',
+        'runner': 'handshake-host',
+    })
+    assert 'id' in p, f'expected id in get_prompt response, got {p}'
+    expected_id = p['id']
+
+    # Log run with the same runner and NO explicit prompt_id
+    r = post('log_run', {
+        'runner': 'handshake-host',
+        'status': 'success',
+        'output_summary': 'handshake verification',
+        'tokens_input': 11,
+        'tokens_output': 22,
+    })
+    assert r.get('status') == 'logged', f'expected status=logged, got {r}'
+    run_id = r.get('id')
+
+    # Verify linkage via direct DB read (webhook doesn't expose list_runs)
+    import sqlite3
+    conn = sqlite3.connect(TEST_DB)
+    try:
+        row = conn.execute(
+            "SELECT prompt_id FROM prompt_runs WHERE id = ?", (run_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is not None, f'run {run_id} not found in prompt_runs'
+    assert row[0] == expected_id, f'expected prompt_id={expected_id}, got {row[0]}'
+
+    # Second log_run from same runner (no new get_prompt) must NOT re-link —
+    # pending_runs should have been consumed by the first call.
+    r2 = post('log_run', {
+        'runner': 'handshake-host',
+        'status': 'success',
+        'output_summary': 'second run, no new fetch',
+    })
+    run_id_2 = r2.get('id')
+    conn = sqlite3.connect(TEST_DB)
+    try:
+        row2 = conn.execute(
+            "SELECT prompt_id FROM prompt_runs WHERE id = ?", (run_id_2,)
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row2 is not None and row2[0] is None, \
+        f'expected prompt_id=NULL on second run (pending consumed), got {row2}'
+
+
 def log_run_alias():
     r = post('log_session', {'runner': 'test-agent', 'status': 'success'})
     assert r.get('_use_command') == 'log_run'
@@ -197,6 +258,7 @@ TESTS = [
     ('get_prompt by name',             get_prompt_by_name),
     ('get_prompt alias: fetch_prompt', get_prompt_alias),
     ('log_run plain',                  log_run_plain),
+    ('log_run auto-links prompt_id',   log_run_auto_links_prompt_id),
     ('log_run alias: log_session',     log_run_alias),
     ('log_error plain',                log_error_plain),
     ('save_requirement',               save_requirement_plain),

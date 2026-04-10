@@ -4,8 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>zikra.memory</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23534AB7'/><text x='16' y='22' text-anchor='middle' font-family='system-ui,sans-serif' font-size='18' font-weight='700' fill='white'>Z</text></svg>">
-<link rel="alternate icon" href="favicon.ico">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23E8730C'/><text x='16' y='22' text-anchor='middle' font-family='system-ui,sans-serif' font-size='18' font-weight='700' fill='white'>Z</text></svg>">
 <style>
 :root {
   --bg:       #0c0d14;
@@ -80,6 +79,22 @@ button { cursor: pointer; border: none; background: none; }
 }
 
 .topbar-right { display: flex; align-items: center; gap: 9px; position: relative; }
+
+/* Token counter pill in topbar — shows total tokens burned across all runs */
+.token-pill {
+  display: flex; align-items: center; gap: 7px;
+  background: rgba(232,115,12,0.07);
+  border: 1px solid rgba(232,115,12,0.35);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text2);
+  cursor: help;
+}
+.token-pill .tp-label { color: var(--tmuted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+.token-pill .tp-val   { color: #E8730C; font-weight: 600; font-variant-numeric: tabular-nums; }
+.token-pill .tp-sep   { color: var(--border); }
+
 .conn-status { display: flex; align-items: center; gap: 5px; }
 .conn-dot { width: 7px; aspect-ratio: 1/1; border-radius: 50%; background: var(--cdis); flex-shrink: 0; }
 .conn-dot.on { background: var(--cgre); }
@@ -430,7 +445,18 @@ button { cursor: pointer; border: none; background: none; }
 }
 .show-toggle { font-size: 11px; color: var(--tfaint); margin-top: 4px; display: inline-block; cursor: pointer; }
 .show-toggle:hover { color: var(--tmuted); }
-.run-tokens { font-size: 10px; color: var(--tfaint); margin-top: 5px; }
+.run-tokens { font-size: 10px; color: var(--tfaint); margin-top: 5px; font-variant-numeric: tabular-nums; }
+.rh-summary {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 11px; color: var(--tmuted);
+  padding: 6px 8px; margin: 4px 0 8px;
+  background: rgba(232,115,12,0.05);
+  border: 1px solid rgba(232,115,12,0.2);
+  border-radius: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.rh-summary b { color: var(--text); font-weight: 600; }
+.rh-summary .rh-sep { color: var(--border); }
 
 /* ── Graph Tab ── */
 #graph-canvas { display: block; width: 100%; height: 100%; }
@@ -478,6 +504,14 @@ button { cursor: pointer; border: none; background: none; }
       </div>
     </div>
     <div class="topbar-right">
+      <div class="token-pill" id="token-pill" title="Total tokens across all logged prompt runs" style="display:none">
+        <span class="tp-label">tokens</span>
+        <span class="tp-val" id="tp-in">0</span>
+        <span class="tp-sep">·</span>
+        <span class="tp-val" id="tp-cache" style="color:#BA7517">0</span>
+        <span class="tp-sep">·</span>
+        <span class="tp-val" id="tp-out">0</span>
+      </div>
       <div class="conn-status">
         <span class="conn-dot" id="conn-dot"></span>
         <span class="conn-label" id="conn-label">disconnected</span>
@@ -633,7 +667,7 @@ button { cursor: pointer; border: none; background: none; }
 'use strict';
 
 // ── Constants ──────────────────────────────────────────────────────
-const ZIKRA_VERSION = '1.0.4';
+const ZIKRA_VERSION = '1.0.6';
 const K_TOKEN   = 'zikra_token';
 const K_URL     = 'zikra_url';
 const K_PROJECT = 'zikra_project';
@@ -672,7 +706,7 @@ const S = {
   // prompts
   allPrompts: [], selPrompt: null,
   promptFilter: 'all', promptSort: 'last_run',
-  promptHistory: [],
+  promptHistory: [], promptHistoryStats: {},
 
   // requirements
   allReqs: [], selReq: null,
@@ -906,6 +940,7 @@ function renderProjSelector(projects, role) {
         localStorage.setItem(K_PROJECT, S.project);
         updateProjectPill();
         closeGear();
+        refreshTokenTotals();
         reloadActiveTab();
       });
     });
@@ -984,8 +1019,35 @@ async function connect() {
     }
   } catch (_) {}
 
+  // Refresh token totals pill (topbar)
+  refreshTokenTotals();
+
   // Load current tab
   reloadActiveTab();
+}
+
+// ── Token Totals (topbar pill) ─────────────────────────────────────
+function fmtTok(n) {
+  n = Number(n) || 0;
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+  return n.toString();
+}
+
+async function refreshTokenTotals() {
+  // /api/ui/runs returns stats aggregated under the current project scope.
+  const res = await apiGet('/api/ui/runs', { limit: 1 });
+  if (!res || !res.stats) return;
+  const s = res.stats;
+  const pill = document.getElementById('token-pill');
+  if (!pill) return;
+  document.getElementById('tp-in').textContent    = 'in ' + fmtTok(s.sum_in);
+  document.getElementById('tp-cache').textContent = 'cached ' + fmtTok(s.sum_cache_read);
+  document.getElementById('tp-out').textContent   = 'out ' + fmtTok(s.sum_out);
+  pill.title = (Number(s.run_count)||0) + ' runs · total '
+             + fmtTok((Number(s.sum_in)||0) + (Number(s.sum_out)||0) + (Number(s.sum_cache_read)||0))
+             + ' tokens';
+  pill.style.display = 'flex';
 }
 
 // ── Search Tab ────────────────────────────────────────────────────
@@ -1531,46 +1593,97 @@ function renderPromptsSidebar() {
 }
 
 async function loadRunHistory(prompt) {
-  const res = await apiGet('/api/ui/run-history', {
-    prompt: prompt.title || '',
-    limit: 30
-  });
+  // v1.0.5: hits prompt_runs via /api/ui/runs. Prefer prompt_id linkage, then fall
+  // back to prompt_name for legacy rows logged before the prompt_id column existed.
+  const params = { limit: 30 };
+  if (prompt.id) params.prompt_id = prompt.id;
+  let res = await apiGet('/api/ui/runs', params);
+
+  // Fallback for legacy rows that only carry prompt_name
+  if (res && (!res.runs || res.runs.length === 0) && prompt.title) {
+    const byName = await apiGet('/api/ui/runs', {
+      prompt_name: prompt.title, limit: 30
+    });
+    if (byName && byName.runs && byName.runs.length) res = byName;
+  }
+
   if (!res) return;
   S.promptHistory = res.runs || [];
+  S.promptHistoryStats = res.stats || {};
   renderRunHistory();
+  renderPromptStatCards();
+}
+
+function renderPromptStatCards() {
+  const s = S.promptHistoryStats || {};
+  const fmt = n => {
+    n = Math.round(Number(n) || 0);
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return n > 0 ? n.toString() : '—';
+  };
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('avg-in',   fmt(s.avg_in));
+  set('avg-cach', fmt(s.avg_cache_read));
+  set('avg-out',  fmt(s.avg_out));
 }
 
 function renderRunHistory() {
   const sec = document.getElementById('run-hist-section');
   if (!sec) return;
   if (S.promptHistory.length === 0) {
-    sec.innerHTML = '<div class="empty-msg">No runs recorded yet. Run this prompt in Claude Code to see history here.</div>';
+    sec.innerHTML = '<span class="slabel">Run History</span>'
+      + '<div class="empty-msg">No runs recorded yet. Run this prompt in Claude Code to see history here.</div>';
     return;
   }
 
-  sec.innerHTML = S.promptHistory.map((r, idx) => {
-    const machine = r.created_by || (r.tags || []).find(t => !['success','fail'].includes(t)) || 'unknown';
-    const status  = (r.tags || []).includes('fail') ? 'fail' : 'success';
+  const s = S.promptHistoryStats || {};
+  const totalIn    = Math.round(Number(s.sum_in) || 0);
+  const totalCache = Math.round(Number(s.sum_cache_read) || 0);
+  const totalOut   = Math.round(Number(s.sum_out) || 0);
+
+  const header = `<span class="slabel">Run History</span>
+    <div class="rh-summary">
+      <span>${S.promptHistory.length} runs</span>
+      <span class="rh-sep">·</span>
+      <span>in <b>${totalIn.toLocaleString()}</b></span>
+      <span class="rh-sep">·</span>
+      <span>cached <b style="color:#BA7517">${totalCache.toLocaleString()}</b></span>
+      <span class="rh-sep">·</span>
+      <span>out <b>${totalOut.toLocaleString()}</b></span>
+    </div>`;
+
+  const entries = S.promptHistory.map((r, idx) => {
+    const machine = r.runner || 'unknown';
+    const status  = r.status || 'success';
     const ts      = fmtDate(r.created_at);
-    const diary   = r.content || r.snippet || '';
-    const tokIn   = r.token_input  || r.tokens_input  || '';
-    const tokCach = r.token_cached || r.tokens_cached || '';
-    const tokOut  = r.token_output || r.tokens_output || '';
+    const summary = r.output_summary || '';
+    const tokIn   = r.tokens_input  || 0;
+    const tokCach = r.tokens_cache_read || 0;
+    const tokCC   = r.tokens_cache_creation || 0;
+    const tokOut  = r.tokens_output || 0;
     const id      = 'diary-' + idx;
+
+    const tokBits = [];
+    if (tokIn)   tokBits.push(`in ${tokIn.toLocaleString()}`);
+    if (tokCach) tokBits.push(`cached ${tokCach.toLocaleString()}`);
+    if (tokCC)   tokBits.push(`cache-new ${tokCC.toLocaleString()}`);
+    if (tokOut)  tokBits.push(`out ${tokOut.toLocaleString()}`);
 
     return `<div class="run-entry">
       <div class="run-entry-hdr">
         <span class="run-machine">${esc(machine)}</span>
         <div style="display:flex;align-items:center;gap:6px">
-          <span class="spill spill-${status}">${status}</span>
+          <span class="spill spill-${status === 'fail' ? 'fail' : 'success'}">${esc(status)}</span>
           <span class="run-ts">${ts}</span>
         </div>
       </div>
-      <div class="run-diary collapsed" id="${id}">${esc(diary)}</div>
-      <span class="show-toggle" data-diary="${id}">↓ show more</span>
-      ${(tokIn || tokCach || tokOut) ? `<div class="run-tokens">input ${tokIn || '—'}  ·  cached ${tokCach || '—'}  ·  output ${tokOut || '—'}</div>` : ''}
+      ${summary ? `<div class="run-diary collapsed" id="${id}">${esc(summary)}</div>
+      <span class="show-toggle" data-diary="${id}">↓ show more</span>` : ''}
+      ${tokBits.length ? `<div class="run-tokens">${tokBits.join('  ·  ')}</div>` : ''}
     </div>`;
   }).join('');
+
+  sec.innerHTML = header + entries;
 
   sec.querySelectorAll('.show-toggle').forEach(btn => {
     btn.addEventListener('click', () => {

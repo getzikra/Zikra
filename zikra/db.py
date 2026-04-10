@@ -482,22 +482,130 @@ async def record_run(data: dict, run_id: str) -> None:
 
     await _aio_db.execute(
         """INSERT INTO prompt_runs
-           (id, project, runner, prompt_name, status, output_summary,
-            tokens_input, tokens_output, cost_usd)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (id, project, runner, prompt_id, prompt_name, status, output_summary,
+            tokens_input, tokens_output, tokens_cache_read, tokens_cache_creation, cost_usd)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         [
             run_id,
             data.get('project', 'global'),
             data.get('runner'),
+            data.get('prompt_id'),
             data.get('prompt_name'),
             data.get('status', 'success'),
             data.get('output_summary'),
             data.get('tokens_input'),
             data.get('tokens_output'),
+            data.get('tokens_cache_read'),
+            data.get('tokens_cache_creation'),
             data.get('cost_usd'),
         ]
     )
     await _aio_db.commit()
+
+
+async def record_pending_run(runner: str, prompt_id: str, project: str) -> None:
+    """Record that `runner` just fetched `prompt_id`. UPSERT — last write wins.
+    v1.0.6: server-side handshake, replaces the dead /tmp/zikra_prompt_id rendezvous."""
+    if _is_pg:
+        from zikra.db_postgres import record_pending_run_pg, get_pg_pool
+        await record_pending_run_pg(get_pg_pool(), runner, prompt_id, project)
+        return
+    await _aio_db.execute("""
+        INSERT INTO pending_runs (runner, project, prompt_id) VALUES (?, ?, ?)
+        ON CONFLICT(runner, project) DO UPDATE SET
+            prompt_id = excluded.prompt_id,
+            created_at = datetime('now')
+    """, [runner, project, prompt_id])
+    await _aio_db.commit()
+
+
+async def consume_pending_run(runner: str, project: str) -> Optional[str]:
+    """Atomically read-and-delete the pending prompt_id for this (runner, project).
+    Returns the prompt_id string or None if no pending handshake exists."""
+    if _is_pg:
+        from zikra.db_postgres import consume_pending_run_pg, get_pg_pool
+        return await consume_pending_run_pg(get_pg_pool(), runner, project)
+    async with _aio_db.execute(
+        "SELECT prompt_id FROM pending_runs WHERE runner = ? AND project = ?",
+        [runner, project]
+    ) as cur:
+        row = await cur.fetchone()
+    if not row:
+        return None
+    await _aio_db.execute(
+        "DELETE FROM pending_runs WHERE runner = ? AND project = ?",
+        [runner, project]
+    )
+    await _aio_db.commit()
+    return row['prompt_id']
+
+
+async def list_runs(project: str = 'global', prompt_id: str = None,
+                    prompt_name: str = None, limit: int = 100) -> list:
+    """List prompt_runs rows joined with prompt title from memories."""
+    if _is_pg:
+        from zikra.db_postgres import list_runs_pg, get_pg_pool
+        return await list_runs_pg(get_pg_pool(), project, prompt_id, prompt_name, limit)
+
+    where = []
+    params: list = []
+    if project and project != 'global':
+        where.append('r.project = ?'); params.append(project)
+    if prompt_id:
+        where.append('r.prompt_id = ?'); params.append(prompt_id)
+    if prompt_name:
+        where.append('r.prompt_name = ?'); params.append(prompt_name)
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    params.append(limit)
+    sql = f"""
+        SELECT r.id, r.project, r.runner, r.prompt_id, r.prompt_name,
+               r.status, r.output_summary,
+               r.tokens_input, r.tokens_output,
+               r.tokens_cache_read, r.tokens_cache_creation,
+               r.cost_usd, r.created_at,
+               m.title AS prompt_title
+        FROM prompt_runs r
+        LEFT JOIN memories m ON m.id = r.prompt_id
+        {where_sql}
+        ORDER BY r.created_at DESC
+        LIMIT ?
+    """
+    async with _aio_db.execute(sql, params) as cur:
+        rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def run_stats(project: str = 'global', prompt_id: str = None,
+                    prompt_name: str = None) -> dict:
+    """Aggregate token usage across prompt_runs (filterable)."""
+    if _is_pg:
+        from zikra.db_postgres import run_stats_pg, get_pg_pool
+        return await run_stats_pg(get_pg_pool(), project, prompt_id, prompt_name)
+
+    where = []
+    params: list = []
+    if project and project != 'global':
+        where.append('project = ?'); params.append(project)
+    if prompt_id:
+        where.append('prompt_id = ?'); params.append(prompt_id)
+    if prompt_name:
+        where.append('prompt_name = ?'); params.append(prompt_name)
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    sql = f"""
+        SELECT COUNT(*) AS run_count,
+               COALESCE(SUM(tokens_input),0)          AS sum_in,
+               COALESCE(SUM(tokens_output),0)         AS sum_out,
+               COALESCE(SUM(tokens_cache_read),0)     AS sum_cache_read,
+               COALESCE(SUM(tokens_cache_creation),0) AS sum_cache_creation,
+               COALESCE(AVG(tokens_input),0)          AS avg_in,
+               COALESCE(AVG(tokens_output),0)         AS avg_out,
+               COALESCE(AVG(tokens_cache_read),0)     AS avg_cache_read
+        FROM prompt_runs
+        {where_sql}
+    """
+    async with _aio_db.execute(sql, params) as cur:
+        row = await cur.fetchone()
+    return dict(row) if row else {}
 
 
 async def record_error(data: dict, error_id: str) -> None:

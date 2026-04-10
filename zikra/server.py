@@ -19,7 +19,9 @@ from zikra.db import (
     list_all_memories,
     list_projects,
     list_by_memory_type,
+    list_runs,
     open_aio_db,
+    run_stats,
     set_aio_db,
 )
 from zikra.auth import verify_auth, ROLE_PERMISSIONS
@@ -452,9 +454,8 @@ async def ui_requirements(request: Request):
 @app.get('/api/ui/run-history')
 async def ui_run_history(request: Request):
     """
-    List conversation memories (run diary entries) for a prompt's history panel.
-    Filters by prompt name in title/tags.
-    Query params: project, prompt (prompt title to filter by), limit
+    DEPRECATED (kept for v1.0.4 clients). Use /api/ui/runs instead.
+    Returns conversation-type memories filtered by prompt name in title/tags.
     """
     await verify_auth(request)
     project     = request.query_params.get('project') or 'global'
@@ -470,6 +471,48 @@ async def ui_run_history(request: Request):
         rows = [r for r in rows if _matches(r)]
 
     return {'runs': _prep_memories(rows), 'count': len(rows)}
+
+
+@app.get('/api/ui/runs')
+async def ui_runs(request: Request):
+    """
+    List prompt_runs rows (actual run telemetry with token counts).
+    Query params:
+      project     – filter by project ('global' = all)
+      prompt_id   – filter to a single prompt's runs (preferred linkage)
+      prompt_name – fallback filter when prompt_id is missing
+      limit       – max rows returned (default 50, cap 200)
+    Response: { runs: [...], stats: { run_count, sum_in, sum_out, sum_cache_read, ... } }
+    """
+    await verify_auth(request)
+    project     = request.query_params.get('project') or 'global'
+    prompt_id   = request.query_params.get('prompt_id') or None
+    prompt_name = request.query_params.get('prompt_name') or None
+    limit       = min(int(request.query_params.get('limit', '50')), 200)
+
+    rows = await list_runs(project=project, prompt_id=prompt_id,
+                           prompt_name=prompt_name, limit=limit)
+    stats = await run_stats(project=project, prompt_id=prompt_id,
+                            prompt_name=prompt_name)
+
+    # normalise created_at → iso string for sqlite rows
+    for r in rows:
+        ca = r.get('created_at')
+        if ca is not None and not isinstance(ca, str):
+            try:
+                r['created_at'] = ca.isoformat()
+            except Exception:
+                r['created_at'] = str(ca)
+
+    # Coerce Decimal/float from aggregates → plain numbers
+    clean_stats = {}
+    for k, v in (stats or {}).items():
+        try:
+            clean_stats[k] = float(v) if v is not None else 0
+        except Exception:
+            clean_stats[k] = 0
+
+    return {'runs': rows, 'count': len(rows), 'stats': clean_stats}
 
 
 # ── Webhook ────────────────────────────────────────────────────────────────────

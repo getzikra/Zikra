@@ -55,11 +55,12 @@ DEBOUNCE         = 30          # seconds of mtime stability before firing
 POLL_INTERVAL    = 5           # seconds between polls
 TRANSCRIPT_GLOB  = os.path.expanduser("~/.claude/projects/**/*.jsonl")
 
-# ── Portable temp paths — use ~/.claude/ to avoid /tmp assumptions ────────────
+# ── Portable state dir — use ~/.claude/ to avoid /tmp assumptions ─────────────
 _ZIKRA_STATE_DIR = os.path.expanduser("~/.claude")
-PROMPT_ID_FILE   = os.path.join(_ZIKRA_STATE_DIR, ".zikra_prompt_id")
 BOOT_MARKER      = os.path.join(_ZIKRA_STATE_DIR, ".zikra_boot")
 LOG_PREFIX       = "[zikra_watcher]"
+# v1.0.6: prompt_id <-> run linkage is handled server-side (pending_runs table).
+# The watcher no longer needs to shuttle prompt IDs through a local file.
 
 
 # ── Boot marker ───────────────────────────────────────────────────────────────
@@ -173,21 +174,6 @@ def extract_session_info(path: str) -> dict:
     }
 
 
-# ── Prompt ID linkage ─────────────────────────────────────────────────────────
-
-def consume_prompt_id() -> str:
-    """Read and delete the prompt ID file. Returns empty string if absent."""
-    try:
-        if os.path.exists(PROMPT_ID_FILE):
-            with open(PROMPT_ID_FILE) as f:
-                pid = f.read().strip()
-            os.remove(PROMPT_ID_FILE)
-            return pid
-    except Exception:
-        pass
-    return ""
-
-
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 def _log(msg: str) -> None:
@@ -264,8 +250,7 @@ def main() -> None:
 
             seen[path]["fired"] = True
 
-            info      = extract_session_info(path)
-            prompt_id = consume_prompt_id()
+            info = extract_session_info(path)
 
             output_summary = (
                 info["last_assistant"][:250]
@@ -288,8 +273,8 @@ def main() -> None:
             if info["session_id"]:
                 payload["session_id"] = info["session_id"]
 
-            if prompt_id:
-                payload["prompt_run_id"] = prompt_id
+            # v1.0.6: prompt_id is resolved server-side from (runner, project)
+            # via the pending_runs table. No client-side rendezvous needed.
 
             ok = zikra_post(payload)
             _log(

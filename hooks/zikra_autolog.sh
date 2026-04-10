@@ -272,43 +272,40 @@ print(json.dumps({
 
   [[ -n "$BODY" ]] && zikra_post "$BODY"
 
-  # ── Log run for every session — prompt_name only when a named prompt was run ──
-  PROMPT_ID_FILE="/tmp/zikra_prompt_id"
-  PROMPT_ID=""
-  if [[ -s "$PROMPT_ID_FILE" ]]; then
-    PROMPT_ID="$(tr -d '[:space:]' < "$PROMPT_ID_FILE")"
-    : > "$PROMPT_ID_FILE"   # clear immediately — prevent double-logging
-  fi
-
-  read T_IN T_OUT <<< $(python3 -c "
+  # ── Log run for every session ────────────────────────────────────────
+  # v1.0.6: prompt_id linkage is now handled server-side via the pending_runs
+  # table — cmd_get_prompt records (runner, prompt_id); cmd_log_run from the
+  # same runner consumes it. No /tmp rendezvous file anymore.
+  read T_IN T_OUT T_CR T_CC <<< $(python3 -c "
 import json, sys
-ti, to = 0, 0
+ti, to, cr, cc = 0, 0, 0, 0
 for line in open(sys.argv[1]):
     try:
         u = json.loads(line).get('message', {}).get('usage', {})
         ti += u.get('input_tokens', 0)
         to += u.get('output_tokens', 0)
+        cr += u.get('cache_read_input_tokens', 0)
+        cc += u.get('cache_creation_input_tokens', 0)
     except: pass
-print(ti, to)
+print(ti, to, cr, cc)
 " "$LATEST" 2>/dev/null)
-  T_IN=${T_IN:-0}; T_OUT=${T_OUT:-0}
+  T_IN=${T_IN:-0}; T_OUT=${T_OUT:-0}; T_CR=${T_CR:-0}; T_CC=${T_CC:-0}
 
   RUN_BODY="$(python3 -c "
 import json, sys
-payload = {
-  'command':        'log_run',
-  'project':        sys.argv[1],
-  'runner':         sys.argv[2],
-  'status':         'success',
-  'output_summary': 'auto-logged by zikra_autolog.sh',
-  'tokens_input':   int(sys.argv[4]),
-  'tokens_output':  int(sys.argv[5]),
-}
-if sys.argv[3]:
-    payload['prompt_name'] = sys.argv[3]
-print(json.dumps(payload))" \
-    "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" "$PROMPT_ID" \
-    "$T_IN" "$T_OUT" 2>/dev/null)"
+print(json.dumps({
+  'command':               'log_run',
+  'project':               sys.argv[1],
+  'runner':                sys.argv[2],
+  'status':                'success',
+  'output_summary':        'auto-logged by zikra_autolog.sh',
+  'tokens_input':          int(sys.argv[3]),
+  'tokens_output':         int(sys.argv[4]),
+  'tokens_cache_read':     int(sys.argv[5]),
+  'tokens_cache_creation': int(sys.argv[6]),
+}))" \
+    "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" \
+    "$T_IN" "$T_OUT" "$T_CR" "$T_CC" 2>/dev/null)"
 
   [[ -n "$RUN_BODY" ]] && zikra_post "$RUN_BODY"
   # ──────────────────────────────────────────────────────────────────────

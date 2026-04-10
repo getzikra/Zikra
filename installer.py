@@ -268,9 +268,17 @@ try:
 
     s.setdefault('mcpServers', {})
     mcp_host = 'localhost' if zikra_host in ('0.0.0.0', '') else zikra_host
+    import socket as _socket
+    runner_hostname = _socket.gethostname() or 'unknown-host'
     s['mcpServers']['zikra'] = {
         'url': f'http://{mcp_host}:{zikra_port}/mcp',
-        'headers': {'Authorization': f'Bearer {token}'},
+        'headers': {
+            'Authorization': f'Bearer {token}',
+            # v1.0.6+: identifies this machine for the server-side prompt_id <-> run
+            # handshake. The server reads it in zikra/mcp_server.py and injects it
+            # into get_prompt/log_run tool arguments so runs auto-link to prompts.
+            'X-Zikra-Runner': runner_hostname,
+        },
     }
 
     tmp = str(settings_path) + '.tmp'

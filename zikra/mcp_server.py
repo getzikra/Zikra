@@ -18,10 +18,17 @@ mcp.json example:
   "mcpServers": {
     "zikra": {
       "url": "http://<host-ip>:8000/mcp",
-      "headers": { "Authorization": "Bearer <ZIKRA_TOKEN>" }
+      "headers": {
+        "Authorization": "Bearer <ZIKRA_TOKEN>",
+        "X-Zikra-Runner": "<your-hostname>"
+      }
     }
   }
 }
+
+X-Zikra-Runner identifies the calling host/agent. The server injects it into
+tool arguments for `zikra_get_prompt` and `zikra_log_run` so the prompt_id <->
+run handshake works automatically (v1.0.6+).
 """
 
 import json
@@ -60,6 +67,11 @@ sse_transport = SseServerTransport('/messages')
 # Per-connection role — ContextVar (SSE) + session dict (belt-and-suspenders)
 _mcp_session_role: ContextVar[str] = ContextVar('_mcp_session_role', default='viewer')
 _SESSION_ROLES: dict[str, str] = {}
+
+# v1.0.6: per-connection runner (from X-Zikra-Runner header), injected into
+# tool arguments for get_prompt/log_run so the server-side handshake links runs.
+_mcp_session_runner: ContextVar[str] = ContextVar('_mcp_session_runner', default='')
+_SESSION_RUNNERS: dict[str, str] = {}
 
 
 async def _check_auth_request(request: Request) -> dict | None:
@@ -118,6 +130,10 @@ _TOOLS: list[types.Tool] = [
             'properties': {
                 'prompt_name': {'type': 'string'},
                 'project': {'type': 'string'},
+                'runner': {
+                    'type': 'string',
+                    'description': 'Hostname/agent identifier (auto-filled by the MCP server from the X-Zikra-Runner header; overriding is optional)',
+                },
             },
             'required': ['prompt_name'],
         },
@@ -285,6 +301,14 @@ async def _run_tool(name: str, arguments: dict, role: str) -> list[types.TextCon
     if handler is None:
         return _text({'error': f'Unknown tool: {name}'})
 
+    # v1.0.6: inject runner from X-Zikra-Runner header for the two commands
+    # that participate in the prompt_id <-> run handshake. The caller never has
+    # to know its own hostname — it comes from the mcp.json headers block.
+    runner = _mcp_session_runner.get()
+    if runner and name in ('zikra_get_prompt', 'zikra_log_run'):
+        if not (arguments or {}).get('runner'):
+            arguments = {**(arguments or {}), 'runner': runner}
+
     try:
         return _text(await handler(arguments))
     except Exception as e:
@@ -373,8 +397,10 @@ async def handle_streamable_http(request: Request) -> Response:
     if not auth_info:
         return Response('Unauthorized', status_code=401)
 
-    role     = auth_info.get('role', 'viewer')
-    cv_token = _mcp_session_role.set(role)
+    role         = auth_info.get('role', 'viewer')
+    runner_hdr   = (request.headers.get('X-Zikra-Runner') or '').strip()
+    cv_token     = _mcp_session_role.set(role)
+    cv_runner    = _mcp_session_runner.set(runner_hdr)
 
     try:
         body_bytes = await request.body()
@@ -406,6 +432,7 @@ async def handle_streamable_http(request: Request) -> Response:
         return Response(err, status_code=500, media_type='application/json')
     finally:
         _mcp_session_role.reset(cv_token)
+        _mcp_session_runner.reset(cv_runner)
 
 
 async def _streamable_http_endpoint(scope, receive, send):
@@ -431,7 +458,8 @@ async def _sse_endpoint(scope, receive, send):
         await Response('Unauthorized', status_code=401)(scope, receive, send)
         return
 
-    role = auth_info.get('role', 'viewer')
+    role       = auth_info.get('role', 'viewer')
+    runner_hdr = (req.headers.get('X-Zikra-Runner') or '').strip()
     session_ids: list[str] = []
 
     async def _capturing_send(message):
@@ -442,9 +470,12 @@ async def _sse_endpoint(scope, receive, send):
                 sid = m.group(1)
                 session_ids.append(sid)
                 _SESSION_ROLES[sid] = role
+                if runner_hdr:
+                    _SESSION_RUNNERS[sid] = runner_hdr
         await send(message)
 
-    cv_token = _mcp_session_role.set(role)
+    cv_token  = _mcp_session_role.set(role)
+    cv_runner = _mcp_session_runner.set(runner_hdr)
     try:
         async with sse_transport.connect_sse(scope, receive, _capturing_send) as streams:
             await mcp.run(streams[0], streams[1], mcp.create_initialization_options())
@@ -452,8 +483,10 @@ async def _sse_endpoint(scope, receive, send):
         logger.warning(f'SSE error: {e}')
     finally:
         _mcp_session_role.reset(cv_token)
+        _mcp_session_runner.reset(cv_runner)
         for sid in session_ids:
             _SESSION_ROLES.pop(sid, None)
+            _SESSION_RUNNERS.pop(sid, None)
 
 
 async def _messages_endpoint(scope, receive, send):
@@ -466,12 +499,15 @@ async def _messages_endpoint(scope, receive, send):
 
     qs = parse_qs(scope.get('query_string', b'').decode())
     session_id = (qs.get('session_id') or [''])[0]
-    role = _SESSION_ROLES.get(session_id, auth_info.get('role', 'viewer'))
-    cv_token = _mcp_session_role.set(role)
+    role   = _SESSION_ROLES.get(session_id, auth_info.get('role', 'viewer'))
+    runner = _SESSION_RUNNERS.get(session_id, (req.headers.get('X-Zikra-Runner') or '').strip())
+    cv_token  = _mcp_session_role.set(role)
+    cv_runner = _mcp_session_runner.set(runner)
     try:
         await sse_transport.handle_post_message(scope, receive, send)
     finally:
         _mcp_session_role.reset(cv_token)
+        _mcp_session_runner.reset(cv_runner)
 
 
 # ── ASGI router ────────────────────────────────────────────────────────────────

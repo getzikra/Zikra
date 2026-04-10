@@ -54,17 +54,22 @@ CREATE INDEX IF NOT EXISTS idx_memories_project
     ON memories(project, memory_type);
 
 CREATE TABLE IF NOT EXISTS prompt_runs (
-    id             TEXT PRIMARY KEY,
-    project        TEXT,
-    runner         TEXT,
-    prompt_name    TEXT,
-    status         TEXT DEFAULT 'success',
-    output_summary TEXT,
-    tokens_input   INTEGER,
-    tokens_output  INTEGER,
-    cost_usd       REAL,
-    created_at     TIMESTAMPTZ DEFAULT NOW()
+    id                     TEXT PRIMARY KEY,
+    project                TEXT,
+    runner                 TEXT,
+    prompt_id              TEXT,
+    prompt_name            TEXT,
+    status                 TEXT DEFAULT 'success',
+    output_summary         TEXT,
+    tokens_input           INTEGER,
+    tokens_output          INTEGER,
+    tokens_cache_read      INTEGER,
+    tokens_cache_creation  INTEGER,
+    cost_usd               REAL,
+    created_at             TIMESTAMPTZ DEFAULT NOW()
 );
+-- NOTE: indexes on prompt_id/prompt_name live in the _migrations block below
+-- so they run AFTER ADD COLUMN statements on pre-existing deployments.
 
 CREATE TABLE IF NOT EXISTS error_log (
     id          TEXT PRIMARY KEY,
@@ -152,6 +157,19 @@ async def init_pg() -> 'asyncpg.Pool':
         # Migration guards — safe to run on every startup (IF NOT EXISTS / no-ops on current schema)
         _migrations = [
             "ALTER TABLE prompt_runs ADD COLUMN IF NOT EXISTS prompt_name TEXT NULL",
+            "ALTER TABLE prompt_runs ADD COLUMN IF NOT EXISTS prompt_id TEXT NULL",
+            "ALTER TABLE prompt_runs ADD COLUMN IF NOT EXISTS tokens_cache_read INTEGER NULL",
+            "ALTER TABLE prompt_runs ADD COLUMN IF NOT EXISTS tokens_cache_creation INTEGER NULL",
+            "CREATE INDEX IF NOT EXISTS idx_prompt_runs_prompt_id ON prompt_runs(prompt_id)",
+            "CREATE INDEX IF NOT EXISTS idx_prompt_runs_prompt_name ON prompt_runs(prompt_name)",
+            # v1.0.6: server-side handshake for prompt_id <-> run linkage
+            """CREATE TABLE IF NOT EXISTS pending_runs (
+                runner     TEXT NOT NULL,
+                project    TEXT NOT NULL DEFAULT 'global',
+                prompt_id  TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                PRIMARY KEY (runner, project)
+            )""",
         ]
         for stmt in _migrations:
             try:
@@ -483,20 +501,111 @@ async def log_run_pg(pool, data: dict, run_id: str) -> None:
     async with pool.acquire() as conn:
         await conn.execute("""
             INSERT INTO prompt_runs
-               (id, project, runner, prompt_name, status, output_summary,
-                tokens_input, tokens_output, cost_usd)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+               (id, project, runner, prompt_id, prompt_name, status, output_summary,
+                tokens_input, tokens_output, tokens_cache_read, tokens_cache_creation, cost_usd)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
         """,
             run_id,
             data.get('project', 'global'),
             data.get('runner'),
+            data.get('prompt_id'),
             data.get('prompt_name'),
             data.get('status', 'success'),
             data.get('output_summary'),
             data.get('tokens_input'),
             data.get('tokens_output'),
+            data.get('tokens_cache_read'),
+            data.get('tokens_cache_creation'),
             data.get('cost_usd'),
         )
+
+
+async def record_pending_run_pg(pool, runner: str, prompt_id: str, project: str) -> None:
+    """v1.0.6 handshake: remember that `runner` just fetched `prompt_id`."""
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO pending_runs (runner, project, prompt_id) VALUES ($1,$2,$3)
+            ON CONFLICT (runner, project) DO UPDATE SET
+                prompt_id = EXCLUDED.prompt_id,
+                created_at = NOW()
+        """, runner, project, prompt_id)
+
+
+async def consume_pending_run_pg(pool, runner: str, project: str) -> Optional[str]:
+    """Atomically read-and-delete the pending prompt_id for (runner, project)."""
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(
+                "SELECT prompt_id FROM pending_runs WHERE runner=$1 AND project=$2 FOR UPDATE",
+                runner, project
+            )
+            if not row:
+                return None
+            await conn.execute(
+                "DELETE FROM pending_runs WHERE runner=$1 AND project=$2",
+                runner, project
+            )
+            return row['prompt_id']
+
+
+async def list_runs_pg(pool, project: str = 'global', prompt_id: str = None,
+                        prompt_name: str = None, limit: int = 100) -> list[dict]:
+    """List prompt_runs rows joined with the prompt title from memories."""
+    where = []
+    args: list = []
+    if project and project != 'global':
+        args.append(project); where.append(f'r.project = ${len(args)}')
+    if prompt_id:
+        args.append(prompt_id); where.append(f'r.prompt_id = ${len(args)}')
+    if prompt_name:
+        args.append(prompt_name); where.append(f'r.prompt_name = ${len(args)}')
+    args.append(limit)
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    sql = f"""
+        SELECT r.id, r.project, r.runner, r.prompt_id, r.prompt_name,
+               r.status, r.output_summary,
+               r.tokens_input, r.tokens_output,
+               r.tokens_cache_read, r.tokens_cache_creation,
+               r.cost_usd, r.created_at,
+               m.title AS prompt_title
+        FROM prompt_runs r
+        LEFT JOIN memories m ON m.id = r.prompt_id
+        {where_sql}
+        ORDER BY r.created_at DESC
+        LIMIT ${len(args)}
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(sql, *args)
+    return [_row_to_dict(r) for r in rows]
+
+
+async def run_stats_pg(pool, project: str = 'global', prompt_id: str = None,
+                        prompt_name: str = None) -> dict:
+    """Aggregate token usage across prompt_runs (filterable)."""
+    where = []
+    args: list = []
+    if project and project != 'global':
+        args.append(project); where.append(f'project = ${len(args)}')
+    if prompt_id:
+        args.append(prompt_id); where.append(f'prompt_id = ${len(args)}')
+    if prompt_name:
+        args.append(prompt_name); where.append(f'prompt_name = ${len(args)}')
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    sql = f"""
+        SELECT COUNT(*) AS run_count,
+               COALESCE(SUM(tokens_input),0)          AS sum_in,
+               COALESCE(SUM(tokens_output),0)         AS sum_out,
+               COALESCE(SUM(tokens_cache_read),0)     AS sum_cache_read,
+               COALESCE(SUM(tokens_cache_creation),0) AS sum_cache_creation,
+               COALESCE(AVG(tokens_input),0)          AS avg_in,
+               COALESCE(AVG(tokens_output),0)         AS avg_out,
+               COALESCE(AVG(tokens_cache_read),0)     AS avg_cache_read
+        FROM prompt_runs
+        {where_sql}
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(sql, *args)
+    return dict(row) if row else {}
 
 
 async def log_error_pg(pool, data: dict, error_id: str) -> None:
