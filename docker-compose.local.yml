@@ -1,0 +1,21 @@
+services:
+  zikra:
+    build: .
+    container_name: zikra
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8100:8100"
+    networks:
+      shared_net:
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8100/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+networks:
+  shared_net:
+    external: true
