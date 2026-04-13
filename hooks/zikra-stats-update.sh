@@ -18,11 +18,27 @@ HOOK_CWD="$(printf '%s' "$PAYLOAD" | python3 -c \
   "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" \
   2>/dev/null || echo "")"
 
-# Fetch live memory count from Zikra (search with limit=1 returns total)
+# Detect project from CWD now (same logic as the python block below) so the
+# memory-count query can be scoped to the current project. Without this the
+# statusline shows the global total even when you're inside a specific repo.
+PROJECT=$(python3 -c "
+import sys
+cwd = sys.argv[1].lower() if len(sys.argv) > 1 else ''
+fallback = sys.argv[2] if len(sys.argv) > 2 else 'global'
+if 'getzikra' in cwd or '/zikra' in cwd: print('zikra')
+elif 'molten8'  in cwd: print('molten8')
+elif 'veltis'   in cwd: print('veltisai')
+else: print(fallback)
+" "$HOOK_CWD" "${ZIKRA_PROJECT:-global}")
+
+# Fetch live memory count from Zikra, scoped to the current project so the
+# '187 memories' tag actually reflects what's visible in this project. When
+# PROJECT resolves to 'global', the server treats it as a wildcard and
+# returns the cross-project total (the same behavior as before).
 MEMORY_COUNT=$(curl -s -X POST "$ZIKRA_URL" \
   -H "Authorization: Bearer $ZIKRA_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"command":"search","query":"*","limit":1}' \
+  -d "{\"command\":\"search\",\"query\":\"*\",\"limit\":1,\"project\":\"$PROJECT\"}" \
   | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('total', d.get('count', 0)))" 2>/dev/null || echo "0")
 
 # Fetch server version
