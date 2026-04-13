@@ -3,7 +3,7 @@
 // Reads local cache only. Zero network calls. Silent fail on any error.
 //
 // Output format:
-//   Zikra (v1.0.1) │ 17 runs · 847 memories │ veltisai │ Opus 4.6 │ 💀 650K/1M ████░░░░ 65%
+//   Zikra (v1.0.1) │ 17 runs · 847 memories │ veltisai │ Opus 4.6 │ 💀 130K/200K ████░░░░ 65%
 
 'use strict';
 
@@ -84,14 +84,13 @@ function tokenBar(payload) {
     tokensUsed = ctx.total_input_tokens;
   }
 
-  // Hardcoded to 1M — Claude Code CLI session limit.
-  // Claude Code reports context_window_size: 200K (per-call window) which is misleading.
-  const sessionMax = 1000000;
-  const callMax = maxTokens || 200000;
+  // Use the context window Claude Code reports. Fall back to 200K —
+  // the default Claude Code per-call context window — if absent.
+  const sessionMax = maxTokens || 200000;
 
-  // Back-calculate actual tokens from used_percentage * per-call window
+  // Back-calculate actual tokens from used_percentage when no breakdown
   if (tokensUsed === null && typeof ctx.used_percentage === 'number') {
-    tokensUsed = Math.round((ctx.used_percentage / 100) * callMax);
+    tokensUsed = Math.round((ctx.used_percentage / 100) * sessionMax);
   }
 
   if (tokensUsed === null || tokensUsed === 0) return '';
@@ -112,8 +111,9 @@ function tokenBar(payload) {
   const icon     = skull ? '💀 ' : '   ';
 
   const usedStr = formatTokens(tokensUsed);
+  const maxStr  = formatTokens(sessionMax);
 
-  return ` ${W}${icon}${usedStr}/1M${RESET} ${bar} ${pctColor}${Math.round(pct * 100)}%${RESET}`;
+  return ` ${W}${icon}${usedStr}/${maxStr}${RESET} ${bar} ${pctColor}${Math.round(pct * 100)}%${RESET}`;
 }
 
 function formatVersion(local, latest) {
