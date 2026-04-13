@@ -264,44 +264,109 @@ def _normalise_title(value: str) -> str:
     return ' '.join((value or '').lower().split())
 
 
+def _parse_ts(raw) -> float:
+    """Parse created_at (datetime, ISO str, or SQLite 'YYYY-MM-DD HH:MM:SS') to unix seconds. Returns 0 on failure."""
+    if raw is None:
+        return 0.0
+    if hasattr(raw, 'timestamp'):
+        try:
+            return raw.timestamp()
+        except Exception:
+            return 0.0
+    s = str(raw).replace(' ', 'T')
+    if not s.endswith('Z') and '+' not in s[10:] and '-' not in s[10:]:
+        s += 'Z'
+    try:
+        from datetime import datetime
+        return datetime.fromisoformat(s.replace('Z', '+00:00')).timestamp()
+    except Exception:
+        return 0.0
+
+
 def _build_graph_payload(memories: list[dict]) -> dict:
-    max_edges = 260
-    node_degree_cap = 6
+    """
+    Build a graph payload of nodes + edges scored across multiple signals.
+
+    Edge signals (summed, threshold = 1.6):
+      title reference (one title appears in the other's body) → +3.2
+      same module                                             → +2.4
+      shared normalised-tag intersection                      → 0.7 per tag (cap 1.8)
+      temporal proximity (within 6h)                          → +0.9
+      same memory_type                                        → +0.25
+      same project (only if graph mixes projects)             → +1.0
+
+    Same-project bonus is suppressed when all memories in the payload
+    share the same project — otherwise every pair would get the bonus
+    and scoring collapses into a giant blob.
+    """
+    max_edges = 320
+    node_degree_cap = 8
+    score_threshold = 1.6
+
+    projects_in_payload = {m.get('project') for m in memories if m.get('project')}
+    uniform_project = len(projects_in_payload) <= 1
+
     title_map = {m['id']: _normalise_title(m.get('title', '')) for m in memories}
+    ts_map = {m['id']: _parse_ts(m.get('created_at')) for m in memories}
+
     candidate_edges: list[tuple[float, str, str, str]] = []
     ids = [m['id'] for m in memories]
 
     for index, left in enumerate(memories):
-        left_title = title_map[left['id']]
+        left_id = left['id']
+        left_title = title_map[left_id]
         left_content = (left.get('content_md') or '').lower()
-        left_tags = {str(tag).strip().lower() for tag in (left.get('tags') or []) if str(tag).strip()}
+        left_tags = {str(tag).strip().lower() for tag in (left.get('tags') or []) if str(tag).strip() and str(tag).strip() != 'null'}
+        left_ts = ts_map[left_id]
         for right in memories[index + 1:]:
-            right_title = title_map[right['id']]
+            right_id = right['id']
+            right_title = title_map[right_id]
             right_content = (right.get('content_md') or '').lower()
-            right_tags = {str(tag).strip().lower() for tag in (right.get('tags') or []) if str(tag).strip()}
+            right_tags = {str(tag).strip().lower() for tag in (right.get('tags') or []) if str(tag).strip() and str(tag).strip() != 'null'}
+            right_ts = ts_map[right_id]
 
             score = 0.0
             relation = ''
-            shared_tags = left_tags & right_tags
-            if left.get('module') and left.get('module') == right.get('module'):
-                score += 2.4
-                relation = 'module'
-            if shared_tags:
-                score += min(1.8, 0.7 * len(shared_tags))
-                relation = relation or 'tag'
-            if left.get('project') and left.get('project') == right.get('project'):
-                score += 1.85
-                relation = relation or 'project'
+
+            # Title-in-body references (strongest signal — explicit mention)
             if left_title and len(left_title) >= 10 and left_title in right_content:
                 score += 3.2
                 relation = 'reference'
             if right_title and len(right_title) >= 10 and right_title in left_content:
                 score += 3.2
                 relation = 'reference'
+
+            # Module match — strong signal that two memories concern the same code area
+            if left.get('module') and left.get('module') == right.get('module'):
+                score += 2.4
+                relation = relation or 'module'
+
+            # Shared tag intersection (after filtering junk values)
+            shared_tags = left_tags & right_tags
+            if shared_tags:
+                score += min(1.8, 0.7 * len(shared_tags))
+                relation = relation or 'tag'
+
+            # Temporal proximity — memories created within 6h often concern the
+            # same task. Useful for auto-logged diary/conversation entries that
+            # rarely carry tags but cluster in time.
+            if left_ts and right_ts:
+                dt = abs(left_ts - right_ts)
+                if dt < 6 * 3600:
+                    score += 0.9 * (1 - dt / (6 * 3600))
+                    relation = relation or 'temporal'
+
+            # Project match — only meaningful when the payload mixes projects
+            if not uniform_project and left.get('project') and left.get('project') == right.get('project'):
+                score += 1.0
+                relation = relation or 'project'
+
+            # Type affinity — weak signal, just tips borderline edges in
             if left.get('memory_type') == right.get('memory_type'):
                 score += 0.25
-            if score >= 2.0:
-                candidate_edges.append((score, left['id'], right['id'], relation or 'related'))
+
+            if score >= score_threshold:
+                candidate_edges.append((score, left_id, right_id, relation or 'related'))
 
     candidate_edges.sort(key=lambda item: item[0], reverse=True)
     degree_count = {node_id: 0 for node_id in ids}
@@ -322,6 +387,12 @@ def _build_graph_payload(memories: list[dict]) -> dict:
 
     nodes = []
     for memory in memories:
+        tags = memory.get('tags') or []
+        # Strip the "null" string junk so the UI doesn't render it as a tag pill
+        if isinstance(tags, list):
+            tags = [t for t in tags if t and str(t).strip() and str(t).strip() != 'null']
+        else:
+            tags = []
         nodes.append({
             'id': memory['id'],
             'title': memory.get('title') or 'Untitled',
@@ -332,6 +403,7 @@ def _build_graph_payload(memories: list[dict]) -> dict:
             'created_at': memory.get('created_at'),
             'access_count': memory.get('access_count') or 0,
             'created_by': memory.get('created_by') or '',
+            'tags': tags,
         })
     return {'nodes': nodes, 'edges': edges}
 
@@ -356,7 +428,7 @@ async def ui_bootstrap(request: Request):
 async def ui_graph(request: Request):
     await verify_auth(request)
     project = request.query_params.get('project') or 'global'
-    limit = min(int(request.query_params.get('limit', '180')), 300)
+    limit = min(int(request.query_params.get('limit', '300')), 500)
     memories = await list_all_memories(project, limit)
     return _build_graph_payload(memories)
 
@@ -415,17 +487,18 @@ async def ui_memories(request: Request):
 @app.get('/api/ui/memories/{memory_id}')
 async def ui_memory_get(memory_id: str, request: Request):
     """
-    Fetch a single memory with full content_md. Read-only — does NOT bump access count.
-    Access count is only incremented when Claude (or an API client) calls get_memory
-    via the webhook. The UI is a read-only observer.
-    Query params: project (optional scope filter)
+    Fetch a single memory by UUID with full content_md. Read-only — does NOT
+    bump access count (only webhook get_memory counts).
+
+    Note: UUIDs are globally unique so we deliberately do NOT scope by project
+    here. Scoping caused false 404s when the UI displayed a memory from one
+    project (e.g. via graph or search) while the project filter was set to
+    another. Auth is still enforced at the token level.
     """
     await verify_auth(request)
-    project = request.query_params.get('project') or None
-    row = await fetch_memory(memory_id=memory_id, project=project)
+    row = await fetch_memory(memory_id=memory_id)
     if not row:
         return JSONResponse(status_code=404, content={'error': 'Memory not found'})
-    # NOTE: no bump_access_count — UI browsing does not count as memory access
     row = _prep_memories([row])[0]
     return row
 

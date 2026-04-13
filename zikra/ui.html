@@ -459,26 +459,105 @@ button { cursor: pointer; border: none; background: none; }
 .rh-summary .rh-sep { color: var(--border); }
 
 /* ── Graph Tab ── */
-#graph-canvas { display: block; width: 100%; height: 100%; }
-.gndp {
-  position: absolute; top: 12px; right: 12px; width: 200px;
-  background: rgba(14,15,28,0.92); border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px; font-size: 11px;
-  display: none; backdrop-filter: blur(4px); z-index: 5;
-}
-.gndp.visible { display: block; }
-.gndp-type { color: var(--tmuted); margin-bottom: 3px; }
-.gndp-title { font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 6px; line-height: 1.3; }
-.gndp-meta { color: var(--tfaint); line-height: 1.7; }
+#graph-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+#graph-canvas:active { cursor: grabbing; }
 
-.graph-legend {
-  position: absolute; bottom: 12px; left: 12px;
-  display: flex; flex-direction: column; gap: 4px;
-  background: rgba(14,15,28,0.85); border: 1px solid var(--border);
-  border-radius: 7px; padding: 8px 10px; z-index: 5;
+/* Hover tooltip — small, unobtrusive, only on mouseover */
+.gtip {
+  position: absolute; pointer-events: none;
+  background: rgba(14,15,28,0.94); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 9px; font-size: 11px;
+  display: none; backdrop-filter: blur(4px); z-index: 4;
+  max-width: 240px;
 }
-.legend-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--tmuted); }
-.legend-dot { width: 8px; aspect-ratio: 1/1; border-radius: 50%; flex-shrink: 0; }
+.gtip.visible { display: block; }
+.gtip-title { color: var(--text); font-weight: 500; line-height: 1.3; }
+.gtip-type { color: var(--tmuted); font-size: 10px; margin-top: 2px; }
+
+/* Click-to-open detail drawer — larger, scrollable, full content_md */
+.gndp {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 420px;
+  background: rgba(14,15,28,0.96); border-left: 1px solid var(--border);
+  display: none; flex-direction: column; z-index: 6;
+  backdrop-filter: blur(6px);
+  box-shadow: -8px 0 24px rgba(0,0,0,0.35);
+}
+.gndp.visible { display: flex; }
+.gndp-head {
+  padding: 14px 16px 10px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0; position: relative;
+}
+.gndp-close {
+  position: absolute; top: 10px; right: 10px;
+  width: 22px; height: 22px; border-radius: 4px;
+  color: var(--tmuted); font-size: 16px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.gndp-close:hover { background: var(--bgsec); color: var(--text); }
+.gndp-badges { display: flex; gap: 6px; margin-bottom: 8px; padding-right: 28px; }
+.gndp-title { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.35; padding-right: 28px; }
+.gndp-meta {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  color: var(--tfaint); font-size: 10px; margin-top: 8px;
+}
+.gndp-meta span { white-space: nowrap; }
+.gndp-body {
+  flex: 1; overflow-y: auto; padding: 12px 16px 18px;
+  font-size: 12px; line-height: 1.55; color: var(--text2);
+}
+.gndp-body .mdr { color: var(--text2); }
+.gndp-tags { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 16px 0; flex-shrink: 0; }
+.gndp-tags .tag-pill { font-size: 10px; }
+.gndp-loading { color: var(--tfaint); font-size: 11px; padding: 8px 0; }
+
+/* Type filter panel — top-left corner, clickable rows to show/hide each type.
+   Explicit max-height + scroll in case many types are present, and a high
+   z-index so nothing in the canvas stacking context can cover it. */
+.graph-legend {
+  position: absolute; top: 12px; left: 12px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: rgba(14,15,28,0.92); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px 10px;
+  z-index: 20;
+  min-width: 170px; max-width: 220px;
+  max-height: calc(100% - 24px); overflow-y: auto;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+}
+.graph-legend-hdr {
+  font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--tfaint); margin-bottom: 6px; padding: 0 2px;
+  font-weight: 600;
+}
+.legend-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--tmuted);
+  cursor: pointer; padding: 4px 6px; border-radius: 4px;
+  transition: background 0.12s, color 0.12s, opacity 0.12s;
+  user-select: none;
+}
+.legend-row:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+.legend-row.off { opacity: 0.4; }
+.legend-row.off:hover { opacity: 0.7; }
+.legend-row .legend-count {
+  color: var(--tfaint); margin-left: auto;
+  font-variant-numeric: tabular-nums; font-size: 10px;
+}
+.legend-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.legend-row.off .legend-dot { background: transparent !important; border-color: var(--tmuted); }
+
+/* Graph stats pill — bottom-right */
+.graph-stats {
+  position: absolute; bottom: 12px; right: 12px;
+  background: rgba(14,15,28,0.85); border: 1px solid var(--border);
+  border-radius: 7px; padding: 6px 10px; z-index: 5;
+  font-size: 10px; color: var(--tfaint); font-variant-numeric: tabular-nums;
+  display: flex; gap: 10px; pointer-events: none;
+}
 
 /* ── Meta Row ── */
 .meta-row { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--tfaint); line-height: 1.7; }
@@ -600,8 +679,10 @@ button { cursor: pointer; border: none; background: none; }
       <!-- GRAPH TAB -->
       <div class="tab-view" id="view-graph">
         <canvas id="graph-canvas"></canvas>
+        <div class="gtip" id="graph-tip"></div>
         <div class="gndp" id="graph-node-detail"></div>
         <div class="graph-legend" id="graph-legend"></div>
+        <div class="graph-stats" id="graph-stats"></div>
       </div>
 
       <!-- PROMPTS TAB -->
@@ -702,6 +783,11 @@ const S = {
   gT: { x: 0, y: 0, s: 1 },
   gDrag: null, gPan: false, gPanS: null,
   gHover: null, gSel: null, gAF: null,
+  // Default-hide auto-logged diary/conversation entries — they dominate
+  // the graph and drown out signal memories (decisions/prompts/requirements).
+  // User can click the legend to toggle them back on.
+  gHiddenTypes: new Set(['conversation']),
+  gTypeCounts: {},
 
   // prompts
   allPrompts: [], selPrompt: null,
@@ -1215,125 +1301,192 @@ async function renderSearchDetail(m) {
 }
 
 // ── Graph Tab ─────────────────────────────────────────────────────
+// Uses the server-built /api/ui/graph endpoint which computes multi-signal
+// edges (title-reference, module, tags, temporal proximity, project, type).
+// Canvas coordinates are always in CSS pixels (offsetWidth/offsetHeight);
+// the DPR scale is applied inside drawGraph() via a fresh transform each frame.
 async function loadGraph() {
-  const res = await apiGet('/api/ui/memories', { q: '*', limit: 100 });
+  const res = await apiGet('/api/ui/graph', { limit: 300 });
   if (!res) return;
-  const mems = res.memories || [];
-  buildGraphData(mems);
+  buildGraphData(res.nodes || [], res.edges || []);
 }
 
-function buildGraphData(mems) {
+function graphSize() {
   const canvas = document.getElementById('graph-canvas');
-  const W = canvas.offsetWidth || 800;
-  const H = canvas.offsetHeight || 600;
+  return {
+    W: canvas.offsetWidth  || canvas.parentElement.offsetWidth  || 800,
+    H: canvas.offsetHeight || canvas.parentElement.offsetHeight || 600,
+  };
+}
 
-  S.gNodes = mems.map(m => ({
+// Node visual weight — decisions/prompts/requirements should dominate over
+// the sea of auto-logged conversation entries.
+const TYPE_WEIGHT = {
+  decision:     1.6,
+  requirement:  1.5,
+  prompt:       1.4,
+  reference:    1.25,
+  error:        1.2,
+  conversation: 0.75,
+};
+function typeWeight(t) { return TYPE_WEIGHT[t] || 1.0; }
+
+function buildGraphData(nodes, edges) {
+  const { W, H } = graphSize();
+
+  // Seed random positions in a disc around the center
+  S.gNodes = nodes.map(m => ({
     id: m.id,
     title: m.title || 'Untitled',
     memory_type: m.memory_type || 'conversation',
     access_count: m.access_count || 0,
-    tags: m.tags || [],
+    tags: Array.isArray(m.tags) ? m.tags : [],
     project: m.project || S.project,
-    confidence_score: m.confidence_score || 0,
-    x: W * 0.3 + Math.random() * W * 0.4,
-    y: H * 0.3 + Math.random() * H * 0.4,
-    vx: 0, vy: 0, dragging: false
+    created_at: m.created_at || null,
+    x: W / 2 + (Math.random() - 0.5) * Math.min(W, H) * 0.7,
+    y: H / 2 + (Math.random() - 0.5) * Math.min(W, H) * 0.7,
+    vx: 0, vy: 0, dragging: false,
   }));
 
-  // Build edges from shared tags (>=2 shared tags)
-  S.gEdges = [];
-  for (let i = 0; i < S.gNodes.length; i++) {
-    const a = S.gNodes[i];
-    const setA = new Set(a.tags);
-    for (let j = i + 1; j < S.gNodes.length; j++) {
-      const b = S.gNodes[j];
-      const shared = b.tags.filter(t => setA.has(t)).length;
-      if (shared >= 2) {
-        S.gEdges.push({ source: a.id, target: b.id, weight: shared });
-      }
-    }
-  }
+  // Edges come pre-scored with weight + type
+  S.gEdges = edges.map(e => ({
+    source: e.source,
+    target: e.target,
+    weight: e.weight || 1,
+    type:   e.type   || 'related',
+  }));
+
+  // Tally type counts for the interactive legend
+  S.gTypeCounts = {};
+  S.gNodes.forEach(n => {
+    S.gTypeCounts[n.memory_type] = (S.gTypeCounts[n.memory_type] || 0) + 1;
+  });
+
+  // Reset viewport so new graph is centered on current canvas
+  S.gT = { x: 0, y: 0, s: 1 };
+  S.gSel = null;
+  S.gHover = null;
 
   renderGraphLegend();
+  renderGraphStats();
   startGraphSim();
 }
 
+function visibleNode(n) { return !S.gHiddenTypes.has(n.memory_type); }
+
 function renderGraphLegend() {
-  const types = [...new Set(S.gNodes.map(n => n.memory_type))];
   const legend = document.getElementById('graph-legend');
-  legend.innerHTML = types.map(t =>
-    `<div class="legend-row"><span class="legend-dot" style="background:${typeColor(t)}"></span>${esc(t)}</div>`
-  ).join('');
+  // Sort: signal types first (decision/prompt/requirement/etc.), conversation last
+  const order = ['decision','requirement','prompt','reference','error','conversation'];
+  const types = Object.keys(S.gTypeCounts).sort((a, b) => {
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  legend.innerHTML = types.map(t => {
+    const off = S.gHiddenTypes.has(t) ? ' off' : '';
+    return `<div class="legend-row${off}" data-type="${esc(t)}" title="Click to toggle">
+      <span class="legend-dot" style="background:${typeColor(t)}"></span>
+      <span>${esc(t)}</span>
+      <span class="legend-count">${S.gTypeCounts[t]}</span>
+    </div>`;
+  }).join('');
   legend.style.display = types.length > 0 ? 'flex' : 'none';
+  legend.querySelectorAll('.legend-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const t = row.dataset.type;
+      if (S.gHiddenTypes.has(t)) S.gHiddenTypes.delete(t);
+      else S.gHiddenTypes.add(t);
+      renderGraphLegend();
+      renderGraphStats();
+    });
+  });
+}
+
+function renderGraphStats() {
+  const el = document.getElementById('graph-stats');
+  if (!el) return;
+  const visN = S.gNodes.filter(visibleNode).length;
+  const visIds = new Set(S.gNodes.filter(visibleNode).map(n => n.id));
+  const visE = S.gEdges.filter(e => visIds.has(e.source) && visIds.has(e.target)).length;
+  el.innerHTML = `<span>${visN} nodes</span><span>${visE} links</span>`;
 }
 
 function simStep() {
-  const canvas = document.getElementById('graph-canvas');
-  const W = canvas.width || 800;
-  const H = canvas.height || 600;
+  const { W, H } = graphSize();
   const cx = W / 2, cy = H / 2;
-  const nodeMap = Object.fromEntries(S.gNodes.map(n => [n.id, n]));
+  const active = S.gNodes.filter(visibleNode);
+  const activeSet = new Set(active.map(n => n.id));
+  const nodeMap = Object.fromEntries(active.map(n => [n.id, n]));
 
-  S.gNodes.forEach(n => { n.fx = 0; n.fy = 0; });
+  active.forEach(n => { n.fx = 0; n.fy = 0; });
 
-  // Repulsion
-  for (let i = 0; i < S.gNodes.length; i++) {
-    for (let j = i + 1; j < S.gNodes.length; j++) {
-      const a = S.gNodes[i], b = S.gNodes[j];
+  // Repulsion — skip hidden nodes entirely
+  for (let i = 0; i < active.length; i++) {
+    for (let j = i + 1; j < active.length; j++) {
+      const a = active[i], b = active[j];
       let dx = b.x - a.x, dy = b.y - a.y;
       const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-      const f = 2000 / (dist * dist);
+      const f = 4500 / (dist * dist);
       a.fx -= f * dx / dist; a.fy -= f * dy / dist;
       b.fx += f * dx / dist; b.fy += f * dy / dist;
     }
   }
 
-  // Edge springs (length 80)
+  // Edge springs — rest length shrinks as edge weight grows (tighter = more signal)
   S.gEdges.forEach(e => {
+    if (!activeSet.has(e.source) || !activeSet.has(e.target)) return;
     const a = nodeMap[e.source], b = nodeMap[e.target];
     if (!a || !b) return;
     const dx = b.x - a.x, dy = b.y - a.y;
     const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-    const f = (dist - 80) * 0.08;
+    const restLen = Math.max(60, 140 - e.weight * 12);
+    const f = (dist - restLen) * 0.055;
     a.fx += f * dx / dist; a.fy += f * dy / dist;
     b.fx -= f * dx / dist; b.fy -= f * dy / dist;
   });
 
-  // Center gravity 0.003
-  S.gNodes.forEach(n => {
-    n.fx += (cx - n.x) * 0.003;
-    n.fy += (cy - n.y) * 0.003;
+  // Mild center gravity so untethered nodes don't drift off
+  active.forEach(n => {
+    n.fx += (cx - n.x) * 0.004;
+    n.fy += (cy - n.y) * 0.004;
   });
 
-  // Update, damping 0.85
-  S.gNodes.forEach(n => {
+  // Integration — no hard clamp; panning handles overflow
+  active.forEach(n => {
     if (n.dragging) return;
     n.vx = (n.vx + n.fx) * 0.85;
     n.vy = (n.vy + n.fy) * 0.85;
-    n.x = Math.max(20, Math.min(W - 20, n.x + n.vx));
-    n.y = Math.max(20, Math.min(H - 20, n.y + n.vy));
+    n.x += n.vx;
+    n.y += n.vy;
   });
+}
+
+function nodeRadius(n) {
+  // Base size driven by memory type importance + access count
+  return 5 + typeWeight(n.memory_type) * 3 + Math.log(n.access_count + 1) * 1.8;
 }
 
 function drawGraph() {
   const canvas = document.getElementById('graph-canvas');
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
-
-  // Resize if needed
   const W = canvas.offsetWidth, H = canvas.offsetHeight;
+
+  // Keep backing store in sync with CSS size — reset transform each frame
   if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
     canvas.width  = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
-    ctx.scale(dpr, dpr);
   }
-
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  ctx.save();
+
+  // Viewport pan + zoom
   ctx.translate(S.gT.x, S.gT.y);
   ctx.scale(S.gT.s, S.gT.s);
 
-  const nodeMap = Object.fromEntries(S.gNodes.map(n => [n.id, n]));
+  const active = S.gNodes.filter(visibleNode);
+  const activeSet = new Set(active.map(n => n.id));
+  const nodeMap = Object.fromEntries(active.map(n => [n.id, n]));
   const selIds  = S.gSel ? new Set(
     [S.gSel.id, ...S.gEdges
       .filter(e => e.source === S.gSel.id || e.target === S.gSel.id)
@@ -1342,48 +1495,82 @@ function drawGraph() {
 
   // Edges
   S.gEdges.forEach(e => {
+    if (!activeSet.has(e.source) || !activeSet.has(e.target)) return;
     const a = nodeMap[e.source], b = nodeMap[e.target];
     if (!a || !b) return;
     const hovConn = S.gHover && (e.source === S.gHover.id || e.target === S.gHover.id);
-    const dim = selIds && !selIds.has(e.source) && !selIds.has(e.target);
+    const selConn = selIds && selIds.has(e.source) && selIds.has(e.target);
+    const dim = selIds && !selConn;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
-    ctx.strokeStyle = hovConn
-      ? 'rgba(83,74,183,0.5)'
-      : dim ? 'rgba(90,92,120,0.05)' : 'rgba(136,135,128,0.18)';
-    ctx.lineWidth = hovConn ? 1.5 / S.gT.s : 0.8 / S.gT.s;
+
+    // Edge type → color: references stand out, tag/module mid-weight, temporal subtle
+    let base;
+    switch (e.type) {
+      case 'reference': base = [168,156,247]; break;  // lilac — explicit mention
+      case 'module':    base = [83,177,183];  break;  // teal
+      case 'tag':       base = [186,117,23];  break;  // amber
+      case 'temporal':  base = [100,104,130]; break;  // grey-blue
+      case 'project':   base = [136,135,128]; break;  // neutral
+      default:          base = [136,135,128];
+    }
+    const intensity = Math.min(1, 0.18 + e.weight * 0.06);
+    const alpha = selConn ? 0.7 : hovConn ? 0.5 : dim ? 0.03 : intensity;
+    ctx.strokeStyle = `rgba(${base[0]},${base[1]},${base[2]},${alpha})`;
+    ctx.lineWidth = ((selConn || hovConn ? 1.8 : 0.9) + Math.min(1.2, e.weight * 0.12)) / S.gT.s;
     ctx.stroke();
   });
 
   // Nodes
-  S.gNodes.forEach(n => {
+  const showLabels = S.gT.s >= 0.65;
+  active.forEach(n => {
     const isHov = n === S.gHover;
+    const isSel = n === S.gSel;
     const dim   = selIds && !selIds.has(n.id);
-    const r     = 8 + Math.log(n.access_count + 1) * 3 + (isHov ? 3 : 0);
+    const baseR = nodeRadius(n);
+    const r     = baseR + (isHov || isSel ? 3 : 0);
     const color = typeColor(n.memory_type);
 
-    ctx.globalAlpha = dim ? 0.15 : (isHov ? 1.0 : 0.8);
+    ctx.globalAlpha = dim ? 0.10 : (isHov || isSel ? 1.0 : 0.85);
+
+    // Soft glow on selected node
+    if (isSel) {
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, r + 7, 0, Math.PI * 2);
+      ctx.fillStyle = color + '33';
+      ctx.fill();
+    }
+
     ctx.beginPath();
     ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
 
-    if (isHov || n === S.gSel) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2 / S.gT.s;
+    // Signal-type memories get a subtle white ring so they stand out from conversation
+    if (n.memory_type !== 'conversation' && !dim) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 0.9 / S.gT.s;
+      ctx.stroke();
+    }
+    if (isHov || isSel) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = (isSel ? 1.8 : 1.2) / S.gT.s;
       ctx.stroke();
     }
 
-    ctx.globalAlpha = dim ? 0.2 : 0.9;
-    ctx.fillStyle = '#fff';
-    ctx.font = `9px -apple-system,sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText((n.title || '').slice(0, 18), n.x, n.y + r + 11);
+    // Labels — only for important types unless zoomed in
+    const alwaysLabel = n.memory_type !== 'conversation' && typeWeight(n.memory_type) >= 1.25;
+    if ((showLabels || isHov || isSel) && (alwaysLabel || showLabels || isHov || isSel)) {
+      ctx.globalAlpha = dim ? 0.2 : (isSel || isHov ? 1.0 : alwaysLabel ? 0.85 : 0.7);
+      ctx.fillStyle = '#e6e5db';
+      ctx.font = `${Math.max(9, 10 / Math.max(0.6, S.gT.s))}px -apple-system,sans-serif`;
+      ctx.textAlign = 'center';
+      const label = (n.title || '').slice(0, 26);
+      ctx.fillText(label, n.x, n.y + r + (11 / S.gT.s));
+    }
     ctx.globalAlpha = 1;
   });
-
-  ctx.restore();
 }
 
 function graphLoop() {
@@ -1402,13 +1589,6 @@ function stopGraphSim() {
 }
 
 function startGraphTab() {
-  // Resize canvas to actual size
-  const canvas = document.getElementById('graph-canvas');
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width  = Math.round(canvas.offsetWidth * dpr);
-  canvas.height = Math.round(canvas.offsetHeight * dpr);
-  canvas.getContext('2d').scale(dpr, dpr);
-
   if (S.gNodes.length > 0) {
     startGraphSim();
   } else if (S.connected) {
@@ -1426,41 +1606,79 @@ function graphToWorld(cx, cy) {
 function nodeAtPoint(wx, wy) {
   for (let i = S.gNodes.length - 1; i >= 0; i--) {
     const n = S.gNodes[i];
-    const r = 8 + Math.log(n.access_count + 1) * 3 + 3;
+    if (!visibleNode(n)) continue;
+    const r = nodeRadius(n) + 4;
     const dx = n.x - wx, dy = n.y - wy;
     if (dx*dx + dy*dy <= r*r) return n;
   }
   return null;
 }
 
-function showNodeDetail(n) {
-  const el = document.getElementById('graph-node-detail');
+// Small hover tooltip — just title + type, follows cursor
+function showHoverTip(n, cx, cy) {
+  const el = document.getElementById('graph-tip');
   if (!n) { el.classList.remove('visible'); return; }
-  const sc = Math.min(100, n.confidence_score || 0);
-  const c  = scoreColor(sc);
-  const connCount = S.gEdges.filter(e => e.source === n.id || e.target === n.id).length;
   el.innerHTML = `
-    <div class="gndp-type">${esc(n.memory_type)}</div>
-    <div class="gndp-title">${esc(n.title)}</div>
-    <div class="gndp-meta">
-      <div>${esc(n.project)}</div>
-      <div>accessed ${n.access_count}×</div>
-      <div>connections: ${connCount}</div>
-    </div>
-    <svg width="100%" height="4" style="display:block;margin-top:6px" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="${sc}%" height="4" fill="${c}" rx="2"/>
-    </svg>`;
+    <div class="gtip-title">${esc(n.title)}</div>
+    <div class="gtip-type">${esc(n.memory_type)} · ${esc(n.project)} · ${n.access_count}×</div>`;
+  el.style.left = (cx + 14) + 'px';
+  el.style.top  = (cy + 14) + 'px';
   el.classList.add('visible');
+}
+
+// Full click-open drawer — fetches content_md and renders markdown
+async function openNodeDetail(n) {
+  const el = document.getElementById('graph-node-detail');
+  if (!n) { el.classList.remove('visible'); S.gSel = null; return; }
+  S.gSel = n;
+
+  const connCount = S.gEdges.filter(e => e.source === n.id || e.target === n.id).length;
+  const tagHtml = (n.tags || []).map(t => `<span class="tag-pill">${esc(t)}</span>`).join('');
+
+  el.innerHTML = `
+    <div class="gndp-head">
+      <button class="gndp-close" onclick="closeNodeDetail()" title="Close">×</button>
+      <div class="gndp-badges">
+        ${typeBadge(n.memory_type)}
+      </div>
+      <div class="gndp-title">${esc(n.title)}</div>
+      <div class="gndp-meta">
+        <span>${esc(n.project)}</span>
+        <span>accessed ${n.access_count}×</span>
+        <span>${connCount} connection${connCount === 1 ? '' : 's'}</span>
+      </div>
+    </div>
+    ${tagHtml ? `<div class="gndp-tags">${tagHtml}</div>` : ''}
+    <div class="gndp-body"><div class="gndp-loading">Loading content…</div></div>`;
+  el.classList.add('visible');
+
+  const full = await apiGet('/api/ui/memories/' + encodeURIComponent(n.id));
+  // Bail if user already closed or clicked a different node while fetch was in flight
+  if (S.gSel !== n) return;
+  const body = el.querySelector('.gndp-body');
+  if (!full || full.error) {
+    body.innerHTML = `<div class="gndp-loading" style="color:#f87171">Failed to load memory content</div>`;
+    return;
+  }
+  const content = full.content_md || '_(empty)_';
+  body.innerHTML = renderMd(content);
+}
+
+function closeNodeDetail() {
+  const el = document.getElementById('graph-node-detail');
+  el.classList.remove('visible');
+  S.gSel = null;
 }
 
 // Graph events
 (function setupGraphEvents() {
   const canvas = document.getElementById('graph-canvas');
+  let downPos = null;   // track mousedown position to distinguish click vs drag
 
   canvas.addEventListener('mousedown', e => {
     const rect = canvas.getBoundingClientRect();
-    const cx = (e.clientX - rect.left);
-    const cy = (e.clientY - rect.top);
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    downPos = { x: e.clientX, y: e.clientY, cx, cy };
     const w = graphToWorld(cx, cy);
     const n = nodeAtPoint(w.x, w.y);
     if (n) {
@@ -1488,25 +1706,33 @@ function showNodeDetail(n) {
     const w = graphToWorld(cx, cy);
     const prev = S.gHover;
     S.gHover = nodeAtPoint(w.x, w.y);
-    if (S.gHover !== prev) showNodeDetail(S.gHover);
-    canvas.style.cursor = S.gHover ? 'pointer' : 'default';
+    if (S.gHover !== prev || S.gHover) showHoverTip(S.gHover, cx, cy);
+    canvas.style.cursor = S.gHover ? 'pointer' : '';
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    S.gHover = null;
+    document.getElementById('graph-tip').classList.remove('visible');
   });
 
   canvas.addEventListener('mouseup', e => {
+    const moved = downPos && (
+      Math.abs(e.clientX - downPos.x) > 4 || Math.abs(e.clientY - downPos.y) > 4
+    );
     if (S.gDrag) {
       S.gDrag.dragging = false;
-      // Click detection (not moved much)
-      const rect = canvas.getBoundingClientRect();
-      const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
-      const w = graphToWorld(cx, cy);
-      const n = nodeAtPoint(w.x, w.y);
-      if (n) {
-        S.gSel = S.gSel === n ? null : n;
-        showNodeDetail(n);
+      // If the mouse barely moved, treat as click → open the memory
+      if (!moved) {
+        const rect = canvas.getBoundingClientRect();
+        const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+        const w = graphToWorld(cx, cy);
+        const n = nodeAtPoint(w.x, w.y);
+        if (n) openNodeDetail(n);
       }
       S.gDrag = null;
     }
     S.gPan = false; S.gPanS = null;
+    downPos = null;
   });
 
   canvas.addEventListener('wheel', e => {
@@ -1514,12 +1740,19 @@ function showNodeDetail(n) {
     const rect = canvas.getBoundingClientRect();
     const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
     const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newS = Math.min(3, Math.max(0.3, S.gT.s * factor));
+    const newS = Math.min(4, Math.max(0.25, S.gT.s * factor));
     const ratio = newS / S.gT.s;
     S.gT.x = cx - ratio * (cx - S.gT.x);
     S.gT.y = cy - ratio * (cy - S.gT.y);
     S.gT.s = newS;
   }, { passive: false });
+
+  // Esc closes the detail drawer
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && S.activeTab === 'graph' && S.gSel) {
+      closeNodeDetail();
+    }
+  });
 })();
 
 // ── Prompts Tab ───────────────────────────────────────────────────
