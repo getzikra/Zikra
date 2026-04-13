@@ -1,13 +1,12 @@
 import json
 from zikra.db import fetch_memory, bump_access_count
-from zikra.commands import _require_project
 
 
 async def cmd_get_memory(body: dict) -> dict:
     title = body.get('title', '')
     memory_id = body.get('id', '')
     memory_type = body.get('memory_type')
-    project = _require_project(body)
+    project = body.get('project') or None
 
     if not title and not memory_id:
         return {'error': 'title or id is required'}

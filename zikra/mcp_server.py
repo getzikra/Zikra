@@ -198,13 +198,17 @@ _TOOLS: list[types.Tool] = [
     ),
     types.Tool(
         name='zikra_get_memory',
-        description='Fetch a memory by title or ID',
+        description=(
+            'Fetch a memory by title or ID. If project is omitted, searches '
+            'across all projects (matches zikra_search behavior).'
+        ),
         inputSchema={
             'type': 'object',
             'properties': {
                 'title': {'type': 'string'},
                 'id': {'type': 'string'},
                 'memory_type': {'type': 'string'},
+                'project': {'type': 'string'},
             },
         },
     ),
