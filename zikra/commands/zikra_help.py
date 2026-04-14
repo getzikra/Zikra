@@ -29,6 +29,13 @@ async def cmd_zikra_help(body: dict) -> dict:
             'optional': ['memory_type', 'project'],
         },
         {
+            'command': 'hygiene_report',
+            'aliases': ['orphan_report', 'stale_report'],
+            'description': 'Find orphaned or stale memories with no retrievals and no incoming wikilinks.',
+            'required': [],
+            'optional': ['project', 'stale_days'],
+        },
+        {
             'command': 'get_prompt',
             'aliases': ['run_prompt', 'fetch_prompt', 'load_prompt', 'execute_prompt'],
             'description': 'Fetch a stored prompt by name. Increments access_count.',
