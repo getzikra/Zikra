@@ -170,6 +170,14 @@ async def init_pg() -> 'asyncpg.Pool':
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 PRIMARY KEY (runner, project)
             )""",
+            # v1.0.7: wikilink edges for [[title]] references
+            """CREATE TABLE IF NOT EXISTS memory_links (
+                from_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+                to_id   TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+                anchor  TEXT NOT NULL,
+                PRIMARY KEY (from_id, to_id)
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_memory_links_to ON memory_links(to_id)",
         ]
         for stmt in _migrations:
             try:
