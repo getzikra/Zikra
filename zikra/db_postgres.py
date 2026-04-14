@@ -198,6 +198,30 @@ def get_pg_pool() -> Optional['asyncpg.Pool']:
 
 # ── save_memory ───────────────────────────────────────────────────────────────
 
+async def _store_wikilinks_pg(conn, from_id: str, content_md: str, project: str) -> None:
+    """Replace from_id's rows in memory_links with edges parsed from content_md."""
+    from zikra.db import _extract_wikilinks
+    await conn.execute("DELETE FROM memory_links WHERE from_id = $1", from_id)
+    anchors = _extract_wikilinks(content_md)
+    if not anchors:
+        return
+    for anchor in anchors:
+        row = await conn.fetchrow(
+            """SELECT id FROM memories
+               WHERE title = $1 AND (project = $2 OR project = 'global')
+               ORDER BY (project = $2) DESC LIMIT 1""",
+            anchor, project,
+        )
+        if not row:
+            continue
+        await conn.execute(
+            """INSERT INTO memory_links(from_id, to_id, anchor)
+               VALUES ($1, $2, $3)
+               ON CONFLICT DO NOTHING""",
+            from_id, row['id'], anchor,
+        )
+
+
 async def save_memory_pg(pool: 'asyncpg.Pool', data: dict, embedding: list) -> str:
     from zikra.db import new_id
     memory_id = new_id()
@@ -256,7 +280,14 @@ async def save_memory_pg(pool: 'asyncpg.Pool', data: dict, embedding: list) -> s
                 pending_review,
             )
 
-    return row['id'] if row else memory_id
+        resolved_id = row['id'] if row else memory_id
+        await _store_wikilinks_pg(
+            conn, resolved_id,
+            data.get('content_md') or data.get('content', ''),
+            data.get('project', 'global'),
+        )
+
+    return resolved_id
 
 
 # ── search_memories ───────────────────────────────────────────────────────────

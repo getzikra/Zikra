@@ -113,6 +113,47 @@ async def open_aio_db(path: str) -> 'aiosqlite.Connection':
 
 # ── SQLite async: save_memory ──────────────────────────────────────────────────
 
+_WIKI_RE = re.compile(r'\[\[([^\[\]]+)\]\]')
+
+
+def _extract_wikilinks(content_md: str) -> list:
+    """Return unique [[title]] anchors found in content_md, preserving order."""
+    if not content_md:
+        return []
+    seen = set()
+    anchors = []
+    for match in _WIKI_RE.findall(content_md):
+        anchor = match.strip()
+        if anchor and anchor not in seen:
+            seen.add(anchor)
+            anchors.append(anchor)
+    return anchors
+
+
+async def _store_wikilinks_sqlite(db: 'aiosqlite.Connection', from_id: str,
+                                  content_md: str, project: str) -> None:
+    """Replace from_id's rows in memory_links with edges parsed from content_md."""
+    await db.execute("DELETE FROM memory_links WHERE from_id = ?", [from_id])
+    anchors = _extract_wikilinks(content_md)
+    if not anchors:
+        return
+    for anchor in anchors:
+        async with db.execute(
+            """SELECT id FROM memories
+               WHERE title = ? AND (project = ? OR project = 'global')
+               ORDER BY (project = ?) DESC LIMIT 1""",
+            [anchor, project, project],
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            continue
+        await db.execute(
+            """INSERT OR IGNORE INTO memory_links(from_id, to_id, anchor)
+               VALUES (?, ?, ?)""",
+            [from_id, row['id'], anchor],
+        )
+
+
 async def _sqlite_save_memory(db: 'aiosqlite.Connection', data: dict, embedding: list) -> str:
     memory_id = new_id()
     vec_bytes = struct.pack(f'{len(embedding)}f', *embedding)
@@ -158,14 +199,21 @@ async def _sqlite_save_memory(db: 'aiosqlite.Connection', data: dict, embedding:
             [rowid, data.get('title', ''), data.get('content_md') or data.get('content', '')]
         )
 
-    await db.commit()
-
     async with db.execute(
         "SELECT id FROM memories WHERE title=? AND memory_type=? AND project=?",
         [data.get('title', ''), data.get('memory_type', 'conversation'), data.get('project', 'global')]
     ) as cur:
         row = await cur.fetchone()
-    return row['id'] if row else memory_id
+    resolved_id = row['id'] if row else memory_id
+
+    await _store_wikilinks_sqlite(
+        db, resolved_id,
+        data.get('content_md') or data.get('content', ''),
+        data.get('project', 'global'),
+    )
+
+    await db.commit()
+    return resolved_id
 
 
 # ── SQLite async: search_memories ─────────────────────────────────────────────
