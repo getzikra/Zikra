@@ -1,5 +1,5 @@
 import json
-from zikra.db import fetch_memory, bump_access_count
+from zikra.db import fetch_memory, bump_access_count, fetch_memory_links
 
 
 async def cmd_get_memory(body: dict) -> dict:
@@ -28,6 +28,8 @@ async def cmd_get_memory(body: dict) -> dict:
         except (json.JSONDecodeError, ValueError):
             tags = []
 
+    links = await fetch_memory_links(row['id'])
+
     return {
         'id': row['id'],
         'title': row['title'],
@@ -40,4 +42,6 @@ async def cmd_get_memory(body: dict) -> dict:
         'access_count': row['access_count'],
         'created_at': row['created_at'],
         'updated_at': row['updated_at'],
+        'links_out': links['links_out'],
+        'links_in':  links['links_in'],
     }

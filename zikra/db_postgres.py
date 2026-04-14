@@ -707,6 +707,27 @@ async def get_prompt_pg(pool, prompt_name: str, project: str = None) -> Optional
     return _row_to_dict(row) if row else None
 
 
+async def fetch_memory_links_pg(pool, memory_id: str) -> dict:
+    """Return {links_out, links_in} for a memory via memory_links."""
+    async with pool.acquire() as conn:
+        out_rows = await conn.fetch(
+            """SELECT m.id, m.title, m.memory_type
+               FROM memory_links l JOIN memories m ON m.id = l.to_id
+               WHERE l.from_id = $1 ORDER BY m.title""",
+            memory_id,
+        )
+        in_rows = await conn.fetch(
+            """SELECT m.id, m.title, m.memory_type
+               FROM memory_links l JOIN memories m ON m.id = l.from_id
+               WHERE l.to_id = $1 ORDER BY m.title""",
+            memory_id,
+        )
+    return {
+        'links_out': [dict(r) for r in out_rows],
+        'links_in':  [dict(r) for r in in_rows],
+    }
+
+
 async def delete_memory_pg(pool, memory_id: str) -> Optional[dict]:
     """Delete a memory by UUID. Returns {id, title} on success, None if not found."""
     async with pool.acquire() as conn:

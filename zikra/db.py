@@ -521,6 +521,35 @@ async def fetch_memory(memory_id: str = None, title: str = None,
     return dict(row) if row else None
 
 
+async def fetch_memory_links(memory_id: str) -> dict:
+    """Return {links_out, links_in} for a memory. Each list item is
+    {id, title, memory_type}. Missing memory → empty lists."""
+    if not memory_id:
+        return {'links_out': [], 'links_in': []}
+    if _is_pg:
+        from zikra.db_postgres import fetch_memory_links_pg, get_pg_pool
+        return await fetch_memory_links_pg(get_pg_pool(), memory_id)
+
+    async with _aio_db.execute(
+        """SELECT m.id, m.title, m.memory_type
+           FROM memory_links l JOIN memories m ON m.id = l.to_id
+           WHERE l.from_id = ? ORDER BY m.title""",
+        [memory_id],
+    ) as cur:
+        out_rows = await cur.fetchall()
+    async with _aio_db.execute(
+        """SELECT m.id, m.title, m.memory_type
+           FROM memory_links l JOIN memories m ON m.id = l.from_id
+           WHERE l.to_id = ? ORDER BY m.title""",
+        [memory_id],
+    ) as cur:
+        in_rows = await cur.fetchall()
+    return {
+        'links_out': [dict(r) for r in out_rows],
+        'links_in':  [dict(r) for r in in_rows],
+    }
+
+
 async def record_run(data: dict, run_id: str) -> None:
     """Insert a prompt_run record."""
     if _is_pg:
