@@ -550,6 +550,28 @@ async def fetch_memory_links(memory_id: str) -> dict:
     }
 
 
+async def fetch_links_between(memory_ids: list) -> list:
+    """Return memory_links rows where both endpoints are in memory_ids.
+
+    Used by the graph builder so wikilink edges can be rendered alongside the
+    scored semantic edges. Each row is {from_id, to_id, anchor}.
+    """
+    if not memory_ids:
+        return []
+    if _is_pg:
+        from zikra.db_postgres import fetch_links_between_pg, get_pg_pool
+        return await fetch_links_between_pg(get_pg_pool(), memory_ids)
+
+    placeholders = ','.join('?' * len(memory_ids))
+    sql = (
+        f"SELECT from_id, to_id, anchor FROM memory_links "
+        f"WHERE from_id IN ({placeholders}) AND to_id IN ({placeholders})"
+    )
+    async with _aio_db.execute(sql, list(memory_ids) + list(memory_ids)) as cur:
+        rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
 async def record_run(data: dict, run_id: str) -> None:
     """Insert a prompt_run record."""
     if _is_pg:

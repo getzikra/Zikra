@@ -707,6 +707,19 @@ async def get_prompt_pg(pool, prompt_name: str, project: str = None) -> Optional
     return _row_to_dict(row) if row else None
 
 
+async def fetch_links_between_pg(pool, memory_ids: list) -> list:
+    """Return memory_links rows where both endpoints are in memory_ids."""
+    if not memory_ids:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT from_id, to_id, anchor FROM memory_links
+               WHERE from_id = ANY($1::text[]) AND to_id = ANY($1::text[])""",
+            list(memory_ids),
+        )
+    return [dict(r) for r in rows]
+
+
 async def fetch_memory_links_pg(pool, memory_id: str) -> dict:
     """Return {links_out, links_in} for a memory via memory_links."""
     async with pool.acquire() as conn:

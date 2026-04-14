@@ -1542,20 +1542,28 @@ function drawGraph() {
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
 
-    // Edge type → color: references stand out, tag/module mid-weight, temporal subtle
+    // Edge type → color: wiki is an explicit [[title]] anchor and gets the
+    // loudest styling; references are title-in-body (implicit) and remain
+    // mid-weight; tag/module/temporal stay subtle.
     let base;
     switch (e.type) {
-      case 'reference': base = [168,156,247]; break;  // lilac — explicit mention
+      case 'wiki':      base = [127,119,221]; break;  // bold purple — explicit [[link]]
+      case 'reference': base = [168,156,247]; break;  // lilac — implicit mention
       case 'module':    base = [83,177,183];  break;  // teal
       case 'tag':       base = [186,117,23];  break;  // amber
       case 'temporal':  base = [100,104,130]; break;  // grey-blue
       case 'project':   base = [136,135,128]; break;  // neutral
       default:          base = [136,135,128];
     }
-    const intensity = Math.min(1, 0.18 + e.weight * 0.06);
-    const alpha = selConn ? 0.7 : hovConn ? 0.5 : dim ? 0.03 : intensity;
+    const isWiki   = e.type === 'wiki';
+    const intensity = isWiki
+      ? 0.8
+      : Math.min(1, 0.18 + e.weight * 0.06);
+    const alpha = selConn ? 0.9 : hovConn ? 0.7 : dim ? 0.03 : intensity;
     ctx.strokeStyle = `rgba(${base[0]},${base[1]},${base[2]},${alpha})`;
-    ctx.lineWidth = ((selConn || hovConn ? 1.8 : 0.9) + Math.min(1.2, e.weight * 0.12)) / S.gT.s;
+    const baseWidth = isWiki ? 2.0 : 0.9;
+    const hoverBoost = selConn || hovConn ? 1.8 : baseWidth;
+    ctx.lineWidth = (hoverBoost + Math.min(1.2, e.weight * 0.12)) / S.gT.s;
     ctx.stroke();
   });
 

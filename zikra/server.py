@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from zikra.db import (
     bump_access_count,
     debug_memory_count,
+    fetch_links_between,
+    fetch_memory_links,
     fetch_memory,
     find_memories,
     init_db,
@@ -290,7 +292,7 @@ def _parse_ts(raw) -> float:
         return 0.0
 
 
-def _build_graph_payload(memories: list[dict]) -> dict:
+def _build_graph_payload(memories: list[dict], wiki_links: list[dict] | None = None) -> dict:
     """
     Build a graph payload of nodes + edges scored across multiple signals.
 
@@ -378,10 +380,38 @@ def _build_graph_payload(memories: list[dict]) -> dict:
     candidate_edges.sort(key=lambda item: item[0], reverse=True)
     degree_count = {node_id: 0 for node_id in ids}
     edges = []
+
+    # Wikilinks first — explicit [[title]] anchors bypass the score threshold
+    # and degree cap so a bold purple edge always reaches its target. We emit
+    # one undirected entry per {from,to} pair so the graph doesn't draw two
+    # lines between the same nodes when both memories reference each other.
+    id_set = set(ids)
+    wiki_pairs: set[tuple[str, str]] = set()
+    for link in (wiki_links or []):
+        from_id = link.get('from_id')
+        to_id = link.get('to_id')
+        if not from_id or not to_id or from_id not in id_set or to_id not in id_set:
+            continue
+        pair = tuple(sorted((from_id, to_id)))
+        if pair in wiki_pairs:
+            continue
+        wiki_pairs.add(pair)
+        edges.append({
+            'source': from_id,
+            'target': to_id,
+            'type':   'wiki',
+            'weight': 4.0,
+        })
+        degree_count[from_id] = degree_count.get(from_id, 0) + 1
+        degree_count[to_id]   = degree_count.get(to_id, 0) + 1
+
     for score, source, target, relation in candidate_edges:
         if len(edges) >= max_edges:
             break
         if degree_count[source] >= node_degree_cap or degree_count[target] >= node_degree_cap:
+            continue
+        # Don't double-draw an edge a wikilink already claimed for this pair
+        if tuple(sorted((source, target))) in wiki_pairs:
             continue
         degree_count[source] += 1
         degree_count[target] += 1
@@ -437,7 +467,16 @@ async def ui_graph(request: Request):
     project = request.query_params.get('project') or 'global'
     limit = min(int(request.query_params.get('limit', '300')), 500)
     memories = await list_all_memories(project, limit)
-    return _build_graph_payload(memories)
+    wiki_links = await fetch_links_between([m['id'] for m in memories])
+    return _build_graph_payload(memories, wiki_links=wiki_links)
+
+
+@app.get('/api/ui/backlinks/{memory_id}')
+async def ui_backlinks(memory_id: str, request: Request):
+    """Return wikilink backlinks for a single memory — used by the graph
+    node-detail panel when a node is clicked."""
+    await verify_auth(request)
+    return await fetch_memory_links(memory_id)
 
 
 # ── Dedicated UI read endpoints (bypass webhook dispatch) ──────────────────────
