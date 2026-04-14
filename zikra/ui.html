@@ -188,7 +188,7 @@ button { cursor: pointer; border: none; background: none; }
 .tab-view { position: absolute; inset: 0; display: none; overflow: hidden; }
 .tab-view.two-panel.active {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: var(--sidebar-w, 260px) 6px 1fr;
 }
 #view-graph { position: relative; }
 #view-graph.active { display: block; }
@@ -197,9 +197,21 @@ button { cursor: pointer; border: none; background: none; }
 .sidebar {
   display: flex; flex-direction: column;
   overflow: hidden;
-  border-right: 1px solid var(--border);
   background: var(--bg);
+  min-width: 0;
 }
+
+/* ── Resizer (drag handle between sidebar and detail) ── */
+.resizer {
+  cursor: col-resize;
+  background: transparent;
+  border-right: 1px solid var(--border);
+  transition: background 0.15s;
+  user-select: none;
+}
+.resizer:hover,
+.resizer.dragging { background: rgba(83,74,183,0.35); }
+body.resizing { cursor: col-resize; user-select: none; }
 .sidebar-ctrl {
   padding: 8px; border-bottom: 1px solid var(--border);
   display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
@@ -671,6 +683,7 @@ button { cursor: pointer; border: none; background: none; }
             <div class="empty-msg">Connect to search memories.</div>
           </div>
         </div>
+        <div class="resizer" title="Drag to resize  •  Double-click to reset"></div>
         <div class="detail-panel" id="search-detail">
           <div class="detail-empty"><span>Select a memory to view details</span></div>
         </div>
@@ -708,6 +721,7 @@ button { cursor: pointer; border: none; background: none; }
             <div class="empty-msg">Connect to load prompts.</div>
           </div>
         </div>
+        <div class="resizer" title="Drag to resize  •  Double-click to reset"></div>
         <div class="detail-panel" id="prompts-detail">
           <div class="detail-empty"><span>Select a prompt to view details</span></div>
         </div>
@@ -734,6 +748,7 @@ button { cursor: pointer; border: none; background: none; }
             <div class="empty-msg">Connect to load requirements.</div>
           </div>
         </div>
+        <div class="resizer" title="Drag to resize  •  Double-click to reset"></div>
         <div class="detail-panel" id="req-detail">
           <div class="detail-empty"><span>Select a requirement to view details</span></div>
         </div>
@@ -752,7 +767,28 @@ const ZIKRA_VERSION = '1.0.6';
 const K_TOKEN   = 'zikra_token';
 const K_URL     = 'zikra_url';
 const K_PROJECT = 'zikra_project';
+const K_SIDEBAR_W  = 'zikra_sidebar_w';
+const K_ACTIVE_TAB = 'zikra_active_tab';
+const K_UI_PREFS   = 'zikra_ui_prefs';
 const DEFAULT_URL = 'http://localhost:8100/webhook/zikra';
+const DEFAULT_SIDEBAR_W = 260;
+const MIN_SIDEBAR_W = 180;
+const MAX_SIDEBAR_W = 640;
+
+function loadUIPrefs() {
+  try { return JSON.parse(localStorage.getItem(K_UI_PREFS) || '{}') || {}; }
+  catch (e) { return {}; }
+}
+function saveUIPref(key, value) {
+  const p = loadUIPrefs();
+  p[key] = value;
+  try { localStorage.setItem(K_UI_PREFS, JSON.stringify(p)); } catch (e) {}
+}
+function applySidebarWidth(w) {
+  const n = Math.max(MIN_SIDEBAR_W, Math.min(MAX_SIDEBAR_W, Number(w) || DEFAULT_SIDEBAR_W));
+  document.documentElement.style.setProperty('--sidebar-w', n + 'px');
+  return n;
+}
 
 const TYPE_COLORS = {
   decision:     '#534AB7',
@@ -1038,6 +1074,7 @@ function renderProjSelector(projects, role) {
 // ── Tab Switching ─────────────────────────────────────────────────
 function switchTab(name) {
   S.activeTab = name;
+  try { localStorage.setItem(K_ACTIVE_TAB, name); } catch (e) {}
   document.querySelectorAll('.tab-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.tab === name);
   });
@@ -2119,13 +2156,20 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 // Search
 const searchQ = document.getElementById('search-query');
 searchQ.addEventListener('keydown', e => {
-  if (e.key === 'Enter') loadSearch(searchQ.value.trim());
+  if (e.key === 'Enter') { saveUIPref('searchQuery', searchQ.value); loadSearch(searchQ.value.trim()); }
 });
 searchQ.addEventListener('input', () => {
+  saveUIPref('searchQuery', searchQ.value);
   if (searchQ.value === '') loadSearch('*');
 });
-document.getElementById('filter-type').addEventListener('change', () => loadSearch(searchQ.value || '*'));
-document.getElementById('filter-status').addEventListener('change', () => loadSearch(searchQ.value || '*'));
+document.getElementById('filter-type').addEventListener('change', e => {
+  saveUIPref('filterType', e.target.value);
+  loadSearch(searchQ.value || '*');
+});
+document.getElementById('filter-status').addEventListener('change', e => {
+  saveUIPref('filterStatus', e.target.value);
+  loadSearch(searchQ.value || '*');
+});
 
 // Prompts filter
 document.querySelectorAll('#prompts-filter-grp .toggle-btn').forEach(btn => {
@@ -2133,18 +2177,62 @@ document.querySelectorAll('#prompts-filter-grp .toggle-btn').forEach(btn => {
     document.querySelectorAll('#prompts-filter-grp .toggle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     S.promptFilter = btn.dataset.pf;
+    saveUIPref('promptFilter', S.promptFilter);
     renderPromptsSidebar();
   });
 });
 document.getElementById('prompts-sort').addEventListener('change', e => {
   S.promptSort = e.target.value;
+  saveUIPref('promptSort', S.promptSort);
   renderPromptsSidebar();
 });
-document.getElementById('prompts-query').addEventListener('input', renderPromptsSidebar);
+document.getElementById('prompts-query').addEventListener('input', e => {
+  saveUIPref('promptsQuery', e.target.value);
+  renderPromptsSidebar();
+});
 
 // Requirements filters
-document.getElementById('req-status').addEventListener('change', renderReqSidebar);
-document.getElementById('req-sort').addEventListener('change', renderReqSidebar);
+document.getElementById('req-status').addEventListener('change', e => {
+  saveUIPref('reqStatus', e.target.value);
+  renderReqSidebar();
+});
+document.getElementById('req-sort').addEventListener('change', e => {
+  saveUIPref('reqSort', e.target.value);
+  renderReqSidebar();
+});
+
+// ── Resizable sidebar ─────────────────────────────────────────────
+document.querySelectorAll('.resizer').forEach(r => {
+  r.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const view = r.closest('.tab-view');
+    if (!view) return;
+    const sb = view.querySelector('.sidebar');
+    if (!sb) return;
+    const startX = e.clientX;
+    const startW = sb.getBoundingClientRect().width;
+    r.classList.add('dragging');
+    document.body.classList.add('resizing');
+    const onMove = ev => {
+      const w = applySidebarWidth(startW + (ev.clientX - startX));
+      r.dataset.pendingW = w;
+    };
+    const onUp = () => {
+      r.classList.remove('dragging');
+      document.body.classList.remove('resizing');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      const w = r.dataset.pendingW;
+      if (w) { try { localStorage.setItem(K_SIDEBAR_W, w); } catch (e) {} }
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  r.addEventListener('dblclick', () => {
+    const w = applySidebarWidth(DEFAULT_SIDEBAR_W);
+    try { localStorage.setItem(K_SIDEBAR_W, String(w)); } catch (e) {}
+  });
+});
 
 // Dismiss error banner
 document.getElementById('dismiss-error').addEventListener('click', hideBanner);
@@ -2168,6 +2256,33 @@ window.addEventListener('resize', () => {
   S.project = project;
 
   updateProjectPill();
+
+  // Restore sidebar width
+  applySidebarWidth(localStorage.getItem(K_SIDEBAR_W) || DEFAULT_SIDEBAR_W);
+
+  // Restore filter inputs from UI prefs (applied before connect so first loads use them)
+  const prefs = loadUIPrefs();
+  const setVal = (id, v) => { if (v != null) { const el = document.getElementById(id); if (el) el.value = v; } };
+  setVal('search-query',  prefs.searchQuery);
+  setVal('filter-type',   prefs.filterType);
+  setVal('filter-status', prefs.filterStatus);
+  setVal('prompts-query', prefs.promptsQuery);
+  setVal('prompts-sort',  prefs.promptSort);
+  setVal('req-status',    prefs.reqStatus);
+  setVal('req-sort',      prefs.reqSort);
+  if (prefs.promptSort)   S.promptSort   = prefs.promptSort;
+  if (prefs.promptFilter) {
+    S.promptFilter = prefs.promptFilter;
+    document.querySelectorAll('#prompts-filter-grp .toggle-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.pf === prefs.promptFilter);
+    });
+  }
+
+  // Restore active tab
+  const savedTab = localStorage.getItem(K_ACTIVE_TAB);
+  if (savedTab && ['search','graph','prompts','requirements'].includes(savedTab)) {
+    switchTab(savedTab);
+  }
 
   if (token) {
     // Auto-connect
