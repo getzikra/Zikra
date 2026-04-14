@@ -291,6 +291,14 @@ print(ti, to, cr, cc)
 " "$LATEST" 2>/dev/null)
   T_IN=${T_IN:-0}; T_OUT=${T_OUT:-0}; T_CR=${T_CR:-0}; T_CC=${T_CC:-0}
 
+  # v1.0.7: push the generated diary into output_summary so the run row itself
+  # carries the narrative. Previously we only wrote the diary as a floating
+  # memory with no prompt_id/run_id linkage, so clicking a run in the Zikra UI
+  # showed "auto-logged by zikra_autolog.sh" instead of the real story.
+  SUMMARY_TEXT="$DIARY"
+  [[ -z "$SUMMARY_TEXT" || "$SUMMARY_TEXT" == "Session diary generation failed." ]] \
+      && SUMMARY_TEXT="auto-logged by zikra_autolog.sh (diary unavailable)"
+
   RUN_BODY="$(python3 -c "
 import json, sys
 print(json.dumps({
@@ -298,13 +306,13 @@ print(json.dumps({
   'project':               sys.argv[1],
   'runner':                sys.argv[2],
   'status':                'success',
-  'output_summary':        'auto-logged by zikra_autolog.sh',
-  'tokens_input':          int(sys.argv[3]),
-  'tokens_output':         int(sys.argv[4]),
-  'tokens_cache_read':     int(sys.argv[5]),
-  'tokens_cache_creation': int(sys.argv[6]),
+  'output_summary':        sys.argv[3],
+  'tokens_input':          int(sys.argv[4]),
+  'tokens_output':         int(sys.argv[5]),
+  'tokens_cache_read':     int(sys.argv[6]),
+  'tokens_cache_creation': int(sys.argv[7]),
 }))" \
-    "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" \
+    "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" "$SUMMARY_TEXT" \
     "$T_IN" "$T_OUT" "$T_CR" "$T_CC" 2>/dev/null)"
 
   [[ -n "$RUN_BODY" ]] && zikra_post "$RUN_BODY"
