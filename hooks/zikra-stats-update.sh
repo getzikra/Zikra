@@ -48,7 +48,15 @@ SERVER_VERSION=$(curl -s -X POST "$ZIKRA_URL" \
   -d '{"command":"version"}' \
   | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('version',''))" 2>/dev/null || echo "")
 
-python3 - "$MEMORY_COUNT" "$HOOK_CWD" "${ZIKRA_PROJECT:-global}" "$SERVER_VERSION" <<'PYEOF'
+# Fetch orphan/stale count for statusline warning. Silent fail on older
+# servers that don't know the hygiene_report command.
+ORPHAN_COUNT=$(curl -s -X POST "$ZIKRA_URL" \
+  -H "Authorization: Bearer $ZIKRA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"command\":\"hygiene_report\",\"project\":\"$PROJECT\",\"stale_days\":30}" \
+  | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('orphan_count',0))" 2>/dev/null || echo "0")
+
+python3 - "$MEMORY_COUNT" "$HOOK_CWD" "${ZIKRA_PROJECT:-global}" "$SERVER_VERSION" "$ORPHAN_COUNT" <<'PYEOF'
 import json, os, datetime, sys, socket
 
 cache_path = os.path.expanduser('~/.claude/cache/zikra-stats.json')
@@ -56,6 +64,7 @@ memory_count_arg   = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdig
 hook_cwd           = sys.argv[2] if len(sys.argv) > 2 else ''
 default_project    = sys.argv[3] if len(sys.argv) > 3 else 'global'
 server_version_arg = sys.argv[4].strip() if len(sys.argv) > 4 else ''
+orphan_count_arg   = int(sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5].lstrip('-').isdigit() else 0
 
 def detect_project(cwd, fallback):
     c = cwd.lower()
@@ -86,6 +95,9 @@ stats["project"]    = project
 # Update memory_count if we got a valid value; preserve previous value otherwise
 if memory_count_arg > 0:
     stats["memory_count"] = memory_count_arg
+
+# Always refresh orphan_count (0 is a valid state, not "missing data")
+stats["orphan_count"] = max(0, orphan_count_arg)
 
 # Cache server version if we got one
 if server_version_arg:

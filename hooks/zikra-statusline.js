@@ -32,16 +32,17 @@ function getStats() {
   const cachePath = path.join(os.homedir(), '.claude', 'cache', 'zikra-stats.json');
   try {
     const raw = silentRead(cachePath);
-    if (!raw) return { runs: 0, memories: 0, project: 'global' };
+    if (!raw) return { runs: 0, memories: 0, project: 'global', orphans: 0 };
     const d = JSON.parse(raw);
     return {
       runs:     typeof d.runs_today   === 'number' ? d.runs_today   : 0,
       memories: typeof d.memory_count === 'number' ? d.memory_count :
                 typeof d.memories_approx === 'number' ? d.memories_approx : 0,
       project:  d.project || 'global',
+      orphans:  typeof d.orphan_count === 'number' ? d.orphan_count : 0,
     };
   } catch {
-    return { runs: 0, memories: 0, project: 'global' };
+    return { runs: 0, memories: 0, project: 'global', orphans: 0 };
   }
 }
 
@@ -164,19 +165,21 @@ function render(payload) {
   if (rendered) return;
   rendered = true;
   try {
-    const { runs, memories, project } = getStats();
+    const { runs, memories, project, orphans } = getStats();
     const { server, latest } = getVersions();
     const version = server || 'zikra';
     const model   = getModelLabel(payload && (payload.model || payload.model_id));
     const bar     = tokenBar(payload);
     const vLabel  = server ? formatVersion(server, latest) : `${G}(update if ${R}●${G})${RESET}`;
+    const stale   = orphans > 0 ? ` ${G}│${RESET} ${YELLOW}⚠ ${orphans} stale${RESET}` : '';
 
     const line =
       `${R}Zikra${RESET} ${vLabel} ${G}│${RESET} ` +
       `${R}${runs}${RESET}${G} runs · ${RESET}${R}${memories}${RESET}${G} memories${RESET} ${G}│${RESET} ` +
       `${W}${project}${RESET} ${G}│${RESET} ` +
       `${W}${model}${RESET}` +
-      (bar ? ` ${G}│${RESET}` + bar : '');
+      (bar ? ` ${G}│${RESET}` + bar : '') +
+      stale;
 
     process.stdout.write(line + '\n');
   } catch { /* silent fail */ }
