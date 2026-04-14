@@ -707,6 +707,37 @@ async def get_prompt_pg(pool, prompt_name: str, project: str = None) -> Optional
     return _row_to_dict(row) if row else None
 
 
+async def hygiene_report_pg(pool, project: str, stale_days: int) -> list:
+    """PG implementation of the orphan/stale scan. See db.hygiene_report()."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                m.id,
+                m.title,
+                m.memory_type,
+                m.project,
+                m.access_count,
+                EXTRACT(
+                    day FROM now() - COALESCE(m.updated_at, m.created_at)
+                )::int AS days_idle,
+                COUNT(l.from_id)::int AS backlink_count
+            FROM memories m
+            LEFT JOIN memory_links l ON l.to_id = m.id
+            WHERE m.project = $1
+            GROUP BY m.id, m.title, m.memory_type, m.project,
+                     m.access_count, m.updated_at, m.created_at
+            HAVING EXTRACT(
+                       day FROM now() - COALESCE(m.updated_at, m.created_at)
+                   ) > $2
+               AND COUNT(l.from_id) = 0
+            ORDER BY days_idle DESC
+            """,
+            project, stale_days,
+        )
+    return [dict(r) for r in rows]
+
+
 async def fetch_links_between_pg(pool, memory_ids: list) -> list:
     """Return memory_links rows where both endpoints are in memory_ids."""
     if not memory_ids:

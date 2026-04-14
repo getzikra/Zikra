@@ -550,6 +550,42 @@ async def fetch_memory_links(memory_id: str) -> dict:
     }
 
 
+async def hygiene_report(project: str, stale_days: int) -> list:
+    """Return memories idle for more than stale_days AND with zero incoming
+    wikilinks. Each row has {id, title, memory_type, project, days_idle,
+    access_count, backlink_count}. Sorted most-idle-first.
+    """
+    if _is_pg:
+        from zikra.db_postgres import hygiene_report_pg, get_pg_pool
+        return await hygiene_report_pg(get_pg_pool(), project, stale_days)
+
+    async with _aio_db.execute(
+        """
+        SELECT
+            m.id,
+            m.title,
+            m.memory_type,
+            m.project,
+            m.access_count,
+            CAST(
+                (julianday('now') -
+                 julianday(COALESCE(m.updated_at, m.created_at))
+                ) AS INTEGER
+            ) AS days_idle,
+            (SELECT COUNT(*) FROM memory_links l WHERE l.to_id = m.id) AS backlink_count
+        FROM memories m
+        WHERE m.project = ?
+          AND (julianday('now') -
+               julianday(COALESCE(m.updated_at, m.created_at))) > ?
+          AND (SELECT COUNT(*) FROM memory_links l WHERE l.to_id = m.id) = 0
+        ORDER BY days_idle DESC
+        """,
+        [project, stale_days],
+    ) as cur:
+        rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
 async def fetch_links_between(memory_ids: list) -> list:
     """Return memory_links rows where both endpoints are in memory_ids.
 
