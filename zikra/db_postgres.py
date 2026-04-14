@@ -668,6 +668,16 @@ async def get_prompt_pg(pool, prompt_name: str, project: str = None) -> Optional
     return _row_to_dict(row) if row else None
 
 
+async def delete_memory_pg(pool, memory_id: str) -> Optional[dict]:
+    """Delete a memory by UUID. Returns {id, title} on success, None if not found."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "DELETE FROM memories WHERE id = $1 RETURNING id, title, memory_type, project",
+            memory_id,
+        )
+    return dict(row) if row else None
+
+
 async def bump_access_count_pg(pool, memory_id: str) -> None:
     async with pool.acquire() as conn:
         await conn.execute("""

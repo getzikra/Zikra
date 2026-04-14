@@ -29,6 +29,7 @@ from zikra.commands.search import cmd_search
 from zikra.commands.save_memory import cmd_save_memory
 from zikra.commands.get_prompt import cmd_get_prompt
 from zikra.commands.get_memory import cmd_get_memory
+from zikra.commands.delete_memory import cmd_delete_memory
 from zikra.commands.log_run import cmd_log_run
 from zikra.commands.log_error import cmd_log_error
 from zikra.commands.get_schema import cmd_get_schema
@@ -107,6 +108,7 @@ COMMAND_MIN_ROLE = {
     'log_run':              'developer',
     'log_error':            'developer',
     'get_schema':           'admin',
+    'delete_memory':        'admin',
     'debug_protocol':       'admin',
     'create_token':         'owner',
 }
@@ -133,6 +135,7 @@ DISPATCH: dict = {
     'save_memory':          cmd_save_memory,
     'get_prompt':           cmd_get_prompt,
     'get_memory':           cmd_get_memory,
+    'delete_memory':        cmd_delete_memory,
     'log_run':              cmd_log_run,
     'log_error':            cmd_log_error,
     'get_schema':           cmd_get_schema,
@@ -169,6 +172,10 @@ DISPATCH: dict = {
     'fetch_memory':         cmd_get_memory,
     'read_memory':          cmd_get_memory,
     'load_memory':          cmd_get_memory,
+    # delete_memory aliases
+    'remove_memory':        cmd_delete_memory,
+    'forget_memory':        cmd_delete_memory,
+    'forget':               cmd_delete_memory,
     # log_run aliases
     'log_session':          cmd_log_run,
     'end_session':          cmd_log_run,

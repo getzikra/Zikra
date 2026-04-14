@@ -50,6 +50,7 @@ from zikra.commands.log_error import cmd_log_error
 from zikra.commands.save_requirement import cmd_save_requirement
 from zikra.commands.list_requirements import cmd_list_requirements
 from zikra.commands.get_memory import cmd_get_memory
+from zikra.commands.delete_memory import cmd_delete_memory
 from zikra.commands.get_schema import cmd_get_schema
 from zikra.commands.promote_requirement import cmd_promote_requirement
 from zikra.commands.create_token import cmd_create_token
@@ -213,6 +214,19 @@ _TOOLS: list[types.Tool] = [
         },
     ),
     types.Tool(
+        name='zikra_delete_memory',
+        description='Permanently delete a memory by UUID or title. Admin role required.',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'id': {'type': 'string'},
+                'title': {'type': 'string'},
+                'memory_type': {'type': 'string'},
+                'project': {'type': 'string'},
+            },
+        },
+    ),
+    types.Tool(
         name='zikra_get_schema',
         description='Return the database schema and table definitions',
         inputSchema={'type': 'object', 'properties': {}},
@@ -282,6 +296,7 @@ _MCP_DISPATCH = {
     'zikra_save_requirement':     cmd_save_requirement,
     'zikra_list_requirements':    cmd_list_requirements,
     'zikra_get_memory':           cmd_get_memory,
+    'zikra_delete_memory':        cmd_delete_memory,
     'zikra_get_schema':           cmd_get_schema,
     'zikra_promote_requirement':  cmd_promote_requirement,
     'zikra_create_token':         cmd_create_token,

@@ -22,6 +22,13 @@ async def cmd_zikra_help(body: dict) -> dict:
             'optional': ['memory_type'],
         },
         {
+            'command': 'delete_memory',
+            'aliases': ['remove_memory', 'forget_memory', 'forget'],
+            'description': 'Permanently delete a memory by UUID or title. Admin role required.',
+            'required': ['id or title'],
+            'optional': ['memory_type', 'project'],
+        },
+        {
             'command': 'get_prompt',
             'aliases': ['run_prompt', 'fetch_prompt', 'load_prompt', 'execute_prompt'],
             'description': 'Fetch a stored prompt by name. Increments access_count.',

@@ -671,6 +671,38 @@ async def fetch_prompt_row(prompt_name: str, project: str = None) -> Optional[di
     return dict(row) if row else None
 
 
+async def delete_memory(memory_id: str) -> Optional[dict]:
+    """Delete a memory by UUID. Returns {id, title, ...} on success, None if not found."""
+    if _is_pg:
+        from zikra.db_postgres import delete_memory_pg, get_pg_pool
+        return await delete_memory_pg(get_pg_pool(), memory_id)
+
+    async with _aio_db.execute(
+        "SELECT rowid, id, title, memory_type, project FROM memories WHERE id = ?",
+        [memory_id],
+    ) as cur:
+        row = await cur.fetchone()
+    if not row:
+        return None
+    rowid = row['rowid']
+    await _aio_db.execute("DELETE FROM memories WHERE id = ?", [memory_id])
+    try:
+        await _aio_db.execute("DELETE FROM memories_vec WHERE rowid = ?", [rowid])
+    except Exception:
+        pass
+    try:
+        await _aio_db.execute("DELETE FROM memories_fts WHERE rowid = ?", [rowid])
+    except Exception:
+        pass
+    await _aio_db.commit()
+    return {
+        'id': row['id'],
+        'title': row['title'],
+        'memory_type': row['memory_type'],
+        'project': row['project'],
+    }
+
+
 async def bump_access_count(memory_id: str) -> None:
     """Increment access_count for a memory."""
     if _is_pg:

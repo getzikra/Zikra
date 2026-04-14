@@ -13,10 +13,11 @@ ZIKRA_TOKEN = os.getenv('ZIKRA_TOKEN', '')
 ROLE_PERMISSIONS = {
     'owner':     [],  # empty blocked list = all commands allowed
     'admin':     ['create_token'],
-    'developer': ['create_token', 'get_schema', 'debug_protocol'],
+    'developer': ['create_token', 'get_schema', 'debug_protocol', 'delete_memory'],
     'viewer':    ['save_memory', 'save_prompt', 'save_requirement',
                   'promote_requirement', 'log_run', 'log_error',
-                  'create_token', 'get_schema', 'debug_protocol'],
+                  'create_token', 'get_schema', 'debug_protocol',
+                  'delete_memory'],
 }
 
 
