@@ -51,6 +51,7 @@ from zikra.commands.save_requirement import cmd_save_requirement
 from zikra.commands.list_requirements import cmd_list_requirements
 from zikra.commands.get_memory import cmd_get_memory
 from zikra.commands.delete_memory import cmd_delete_memory
+from zikra.commands.hygiene import cmd_hygiene
 from zikra.commands.get_schema import cmd_get_schema
 from zikra.commands.promote_requirement import cmd_promote_requirement
 from zikra.commands.create_token import cmd_create_token
@@ -285,6 +286,23 @@ _TOOLS: list[types.Tool] = [
         description='Return all available Zikra commands with descriptions and aliases',
         inputSchema={'type': 'object', 'properties': {}},
     ),
+    types.Tool(
+        name='zikra_hygiene_report',
+        description=(
+            'Find orphaned or stale memories in a project. Returns memories '
+            "with no updates in stale_days days AND zero incoming wikilinks. "
+            "verdict='review' means idle 30-90 days; verdict='archive' means "
+            'idle 90+ days.'
+        ),
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'project':    {'type': 'string', 'description': 'Project to scan'},
+                'stale_days': {'type': 'integer', 'description': 'Idle threshold in days (default: 30)'},
+            },
+            'required': ['project'],
+        },
+    ),
 ]
 
 _MCP_DISPATCH = {
@@ -303,6 +321,7 @@ _MCP_DISPATCH = {
     'zikra_save_prompt':          cmd_save_prompt,
     'zikra_list_prompts':         cmd_list_prompts,
     'zikra_help':                 cmd_zikra_help,
+    'zikra_hygiene_report':       cmd_hygiene,
 }
 
 

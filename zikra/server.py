@@ -32,6 +32,7 @@ from zikra.commands.save_memory import cmd_save_memory
 from zikra.commands.get_prompt import cmd_get_prompt
 from zikra.commands.get_memory import cmd_get_memory
 from zikra.commands.delete_memory import cmd_delete_memory
+from zikra.commands.hygiene import cmd_hygiene
 from zikra.commands.log_run import cmd_log_run
 from zikra.commands.log_error import cmd_log_error
 from zikra.commands.get_schema import cmd_get_schema
@@ -103,6 +104,7 @@ COMMAND_MIN_ROLE = {
     'list_requirements':    'viewer',
     'zikra_help':           'viewer',
     'version':              'viewer',
+    'hygiene_report':       'viewer',
     'save_memory':          'developer',
     'save_prompt':          'developer',
     'save_requirement':     'developer',
@@ -150,6 +152,7 @@ DISPATCH: dict = {
     'zikra_help':           cmd_zikra_help,
     'version':              cmd_version,
     'debug_protocol':       _cmd_debug_protocol,
+    'hygiene_report':       cmd_hygiene,
     # search aliases
     'find':                 cmd_search,
     'query':                cmd_search,
