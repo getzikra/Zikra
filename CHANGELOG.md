@@ -19,9 +19,12 @@ and this project adheres to semver.
 
 - **Statusline now respects the reported context window size.** Previously
   always framed usage against 200K. Now uses whatever size Claude Code
-  reports in `context_window.context_window_size` — so 1M-variant models
-  (e.g. Opus 4.7 1M) render as `130K/1M` instead of `130K/200K`. Still
-  falls back to 200K when the field is absent.
+  reports in `context_window.context_window_size` for the session — no
+  hardcoded limit. If the user is on a 1M-variant model the bar renders
+  against 1M; on a 200K session it renders against 200K; if Anthropic
+  ships a new window size tomorrow the statusline picks it up with no
+  code change. 200K is kept only as a last-ditch fallback when the
+  payload omits the field entirely.
 
 ## [1.0.7] — 2026-04-20
 

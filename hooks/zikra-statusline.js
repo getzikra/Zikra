@@ -10,8 +10,8 @@
 //   2. Falls back to project in ~/.claude/cache/zikra-stats.json
 //
 // Context window:
-//   Uses the size Claude Code reports (so 1M-variant models render as 1M).
-//   Falls back to 200K — the default per-call window — only when not reported.
+//   Uses whatever size Claude Code reports for the session — never hardcoded.
+//   Falls back to 200K only when the payload contains no size at all.
 
 'use strict';
 
@@ -131,8 +131,9 @@ function tokenBar(payload) {
     tokensUsed = ctx.total_input_tokens;
   }
 
-  // Use the context window Claude Code reports. Fall back to 200K —
-  // the default Claude Code per-call context window — if absent.
+  // Use whatever size Claude Code reports for this session. Never hardcode
+  // 200K or 1M — the reported value is authoritative. 200K is only a last-
+  // ditch fallback for payloads that omit the field entirely.
   const sessionMax = maxTokens || 200000;
 
   // Back-calculate actual tokens from used_percentage when no breakdown
