@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 // zikra-statusline.js — Claude Code status line renderer
-// Reads local cache only. Zero network calls. Silent fail on any error.
+// Reads local cache + walks cwd for CLAUDE.md. Zero network calls. Silent fail on any error.
 //
 // Output format:
-//   Zikra (v1.0.1) │ 17 runs · 847 memories │ veltisai │ Opus 4.6 │ 💀 130K/200K ████░░░░ 65%
+//   Zikra (v1.0.8) │ 17 runs · 847 memories │ veltisai │ Opus 4.7 │ 💀 130K/1M ████░░░░ 13%
+//
+// Project resolution:
+//   1. CLAUDE.md `project:` / `ZIKRA_PROJECT=` walking up from cwd (skips "global")
+//   2. Falls back to project in ~/.claude/cache/zikra-stats.json
+//
+// Context window:
+//   Uses the size Claude Code reports (so 1M-variant models render as 1M).
+//   Falls back to 200K — the default per-call window — only when not reported.
 
 'use strict';
 
@@ -26,6 +34,44 @@ const RESET  = '\x1b[0m';
 
 function silentRead(filePath) {
   try { return fs.readFileSync(filePath, 'utf8'); } catch { return null; }
+}
+
+// Walk up from the current directory looking for a CLAUDE.md containing a
+// `project: <name>` line (or `ZIKRA_PROJECT=<name>`). First match wins.
+// Returns null when nothing is found so the caller can fall back to the cache.
+// "global" is skipped so a top-level CLAUDE.md defaulting to global does not
+// override a more-specific project deeper in the tree.
+function getProjectFromCwd(payload) {
+  try {
+    const cwd = (payload && payload.workspace && (payload.workspace.current_dir || payload.workspace.cwd))
+             || (payload && payload.cwd)
+             || process.env.CLAUDE_PROJECT_DIR
+             || process.env.PWD
+             || process.cwd();
+
+    const projectRe = /^\s*(?:-\s*)?project\s*[:=]\s*["']?([a-zA-Z0-9_\-]+)["']?/im;
+    const envRe     = /ZIKRA_PROJECT\s*=\s*["']?([a-zA-Z0-9_\-]+)["']?/i;
+
+    const seen = new Set();
+    let dir = path.resolve(cwd);
+    const home = os.homedir();
+
+    while (dir && !seen.has(dir)) {
+      seen.add(dir);
+      const raw = silentRead(path.join(dir, 'CLAUDE.md'));
+      if (raw) {
+        const m = raw.match(projectRe) || raw.match(envRe);
+        if (m) {
+          const name = m[1].toLowerCase();
+          if (name && name !== 'global') return name;
+        }
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir || dir === home || dir === '/') break;
+      dir = parent;
+    }
+  } catch { /* silent */ }
+  return null;
 }
 
 function getStats() {
@@ -165,7 +211,8 @@ function render(payload) {
   if (rendered) return;
   rendered = true;
   try {
-    const { runs, memories, project, orphans } = getStats();
+    const { runs, memories, project: cacheProject, orphans } = getStats();
+    const project = getProjectFromCwd(payload) || cacheProject;
     const { server, latest } = getVersions();
     const version = server || 'zikra';
     const model   = getModelLabel(payload && (payload.model || payload.model_id));
