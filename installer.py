@@ -172,6 +172,25 @@ if db_backend == 'postgres':
               file=sys.stderr)
         sys.exit(1)
 
+# ── Q: Other AI tools ─────────────────────────────────────────────────────────
+
+import shutil as _shutil
+
+_gemini_found = bool(_shutil.which('gemini'))
+_codex_found  = bool(_shutil.which('codex'))
+
+print()
+print('Other AI coding tools to integrate with?')
+print('  Zikra hooks for these tools feed the same shared cache and statusline.')
+print(f'  [1] Claude Code only')
+print(f'  [2] Gemini CLI{"  (detected)" if _gemini_found else ""}')
+print(f'  [3] Codex CLI{"   (detected)" if _codex_found else ""}')
+print(f'  [4] Both Gemini and Codex')
+other_tools_choice = _ask_choice('  Choice', ['1', '2', '3', '4'], default='1')
+install_gemini = other_tools_choice in ('2', '4')
+install_codex  = other_tools_choice in ('3', '4')
+install_shell_status = install_gemini or install_codex
+
 # ── Install hooks ─────────────────────────────────────────────────────────────
 
 HOOKS_SRC = Path(__file__).parent / 'hooks'
@@ -196,6 +215,114 @@ if zikra_profile in ('autolog', 'full'):
     _install_hook('zikra_autolog.sh', CLAUDE_DIR / 'zikra_autolog.sh')
     _install_hook('notify.sh', CLAUDE_DIR / 'notify.sh')
     _install_hook('zikra-statusline.js', CLAUDE_HOOKS_DIR / 'zikra-statusline.js')
+
+# ── Gemini CLI integration ────────────────────────────────────────────────────
+
+if install_gemini and zikra_profile in ('autolog', 'full'):
+    gemini_dir      = Path.home() / '.gemini'
+    gemini_settings = gemini_dir / 'settings.json'
+    hook_dst        = CLAUDE_HOOKS_DIR / 'gemini-hook.sh'
+
+    # Copy hook script
+    _install_hook('gemini-hook.sh', hook_dst)
+
+    # Merge hook registration into ~/.gemini/settings.json
+    gemini_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        gs = json.loads(gemini_settings.read_text()) if gemini_settings.exists() else {}
+    except (json.JSONDecodeError, ValueError):
+        gs = {}
+
+    gs.setdefault('hooks', {})
+    for event in ('AfterModel', 'SessionEnd'):
+        entries = gs['hooks'].setdefault(event, [])
+        # Remove any stale zikra entry, then add fresh one
+        entries[:] = [e for e in entries if e.get('name') != 'zikra']
+        entries.append({'name': 'zikra', 'command': str(hook_dst)})
+
+    tmp = str(gemini_settings) + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(gs, f, indent=2)
+    os.replace(tmp, str(gemini_settings))
+    print(f'  ✓ Gemini hooks registered in {gemini_settings}')
+
+# ── Codex CLI integration ─────────────────────────────────────────────────────
+
+if install_codex and zikra_profile in ('autolog', 'full'):
+    codex_dir  = Path.home() / '.codex'
+    hook_dst   = CLAUDE_HOOKS_DIR / 'codex-hook.sh'
+
+    # Copy hook script
+    _install_hook('codex-hook.sh', hook_dst)
+
+    codex_dir.mkdir(parents=True, exist_ok=True)
+
+    # Codex config: prefer config.toml if it exists, else create hooks.json.
+    # Both formats are in use across Codex versions.
+    config_toml = codex_dir / 'config.toml'
+    hooks_json  = codex_dir / 'hooks.json'
+
+    if config_toml.exists():
+        # Append [hooks] section only if not already present
+        content = config_toml.read_text()
+        hook_block = (
+            f'\n[hooks]\n'
+            f'Stop        = ["{hook_dst}"]\n'
+            f'PostToolUse = ["{hook_dst}"]\n'
+        )
+        if '[hooks]' not in content:
+            config_toml.write_text(content + hook_block)
+            print(f'  ✓ Codex hooks added to {config_toml}')
+        else:
+            print(f'  NOTE: {config_toml} already has a [hooks] section — add manually:')
+            print(f'    Stop        = ["{hook_dst}"]')
+            print(f'    PostToolUse = ["{hook_dst}"]')
+    else:
+        # Write hooks.json (used by newer Codex versions)
+        try:
+            existing = json.loads(hooks_json.read_text()) if hooks_json.exists() else {}
+        except (json.JSONDecodeError, ValueError):
+            existing = {}
+        for event in ('Stop', 'PostToolUse'):
+            entries = existing.setdefault(event, [])
+            entries[:] = [e for e in entries if e.get('name') != 'zikra']
+            entries.append({'name': 'zikra', 'command': str(hook_dst)})
+        tmp = str(hooks_json) + '.tmp'
+        with open(tmp, 'w') as f:
+            json.dump(existing, f, indent=2)
+        os.replace(tmp, str(hooks_json))
+        print(f'  ✓ Codex hooks registered in {hooks_json}')
+
+# ── Shell statusline (for Gemini / Codex sessions) ────────────────────────────
+
+if install_shell_status and zikra_profile in ('autolog', 'full'):
+    shell_status_dst = CLAUDE_HOOKS_DIR / 'zikra-shell-status.sh'
+    _install_hook('zikra-shell-status.sh', shell_status_dst)
+
+    source_line = f'source {shell_status_dst}'
+
+    # Detect active shell RC files and append the source line once
+    rc_files = []
+    if os.environ.get('SHELL', '').endswith('zsh'):
+        rc_files = [Path.home() / '.zshrc']
+    else:
+        rc_files = [Path.home() / '.bashrc']
+    # Always try both if both exist
+    for rc in [Path.home() / '.bashrc', Path.home() / '.zshrc']:
+        if rc.exists() and rc not in rc_files:
+            rc_files.append(rc)
+
+    for rc in rc_files:
+        try:
+            existing_rc = rc.read_text() if rc.exists() else ''
+            if source_line not in existing_rc:
+                with open(rc, 'a') as f:
+                    f.write(f'\n# Zikra shell statusline (Gemini / Codex)\n{source_line}\n')
+                print(f'  ✓ shell statusline added to {rc}')
+            else:
+                print(f'  ✓ {rc} already has the statusline source line')
+        except OSError as e:
+            print(f'  WARNING: Could not update {rc}: {e}')
 
 # ── Full profile: systemd unit ────────────────────────────────────────────────
 
@@ -291,6 +418,10 @@ except Exception as e:
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 
+_tool_list = ['Claude Code']
+if install_gemini: _tool_list.append('Gemini CLI')
+if install_codex:  _tool_list.append('Codex CLI')
+
 print(f"""
 Zikra is ready.
 
@@ -300,17 +431,27 @@ Zikra is ready.
   DB:              {db_backend}
   Embedding model: {default_model}
   Vector index:    {'halfvec HNSW (pgvector)' if db_backend == 'postgres' else 'brute-force (SQLite)'}
+  Integrated with: {', '.join(_tool_list)}
 
-  Add this to your Claude Code MCP config if not already done:
+  Claude Code — MCP config (add if not already present):
   {{
     "zikra": {{
       "url": "http://localhost:{zikra_port}/mcp"
     }}
   }}
-
+""" + ("""
+  Gemini CLI — hooks registered in ~/.gemini/settings.json
+    AfterModel and SessionEnd events update the shared stats cache.
+""" if install_gemini else '') + ("""
+  Codex CLI — hooks registered in ~/.codex/
+    Stop and PostToolUse events update the shared stats cache.
+""" if install_codex else '') + (f"""
+  Shell statusline — sourced from {CLAUDE_HOOKS_DIR}/zikra-shell-status.sh
+    Renders the Zikra bar before each terminal prompt for Gemini/Codex sessions.
+    Restart your shell (or run: source ~/.bashrc) to activate.
+""" if install_shell_status else '') + f"""
   Onboarding prompt: prompts/zikra-claude-code-setup.md
   Run in Claude Code: /prompts then select zikra-claude-code-setup
-  Or: cat prompts/zikra-claude-code-setup.md | pbcopy  (then paste into Claude Code)
 
   Start the server:
     python3 -m zikra --no-onboarding

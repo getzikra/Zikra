@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.0.9] — 2026-04-21
+
+### Added
+
+- **Gemini CLI integration** (`hooks/gemini-hook.sh`). Registers for
+  `AfterModel` and `SessionEnd` events. Parses the transcript JSONL Gemini
+  writes each session and extracts token counts using both Gemini-native
+  (`usageMetadata.promptTokenCount`) and OpenAI-style (`usage.input_tokens`)
+  field names so it works across Gemini CLI versions. Updates the shared
+  `~/.claude/cache/zikra-stats.json` cache and writes `last_tool=gemini`,
+  `last_model`, so the statusline knows which tool is active.
+
+- **Codex CLI integration** (`hooks/codex-hook.sh`). Registers for `Stop` and
+  `PostToolUse` events. Probes `transcript_path` from the hook payload, falls
+  back to `~/.codex/sessions/<session_id>/history.jsonl`. Parses OpenAI-style
+  `usage.prompt_tokens` / `usage.completion_tokens`. Config is written to
+  `~/.codex/config.toml` ([hooks] section) if the file exists, else to
+  `~/.codex/hooks.json` (used by newer Codex versions).
+
+- **Shell statusline** (`hooks/zikra-shell-status.sh`). Sources into
+  `~/.bashrc` / `~/.zshrc` and renders the Zikra bar before each terminal
+  prompt for Gemini and Codex sessions. Reuses `zikra-statusline.js` by
+  piping a synthetic payload built from the shared cache. No token bar in
+  shell mode (context window data is not available at shell level); all other
+  fields (project, runs, memories, model) work normally.
+
+- **Installer step: "Other AI tools"** (`installer.py`). New question after
+  hook depth: choose Claude Code only / Gemini CLI / Codex CLI / both.
+  Installer auto-detects which CLIs are on PATH and marks them "(detected)".
+  Installs hooks, writes tool-specific config, and appends the shell statusline
+  source line to RC files. Summary screen lists all integrated tools.
+
+### Architecture note
+
+All three tools share a single cache (`~/.claude/cache/zikra-stats.json`).
+The Claude Code native statusline reads it via its existing hook. Gemini/Codex
+hooks write to it after each session. The shell PROMPT_COMMAND reads it to
+render the bar between non-Claude prompts.
+
+---
+
+
 All notable changes to Zikra are documented in this file.
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
