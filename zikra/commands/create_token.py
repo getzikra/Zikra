@@ -8,8 +8,9 @@ GRANTABLE_ROLES = set(ROLE_PERMISSIONS.keys()) - {'owner'}
 
 
 async def cmd_create_token(body: dict) -> dict:
-    label = body.get('label') or body.get('person_name', 'unknown')
-    role = body.get('role', DEFAULT_TOKEN_ROLE)
+    label         = body.get('label') or body.get('person_name', 'unknown')
+    role          = body.get('role', DEFAULT_TOKEN_ROLE)
+    project_scope = body.get('project_scope') or None
 
     if role not in GRANTABLE_ROLES:
         return {
@@ -17,10 +18,10 @@ async def cmd_create_token(body: dict) -> dict:
             'allowed_roles': sorted(GRANTABLE_ROLES),
         }
 
-    token = f"token-{uuid.uuid4().hex[:16]}"
+    token    = f"token-{uuid.uuid4().hex[:16]}"
     token_id = new_id()
 
-    await add_token(token_id, token, label, role)
+    await add_token(token_id, token, label, role, project_scope)
 
     return {
         'status': 'created',
@@ -28,4 +29,5 @@ async def cmd_create_token(body: dict) -> dict:
         'label': label,
         'person_name': label,
         'role': role,
+        'project_scope': project_scope,
     }

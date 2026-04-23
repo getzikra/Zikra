@@ -1,5 +1,61 @@
 # Changelog
 
+## [1.0.10] — 2026-04-22
+
+### Added
+
+- **"Who are you?" login screen** (`ui.html`). Replaces the silent settings-panel
+  bearer-token input with a full-viewport user-picker overlay. On first visit (or
+  after a token expiry) the UI fetches `/api/ui/users` and renders a button for
+  each known token label. Clicking a name reveals an inline token-paste field;
+  confirming verifies against `/api/ui/bootstrap` before persisting to
+  `localStorage`. An "Advanced" disclosure allows manual token entry for new
+  users whose label hasn't been minted yet.
+
+- **`GET /api/ui/users`** — unauthenticated endpoint returning
+  `[{"label": "…"}, …]` from `access_tokens` (active, non-owner rows only).
+  No tokens, no roles, no IDs are exposed.
+
+- **Project-scoped tokens** (`project_scope` column on `access_tokens`).
+  `NULL` = unrestricted. A non-null value restricts the token to that project
+  only — any request targeting a different project is rejected with a structured
+  403. Pass `"project_scope": "veltisai"` to `create_token` to mint a
+  pre-scoped token.
+
+- **Token usage tracking** (`token_hits` table). An append-only table records
+  `(label, command, ts)` for every authenticated request via a FastAPI
+  middleware. Webhook calls log the exact command (`search`, `save_memory`, …);
+  UI calls log the path (`ui:bootstrap`, `ui:memories`, …). Non-blocking —
+  inserted as a background task so it never adds latency.
+
+- **`GET /api/ui/token-usage`** — authenticated endpoint returning per-label
+  `hits_total`, `hits_7d`, `hits_24h`, and `last_seen`.
+
+- **Graceful 403 handling in the UI**. Scope-mismatch errors show a banner with
+  a "Switch to '<project>'" button that auto-switches the active project and
+  reconnects. Scoped tokens auto-land on their project at login and on every
+  page reload via the `project_scope` field returned by `/api/ui/bootstrap`.
+
+### Fixed
+
+- `renderProjSelector` owner gate removed — all authenticated roles now see the
+  radio-button project list, not a plain text input.
+- Global 401 handler now wipes `localStorage` and shows the "Who are you?"
+  overlay instead of opening the gear panel.
+- Login flow uses relative URLs (`/api/ui/users`, `/api/ui/bootstrap`) so the
+  "Who are you?" screen works correctly when accessed via a remote domain
+  (previously fetched `localhost:8100` from the user's browser).
+
+### Schema
+
+- `access_tokens`: new `project_scope TEXT` column (nullable, default NULL).
+- New `token_hits (id, label, command, ts)` table with two indexes.
+- SQLite: migration `008_token_hits_and_project_scope`.
+- Postgres: columns/tables added via `init_pg()` migration guards and included
+  in `_PG_TABLES` for fresh installs.
+
+---
+
 ## [1.0.9] — 2026-04-21
 
 ### Added

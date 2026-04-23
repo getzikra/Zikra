@@ -22,11 +22,14 @@ from zikra.db import (
     list_projects,
     list_by_memory_type,
     list_runs,
+    list_token_labels,
+    log_token_hit,
     open_aio_db,
     run_stats,
     set_aio_db,
+    token_usage_stats,
 )
-from zikra.auth import verify_auth, ROLE_PERMISSIONS
+from zikra.auth import verify_auth, assert_scope, ROLE_PERMISSIONS
 from zikra.commands.search import cmd_search
 from zikra.commands.save_memory import cmd_save_memory
 from zikra.commands.get_prompt import cmd_get_prompt
@@ -80,6 +83,23 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
+# ── Token hit tracking middleware ─────────────────────────────────────────────
+@app.middleware('http')
+async def record_token_hit(request: Request, call_next):
+    import asyncio
+    response = await call_next(request)
+    if response.status_code == 200:
+        label = getattr(request.state, 'token_label', None)
+        if label:
+            path = request.url.path
+            if path == '/webhook/zikra':
+                command = getattr(request.state, 'webhook_command', 'webhook')
+            else:
+                command = path.replace('/api/ui/', 'ui:').strip('/')
+            asyncio.create_task(log_token_hit(label, command))
+    return response
+
+
 # ── MCP — Streamable HTTP (primary transport, MCP spec 2025-03-26) ────────────
 # Registered as a direct FastAPI route so Starlette's Mount never issues a
 # 307 redirect on POST /mcp → /mcp/. MCP clients (claude.ai, Cursor) do not
@@ -451,12 +471,15 @@ def _build_graph_payload(memories: list[dict], wiki_links: list[dict] | None = N
 @app.get('/api/ui/bootstrap')
 async def ui_bootstrap(request: Request):
     auth_info = await verify_auth(request)
-    project = request.query_params.get('project') or 'global'
+    scope = auth_info.get('project_scope')
+    # If token is scoped, force the project — do not 403 here (bootstrap is auth-only)
+    project = scope or (request.query_params.get('project') or 'global')
     prompts = await list_by_memory_type('prompt', project, 8)
     requirements = await list_by_memory_type('requirement', project, 8)
     return {
         'role': auth_info.get('role', 'viewer'),
         'project': project,
+        'project_scope': scope,
         'projects': await list_projects(),
         'memory_total': await debug_memory_count(),
         'recent_prompts': prompts,
@@ -464,10 +487,28 @@ async def ui_bootstrap(request: Request):
     }
 
 
+@app.get('/api/ui/users')
+async def ui_users():
+    """Unauthenticated — returns token labels for the 'Who are you?' picker."""
+    labels = await list_token_labels()
+    return JSONResponse([{'label': l} for l in labels])
+
+
+@app.get('/api/ui/token-usage')
+async def ui_token_usage(request: Request):
+    await verify_auth(request)
+    stats = await token_usage_stats()
+    for row in stats:
+        if row.get('last_seen') is not None:
+            row['last_seen'] = str(row['last_seen'])
+    return JSONResponse(stats)
+
+
 @app.get('/api/ui/graph')
 async def ui_graph(request: Request):
-    await verify_auth(request)
+    auth_info = await verify_auth(request)
     project = request.query_params.get('project') or 'global'
+    assert_scope(auth_info, project)
     limit = min(int(request.query_params.get('limit', '300')), 500)
     memories = await list_all_memories(project, limit)
     wiki_links = await fetch_links_between([m['id'] for m in memories])
@@ -510,8 +551,9 @@ async def ui_memories(request: Request):
     - q=<text>          → hybrid vector+FTS search via find_memories (snippet only)
     Query params: project, q, type, status, limit
     """
-    await verify_auth(request)
+    auth_info = await verify_auth(request)
     project = request.query_params.get('project') or 'global'
+    assert_scope(auth_info, project)
     q       = (request.query_params.get('q') or '').strip()
     mtype   = request.query_params.get('type') or None
     status  = request.query_params.get('status') or None
@@ -555,8 +597,9 @@ async def ui_memory_get(memory_id: str, request: Request):
 @app.get('/api/ui/prompts')
 async def ui_prompts(request: Request):
     """List prompts for the UI."""
-    await verify_auth(request)
+    auth_info = await verify_auth(request)
     project = request.query_params.get('project') or 'global'
+    assert_scope(auth_info, project)
     limit   = min(int(request.query_params.get('limit', '100')), 500)
     rows = await list_by_memory_type('prompt', project, limit)
     return {'prompts': _prep_memories(rows), 'count': len(rows)}
@@ -565,8 +608,9 @@ async def ui_prompts(request: Request):
 @app.get('/api/ui/requirements')
 async def ui_requirements(request: Request):
     """List requirements for the UI, optionally filtered by status."""
-    await verify_auth(request)
+    auth_info = await verify_auth(request)
     project = request.query_params.get('project') or 'global'
+    assert_scope(auth_info, project)
     status  = request.query_params.get('status') or None
     limit   = min(int(request.query_params.get('limit', '100')), 500)
     rows = await list_by_memory_type('requirement', project, limit, status=status)
@@ -579,8 +623,9 @@ async def ui_run_history(request: Request):
     DEPRECATED (kept for v1.0.4 clients). Use /api/ui/runs instead.
     Returns conversation-type memories filtered by prompt name in title/tags.
     """
-    await verify_auth(request)
+    auth_info   = await verify_auth(request)
     project     = request.query_params.get('project') or 'global'
+    assert_scope(auth_info, project)
     prompt_name = (request.query_params.get('prompt') or '').lower().strip()
     limit       = min(int(request.query_params.get('limit', '30')), 100)
 
@@ -606,8 +651,9 @@ async def ui_runs(request: Request):
       limit       – max rows returned (default 50, cap 200)
     Response: { runs: [...], stats: { run_count, sum_in, sum_out, sum_cache_read, ... } }
     """
-    await verify_auth(request)
+    auth_info   = await verify_auth(request)
     project     = request.query_params.get('project') or 'global'
+    assert_scope(auth_info, project)
     prompt_id   = request.query_params.get('prompt_id') or None
     prompt_name = request.query_params.get('prompt_name') or None
     limit       = min(int(request.query_params.get('limit', '50')), 200)
@@ -650,6 +696,9 @@ async def handle(request: Request):
             content={'error': 'Request body is not valid JSON'},
         )
     command = str(body.get('command') or '').lower().strip()
+    try: request.state.webhook_command = command
+    except Exception: pass
+    assert_scope(auth_info, str(body.get('project') or 'global'))
     handler = DISPATCH.get(command)
 
     # Resolve alias to canonical name for permission check

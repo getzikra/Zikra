@@ -283,6 +283,59 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .btn-secondary:hover { color: var(--text); }
 
+/* ── Who Are You overlay ── */
+#who-are-you {
+  display: none; position: fixed; inset: 0; z-index: 500;
+  background: var(--bg2);
+  align-items: center; justify-content: center;
+}
+#who-are-you.visible { display: flex; }
+.way-card {
+  width: 360px; max-width: 96vw;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 14px; padding: 28px 24px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.7);
+}
+.way-title {
+  font-size: 15px; font-weight: 600; color: var(--text);
+  margin-bottom: 4px;
+}
+.way-sub {
+  font-size: 12px; color: var(--tmuted); margin-bottom: 18px;
+}
+.way-user-btn {
+  width: 100%; text-align: left;
+  background: var(--bgsec); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 13px;
+  font-size: 13px; color: var(--text2);
+  margin-bottom: 6px; transition: border-color 0.15s, color 0.15s;
+}
+.way-user-btn:hover { border-color: rgba(83,74,183,0.5); color: var(--text); }
+.way-user-btn.selected { border-color: rgba(83,74,183,0.6); color: var(--text); background: rgba(83,74,183,0.08); }
+.way-inline {
+  display: none; flex-direction: column; gap: 6px;
+  margin-bottom: 6px; margin-top: -2px;
+  padding: 10px 13px; background: rgba(83,74,183,0.06);
+  border: 1px solid rgba(83,74,183,0.25); border-radius: 8px;
+}
+.way-inline.open { display: flex; }
+.way-inline input[type="password"] {
+  width: 100%; background: var(--bgsec); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text2); padding: 7px 9px; font-size: 12px;
+  outline: none; transition: border-color 0.15s;
+}
+.way-inline input:focus { border-color: rgba(83,74,183,0.5); }
+.way-inline-err { font-size: 11px; color: #f87171; min-height: 1lh; }
+.way-advanced {
+  margin-top: 16px; border-top: 1px solid var(--border); padding-top: 14px;
+}
+.way-advanced summary {
+  font-size: 11px; color: var(--tfaint); cursor: pointer;
+  list-style: none; user-select: none;
+}
+.way-advanced summary:hover { color: var(--tmuted); }
+.way-advanced-body { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+
 /* ── Type Badge ── */
 .tbadge {
   display: inline-block; padding: 2px 7px;
@@ -759,6 +812,23 @@ body.resizing { cursor: col-resize; user-select: none; }
 
 </div><!-- .app-shell -->
 
+<!-- Who are you? login overlay -->
+<div id="who-are-you" role="dialog" aria-modal="true" aria-label="Sign in">
+  <div class="way-card">
+    <div class="way-title">Who are you?</div>
+    <div class="way-sub">Pick your name, then paste your token.</div>
+    <div id="way-user-list"></div>
+    <details class="way-advanced" id="way-advanced">
+      <summary>Advanced &mdash; I don&rsquo;t see my name</summary>
+      <div class="way-advanced-body">
+        <input type="password" id="way-adv-token" placeholder="Paste bearer token">
+        <div class="way-inline-err" id="way-adv-err"></div>
+        <button class="btn-primary" id="way-adv-submit" style="align-self:flex-start">Connect</button>
+      </div>
+    </details>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -959,12 +1029,8 @@ async function apiGet(path, params = {}) {
     const res = await fetch(url, {
       headers: { 'Authorization': 'Bearer ' + S.token }
     });
-    if (res.status === 401) {
-      openGear();
-      document.getElementById('token-error').textContent = 'Token invalid or expired';
-      setConnected(false);
-      return null;
-    }
+    if (res.status === 401) { handle401(); return null; }
+    if (res.status === 403) { await handle403(res); return null; }
     if (res.status >= 500) {
       showBanner('Server error — check logs');
       return null;
@@ -992,12 +1058,8 @@ async function apiPost(command, extra = {}) {
       },
       body: JSON.stringify({ command, project: S.project, ...extra })
     });
-    if (res.status === 401) {
-      openGear();
-      document.getElementById('token-error').textContent = 'Token invalid or expired';
-      setConnected(false);
-      return null;
-    }
+    if (res.status === 401) { handle401(); return null; }
+    if (res.status === 403) { await handle403(res); return null; }
     if (res.status >= 500) {
       showBanner('Server error — check docker logs zikra');
       return null;
@@ -1011,6 +1073,195 @@ async function apiPost(command, extra = {}) {
     showBanner('Cannot reach ' + url + ' — is the server running?');
     return null;
   }
+}
+
+async function handle403(res) {
+  let scope = null;
+  try {
+    const body = await res.json();
+    scope = (body.detail && body.detail.project_scope) || null;
+  } catch (_) {}
+
+  if (scope) {
+    showScopeBanner(scope);
+  } else {
+    showBanner('Access denied (403)');
+  }
+}
+
+function showScopeBanner(scope) {
+  const msg = `Your token is restricted to the ‘${scope}’ project.`;
+  const el  = document.getElementById('error-banner');
+  const msgEl = document.getElementById('error-banner-msg');
+  // Inject a switch button alongside the message
+  msgEl.innerHTML =
+    `${esc(msg)} &nbsp;<button class="btn-secondary" id="scope-switch-btn"
+      style="padding:3px 10px;font-size:11px;vertical-align:middle">
+      Switch to ‘${esc(scope)}’
+    </button>`;
+  el.classList.add('visible');
+  document.getElementById('scope-switch-btn').addEventListener('click', () => {
+    S.project = scope;
+    localStorage.setItem(K_PROJECT, scope);
+    updateProjectPill();
+    hideBanner();
+    connect();
+  });
+}
+
+// ── Who Are You ───────────────────────────────────────────────────
+function handle401() {
+  localStorage.removeItem(K_TOKEN);
+  localStorage.removeItem(K_URL);
+  localStorage.removeItem(K_PROJECT);
+  S.token = ''; S.connected = false;
+  showWhoAreYou();
+}
+
+async function showWhoAreYou() {
+  const overlay = document.getElementById('who-are-you');
+  const list    = document.getElementById('way-user-list');
+  overlay.classList.add('visible');
+  list.innerHTML = '<div style="font-size:12px;color:var(--tmuted);padding:6px 0">Loading…</div>';
+
+  let users = [];
+  try {
+    const res = await fetch('/api/ui/users');
+    if (res.ok) users = await res.json();
+  } catch (_) {}
+
+  list.innerHTML = '';
+  if (!users.length) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--tmuted);padding:6px 0">No users found. Use the Advanced option below.</div>';
+  }
+
+  users.forEach(u => {
+    const label = u.label || '';
+
+    const btn = document.createElement('button');
+    btn.className = 'way-user-btn';
+    btn.textContent = label;
+
+    const inline = document.createElement('div');
+    inline.className = 'way-inline';
+    inline.innerHTML = `
+      <input type="password" placeholder="Paste your token for ${esc(label)}" autocomplete="current-password">
+      <div class="way-inline-err"></div>
+      <button class="btn-primary" style="align-self:flex-start">Connect</button>
+    `;
+
+    btn.addEventListener('click', () => {
+      list.querySelectorAll('.way-user-btn').forEach(b => b.classList.remove('selected'));
+      list.querySelectorAll('.way-inline').forEach(d => d.classList.remove('open'));
+      btn.classList.add('selected');
+      inline.classList.add('open');
+      inline.querySelector('input').focus();
+    });
+
+    const confirmBtn = inline.querySelector('button');
+    const tokenInput = inline.querySelector('input');
+    const errEl      = inline.querySelector('.way-inline-err');
+
+    async function tryConnect() {
+      const tok = tokenInput.value.trim();
+      if (!tok) { errEl.textContent = 'Paste your token first'; return; }
+      errEl.textContent = '';
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Checking…';
+      try {
+        const r = await fetch('/api/ui/bootstrap', {
+          headers: { 'Authorization': 'Bearer ' + tok }
+        });
+        if (r.status === 401) {
+          errEl.textContent = 'Wrong token — try again';
+          tokenInput.value = '';
+          tokenInput.focus();
+        } else if (r.ok) {
+          const info = await r.json();
+          const derivedUrl = window.location.origin + '/webhook/zikra';
+          S.url = derivedUrl;
+          S.token = tok;
+          if (info.project_scope) {
+            S.project = info.project_scope;
+            localStorage.setItem(K_PROJECT, info.project_scope);
+          }
+          localStorage.setItem(K_TOKEN, tok);
+          localStorage.setItem(K_URL,   derivedUrl);
+          hideWhoAreYou();
+          connect();
+        } else {
+          errEl.textContent = 'Server error (' + r.status + ')';
+        }
+      } catch (_) {
+        errEl.textContent = 'Cannot reach server';
+      }
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Connect';
+    }
+
+    confirmBtn.addEventListener('click', tryConnect);
+    tokenInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryConnect(); });
+
+    list.appendChild(btn);
+    list.appendChild(inline);
+  });
+
+  // Advanced path
+  const advSubmit = document.getElementById('way-adv-submit');
+  const advInput  = document.getElementById('way-adv-token');
+  const advErr    = document.getElementById('way-adv-err');
+
+  const newSubmit = advSubmit.cloneNode(true);
+  advSubmit.replaceWith(newSubmit);
+
+  async function tryAdvConnect() {
+    const tok = advInput.value.trim();
+    if (!tok) { advErr.textContent = 'Paste a token first'; return; }
+    advErr.textContent = '';
+    newSubmit.disabled = true;
+    newSubmit.textContent = 'Checking…';
+    try {
+      const r = await fetch('/api/ui/bootstrap', {
+        headers: { 'Authorization': 'Bearer ' + tok }
+      });
+      if (r.status === 401) {
+        advErr.textContent = 'Token rejected';
+        advInput.value = '';
+        advInput.focus();
+      } else if (r.ok) {
+        const info = await r.json();
+        const derivedUrl = window.location.origin + '/webhook/zikra';
+        S.url = derivedUrl;
+        S.token = tok;
+        if (info.project_scope) {
+          S.project = info.project_scope;
+          localStorage.setItem(K_PROJECT, info.project_scope);
+        }
+        localStorage.setItem(K_TOKEN, tok);
+        localStorage.setItem(K_URL,   derivedUrl);
+        hideWhoAreYou();
+        connect();
+      } else {
+        advErr.textContent = 'Server error (' + r.status + ')';
+      }
+    } catch (_) {
+      advErr.textContent = 'Cannot reach server';
+    }
+    newSubmit.disabled = false;
+    newSubmit.textContent = 'Connect';
+  }
+
+  newSubmit.addEventListener('click', tryAdvConnect);
+  advInput.addEventListener('keydown', e => { if (e.key === 'Enter') tryAdvConnect(); });
+}
+
+function hideWhoAreYou() {
+  document.getElementById('who-are-you').classList.remove('visible');
+  document.getElementById('way-user-list').innerHTML = '';
+  document.getElementById('way-adv-token').value = '';
+  document.getElementById('way-adv-err').textContent = '';
+  const adv = document.getElementById('way-advanced');
+  if (adv) adv.removeAttribute('open');
 }
 
 // ── Error Banner ──────────────────────────────────────────────────
@@ -1050,7 +1301,7 @@ function toggleGear() {
 
 function renderProjSelector(projects, role) {
   const wrap = document.getElementById('proj-selector');
-  if (role === 'owner' && projects.length > 0) {
+  if (projects.length > 0) {
     const items = projects.map(p => {
       const checked = p === S.project ? 'checked' : '';
       return `<label><input type="radio" name="proj-radio" value="${esc(p)}" ${checked}><span>${esc(p)}</span></label>`;
@@ -1113,6 +1364,10 @@ async function connect() {
 
   S.role     = info.role     || 'viewer';
   S.projects = info.projects || [];
+  if (info.project_scope) {
+    S.project = info.project_scope;
+    localStorage.setItem(K_PROJECT, info.project_scope);
+  }
 
   setConnected(true);
   updateProjectPill();
@@ -2293,11 +2548,9 @@ window.addEventListener('resize', () => {
   }
 
   if (token) {
-    // Auto-connect
     connect();
   } else {
-    // Open gear so user knows to configure
-    openGear();
+    showWhoAreYou();
   }
 })();
 </script>

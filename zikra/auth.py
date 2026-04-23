@@ -33,9 +33,12 @@ async def verify_auth(request: Request) -> dict:
     # Reload env token each call so ZIKRA_TOKEN changes are picked up at runtime
     env_token = os.getenv('ZIKRA_TOKEN', ZIKRA_TOKEN)
 
-    # Env token wins (backwards compat) — owner role
+    # Env token wins (backwards compat) — owner role, unrestricted scope
     if env_token and secrets.compare_digest(token.encode(), env_token.encode()):
-        return {'token': token, 'role': 'owner'}
+        info = {'token': token, 'role': 'owner', 'label': 'owner', 'project_scope': None}
+        try: request.state.token_label = 'owner'
+        except Exception: pass
+        return info
 
     # DB token lookup — branch on backend
     backend = os.getenv('DB_BACKEND', 'sqlite').lower()
@@ -44,10 +47,17 @@ async def verify_auth(request: Request) -> dict:
         pool = get_pg_pool()
         if pool is None:
             raise HTTPException(status_code=503, detail='Database not ready')
-        role = await verify_token_pg(pool, token)
-        if not role:
+        result = await verify_token_pg(pool, token)
+        if not result:
             raise HTTPException(status_code=401, detail='Unauthorized')
-        return {'token': token, 'role': role}
+        try: request.state.token_label = result['label']
+        except Exception: pass
+        return {
+            'token': token,
+            'role': result['role'],
+            'label': result['label'],
+            'project_scope': result.get('project_scope'),
+        }
 
     # SQLite path
     db, lock = get_db_and_lock()
@@ -57,11 +67,33 @@ async def verify_auth(request: Request) -> dict:
         raise HTTPException(status_code=503, detail='Database not initialised')
     with lock:
         row = db.execute(
-            'SELECT role FROM access_tokens WHERE token = ? AND active = 1',
+            'SELECT role, person_name, project_scope FROM access_tokens WHERE token = ? AND active = 1',
             [token]
         ).fetchone()
 
     if not row:
         raise HTTPException(status_code=401, detail='Unauthorized')
 
-    return {'token': token, 'role': row[0]}
+    label = row[1] or ''
+    try: request.state.token_label = label
+    except Exception: pass
+    return {'token': token, 'role': row[0], 'label': label, 'project_scope': row[2]}
+
+
+def assert_scope(auth_info: dict, project: str) -> None:
+    """Raise 403 if the token is restricted to a different project."""
+    scope = auth_info.get('project_scope')
+    if scope and scope != project:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                'error': 'token_scope_mismatch',
+                'project_scope': scope,
+                'requested_project': project,
+                'message': (
+                    f"This token is restricted to project '{scope}'. "
+                    f"Set \"project\": \"{scope}\" in your request to continue."
+                ),
+                'hint': f'Change your project parameter to "{scope}".',
+            }
+        )

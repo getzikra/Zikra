@@ -83,14 +83,25 @@ CREATE TABLE IF NOT EXISTS error_log (
 );
 
 CREATE TABLE IF NOT EXISTS access_tokens (
-    id          TEXT PRIMARY KEY,
-    token       TEXT NOT NULL UNIQUE,
-    person_name TEXT,
-    role        TEXT DEFAULT 'owner',
-    active      INTEGER DEFAULT 1,
-    token_name  TEXT,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
+    id            TEXT PRIMARY KEY,
+    token         TEXT NOT NULL UNIQUE,
+    person_name   TEXT,
+    role          TEXT DEFAULT 'owner',
+    active        INTEGER DEFAULT 1,
+    token_name    TEXT,
+    project_scope TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS token_hits (
+    id      TEXT PRIMARY KEY,
+    label   TEXT NOT NULL,
+    command TEXT NOT NULL,
+    ts      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_hits_label_ts ON token_hits (label, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_token_hits_ts ON token_hits (ts DESC);
 """
 
 # Separate so a missing pgvector extension doesn't break table creation
@@ -178,6 +189,17 @@ async def init_pg() -> 'asyncpg.Pool':
                 PRIMARY KEY (from_id, to_id)
             )""",
             "CREATE INDEX IF NOT EXISTS idx_memory_links_to ON memory_links(to_id)",
+            # v1.0.10: per-token usage tracking (append-only)
+            """CREATE TABLE IF NOT EXISTS token_hits (
+                id      TEXT PRIMARY KEY,
+                label   TEXT NOT NULL,
+                command TEXT NOT NULL,
+                ts      TIMESTAMPTZ DEFAULT NOW()
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_token_hits_label_ts ON token_hits (label, ts DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_token_hits_ts ON token_hits (ts DESC)",
+            # v1.0.10: per-project token scoping (null = unrestricted)
+            "ALTER TABLE access_tokens ADD COLUMN IF NOT EXISTS project_scope TEXT NULL",
         ]
         for stmt in _migrations:
             try:
@@ -789,12 +811,37 @@ async def bump_access_count_pg(pool, memory_id: str) -> None:
         """, memory_id)
 
 
-async def add_token_pg(pool, token_id: str, token: str, person_name: str, role: str) -> None:
+async def add_token_pg(pool, token_id: str, token: str, person_name: str, role: str,
+                       project_scope: str = None) -> None:
     async with pool.acquire() as conn:
         await conn.execute("""
-            INSERT INTO access_tokens (id, token, person_name, role, active)
-            VALUES ($1,$2,$3,$4,1)
-        """, token_id, token, person_name, role)
+            INSERT INTO access_tokens (id, token, person_name, role, active, project_scope)
+            VALUES ($1,$2,$3,$4,1,$5)
+        """, token_id, token, person_name, role, project_scope)
+
+
+async def token_usage_stats_pg(pool) -> list:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT
+                label,
+                COUNT(*)                                                        AS hits_total,
+                COUNT(*) FILTER (WHERE ts > NOW() - INTERVAL '7 days')         AS hits_7d,
+                COUNT(*) FILTER (WHERE ts > NOW() - INTERVAL '24 hours')       AS hits_24h,
+                MAX(ts)                                                         AS last_seen
+            FROM token_hits
+            GROUP BY label
+            ORDER BY hits_total DESC
+        """)
+    return [dict(r) for r in rows]
+
+
+async def list_token_labels_pg(pool) -> list:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT person_name FROM access_tokens WHERE active = 1 AND role != 'owner' ORDER BY created_at"
+        )
+        return [r['person_name'] for r in rows if r['person_name']]
 
 
 async def list_by_type_pg(pool, memory_type: str, project: str, limit: int,
@@ -906,11 +953,26 @@ async def debug_count_pg(pool) -> int:
     return row['n'] if row else 0
 
 
-async def verify_token_pg(pool, token: str) -> Optional[str]:
-    """Return the role string for an active token, or None if not found."""
+async def verify_token_pg(pool, token: str) -> Optional[dict]:
+    """Return {'role', 'label', 'project_scope'} for an active token, or None."""
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT role FROM access_tokens WHERE token = $1 AND active = 1",
+            "SELECT role, person_name, project_scope FROM access_tokens WHERE token = $1 AND active = 1",
             token,
         )
-    return row['role'] if row else None
+    if not row:
+        return None
+    return {
+        'role': row['role'],
+        'label': row['person_name'] or '',
+        'project_scope': row['project_scope'],
+    }
+
+
+async def log_token_hit_pg(pool, label: str, command: str) -> None:
+    import uuid as _uuid
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO token_hits (id, label, command) VALUES ($1, $2, $3)",
+            str(_uuid.uuid4()), label, command,
+        )

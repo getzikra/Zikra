@@ -852,18 +852,62 @@ async def bump_access_count(memory_id: str) -> None:
     await _aio_db.commit()
 
 
-async def add_token(token_id: str, token: str, person_name: str, role: str) -> None:
+async def add_token(token_id: str, token: str, person_name: str, role: str,
+                    project_scope: str = None) -> None:
     """Insert a new access token."""
     if _is_pg:
         from zikra.db_postgres import add_token_pg, get_pg_pool
-        await add_token_pg(get_pg_pool(), token_id, token, person_name, role)
+        await add_token_pg(get_pg_pool(), token_id, token, person_name, role, project_scope)
         return
 
     await _aio_db.execute(
-        "INSERT INTO access_tokens (id, token, person_name, role, active) VALUES (?, ?, ?, ?, 1)",
-        [token_id, token, person_name, role]
+        "INSERT INTO access_tokens (id, token, person_name, role, active, project_scope) VALUES (?, ?, ?, ?, 1, ?)",
+        [token_id, token, person_name, role, project_scope]
     )
     await _aio_db.commit()
+
+
+async def log_token_hit(label: str, command: str) -> None:
+    if _is_pg:
+        from zikra.db_postgres import log_token_hit_pg, get_pg_pool
+        await log_token_hit_pg(get_pg_pool(), label, command)
+        return
+    await _aio_db.execute(
+        "INSERT INTO token_hits (id, label, command) VALUES (?, ?, ?)",
+        [new_id(), label, command]
+    )
+    await _aio_db.commit()
+
+
+async def token_usage_stats() -> list:
+    if _is_pg:
+        from zikra.db_postgres import token_usage_stats_pg, get_pg_pool
+        return await token_usage_stats_pg(get_pg_pool())
+    async with _aio_db.execute("""
+        SELECT label,
+               COUNT(*)                                              AS hits_total,
+               COUNT(CASE WHEN ts > datetime('now','-7 days') THEN 1 END) AS hits_7d,
+               COUNT(CASE WHEN ts > datetime('now','-1 day')  THEN 1 END) AS hits_24h,
+               MAX(ts)                                               AS last_seen
+        FROM token_hits
+        GROUP BY label
+        ORDER BY hits_total DESC
+    """) as cur:
+        rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def list_token_labels() -> list:
+    """Return person_name for all active non-owner tokens, ordered by creation."""
+    if _is_pg:
+        from zikra.db_postgres import list_token_labels_pg, get_pg_pool
+        return await list_token_labels_pg(get_pg_pool())
+
+    async with _aio_db.execute(
+        "SELECT person_name FROM access_tokens WHERE active = 1 AND role != 'owner' ORDER BY created_at"
+    ) as cur:
+        rows = await cur.fetchall()
+    return [r[0] for r in rows if r[0]]
 
 
 async def list_by_memory_type(memory_type: str, project: str, limit: int,
