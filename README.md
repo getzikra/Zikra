@@ -13,11 +13,48 @@ zikra 17 runs · 847 memories │ you@team-server │ Sonnet 4.6 │ ~/project (
 
 ---
 
+## Install in one line
+
+```bash
+claude mcp add zikra http://localhost:8000/mcp --header "Authorization: Bearer YOUR_TOKEN"
+```
+
+Or add to `~/.claude/settings.json`:
+
+```json
+{ "mcpServers": { "zikra": { "url": "http://localhost:8000/mcp", "headers": { "Authorization": "Bearer YOUR_TOKEN" } } } }
+```
+
+**Don't have a server yet?** → [Step 1 below](#step-1--install-the-server) takes ~2 minutes.
+
+---
+
 AI agents have no memory between sessions. Claude Code forgets your architecture decisions overnight. Gemini CLI has no idea what Claude Web researched this morning. Cursor on your teammate's machine has never seen your decisions.
 
 Zikra fixes that. It's a **MCP-native memory server** that all your agents connect to. Every decision, requirement, error, and session summary — saved, searchable, and shared across every tool and every machine.
 
 — Mukarram
+
+---
+
+## How Zikra compares
+
+Reviewers always build this table — here it is upfront:
+
+| | **Zikra** | MCP Memory¹ | mem0 | basic-memory | MemoryMesh |
+|---|---|---|---|---|---|
+| Persists across sessions | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Works across **multiple tools**<br>(Claude + Gemini + Codex) | ✅ | ❌ Claude only | ✅ paid | ❌ Claude only | ❌ Claude only |
+| Team sharing / multi-user | ✅ RBAC | ❌ | ✅ paid | ❌ | ❌ |
+| Self-hosted, zero cloud | ✅ | ✅ | ❌ paid tier | ✅ | ✅ |
+| Auto-saves every session | ✅ Stop hook | ❌ manual | ❌ manual | ❌ manual | ❌ manual |
+| Hybrid vector + keyword search | ✅ | ❌ graph only | ✅ | ❌ text only | ❌ JSON scan |
+| Confidence decay / staleness | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Named prompts + requirements | ✅ | ❌ | ❌ | ❌ | ❌ |
+| License | MIT | MIT | Proprietary (cloud) | MIT | MIT |
+| Embedding cost | Optional | Optional | Required (cloud) | None | None |
+
+¹ `@modelcontextprotocol/server-memory` — the official reference server.
 
 ---
 
