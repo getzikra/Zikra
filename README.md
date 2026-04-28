@@ -1,11 +1,11 @@
-# Zikra — Shared Memory Across Every AI Tool Your Team Uses
+# Zikra — Team Memory for AI Agents
 
-> Persistent memory for Claude Code, Cursor, Gemini CLI, and other AI coding agents — shared across sessions and machines.
+> Not just session memory. A shared, governed memory layer for every agent, every person, and every project your team runs.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP](https://img.shields.io/badge/MCP-native-blue)](https://modelcontextprotocol.io/)
 
-**Website:** [zikra.dev](https://zikra.dev) · Self-hosted · Agent-agnostic · MCP native
+**Website:** [zikra.dev](https://zikra.dev) · Self-hosted · MIT · Scales to millions of memories
 
 ```
 zikra 17 runs · 847 memories │ you@team-server │ Sonnet 4.6 │ ~/project (main) │ 387K/200K ████░░░░░░ 45%
@@ -29,9 +29,21 @@ Or add to `~/.claude/settings.json`:
 
 ---
 
-AI agents have no memory between sessions. Claude Code forgets your architecture decisions overnight. Gemini CLI has no idea what Claude Web researched this morning. Cursor on your teammate's machine has never seen your decisions.
+Most AI memory tools solve one problem: one agent remembers one session better.
 
-Zikra fixes that. It's a **MCP-native memory server** that all your agents connect to. Every decision, requirement, error, and session summary — saved, searchable, and shared across every tool and every machine.
+Zikra solves a harder problem: **multiple people running multiple AI agents across multiple projects** — all sharing the same memory pool, with the right person scoped to the right project, the right agent pulling the right context, and millions of memories staying fresh through built-in hygiene scoring.
+
+It's not session memory. It's the shared brain for an AI-native team.
+
+| What you get | What that means |
+|---|---|
+| **Multi-agent** | Claude Code, Gemini CLI, Codex — one pool, one token | 
+| **Multi-person** | Owner / admin / dev / viewer roles per project |
+| **Multi-project** | Isolated namespaces; one team runs `veltisai`, `design`, `global` |
+| **Scale** | PostgreSQL backend — handles millions of memories without index rebuilds |
+| **Memory hygiene** | Built-in hygiene prompt: confidence decay, orphan detection, stale cleanup |
+| **Structure** | Not just "save text" — decisions, requirements, prompts, errors, session diaries |
+| **Auto-save** | Stop + PreCompact hooks write every session automatically |
 
 — Mukarram
 
@@ -39,22 +51,20 @@ Zikra fixes that. It's a **MCP-native memory server** that all your agents conne
 
 ## How Zikra compares
 
-Reviewers always build this table — here it is upfront:
-
 | | **Zikra** | MCP Memory¹ | mem0 | basic-memory | MemoryMesh |
 |---|---|---|---|---|---|
-| Persists across sessions | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Works across **multiple tools**<br>(Claude + Gemini + Codex) | ✅ | ❌ Claude only | ✅ paid | ❌ Claude only | ❌ Claude only |
-| Team sharing / multi-user | ✅ RBAC | ❌ | ✅ paid | ❌ | ❌ |
-| Self-hosted, zero cloud | ✅ | ✅ | ❌ paid tier | ✅ | ✅ |
-| Auto-saves every session | ✅ Stop hook | ❌ manual | ❌ manual | ❌ manual | ❌ manual |
-| Hybrid vector + keyword search | ✅ | ❌ graph only | ✅ | ❌ text only | ❌ JSON scan |
-| Confidence decay / staleness | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Works across **multiple AI tools** | ✅ | ❌ | ✅ paid | ❌ | ❌ |
+| **Team sharing** with per-user roles | ✅ RBAC | ❌ | ✅ paid | ❌ | ❌ |
+| **Multi-project** namespacing | ✅ | ❌ | ✅ paid | ❌ | ❌ |
+| Self-hosted, zero cloud dependency | ✅ | ✅ | ❌ | ✅ | ✅ |
+| Auto-save via session hooks | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Hybrid vector + keyword search | ✅ | ❌ graph only | ✅ | ❌ | ❌ |
+| Confidence decay / memory hygiene | ✅ built-in prompt | ❌ | ❌ | ❌ | ❌ |
 | Named prompts + requirements | ✅ | ❌ | ❌ | ❌ | ❌ |
-| License | MIT | MIT | Proprietary (cloud) | MIT | MIT |
-| Embedding cost | Optional | Optional | Required (cloud) | None | None |
+| Scales to millions of memories | ✅ Postgres | ❌ in-memory | ✅ cloud | ❌ | ❌ |
+| License | MIT | MIT | Proprietary | MIT | MIT |
 
-¹ `@modelcontextprotocol/server-memory` — the official reference server.
+¹ `@modelcontextprotocol/server-memory` — the official Anthropic reference server.
 
 ---
 
@@ -72,7 +82,7 @@ python3 installer.py         # interactive setup, ~2 minutes
 python3 -m zikra
 ```
 
-The installer creates a `.env` file and generates your admin token. The server binds to `http://localhost:8000` by default. `python3 -m zikra` must be run from the same directory as your `.env` file.
+The installer creates a `.env` file and generates your admin token. The server binds to `http://localhost:8000` by default.
 
 > To reach it from other machines, run `cloudflared tunnel --url http://localhost:8000` (free, gives you a permanent public URL like `https://zikra.yourteam.com`).
 
@@ -91,12 +101,11 @@ Open **Claude Code → Settings → MCP → Add Server** and paste:
 }
 ```
 
-The installer does this automatically when run locally. For remote servers, paste your public URL instead of `localhost:8000`.
+The installer does this automatically when run locally.
 
 ### Step 3 — Connect your AI coding agent
 
-Paste the prompt for your agent into a session. It handles both first install and updates —
-run the same prompt any time to install or refresh.
+Paste the prompt for your agent into a session. It handles both first install and updates.
 
 **Claude Code:**
 ```
@@ -104,33 +113,18 @@ Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/zikra-claude
 and follow every instruction in it.
 ```
 
-**Gemini CLI** — coming soon
-
-**Codex** — coming soon
-
-This installs the **Stop hook** (auto-saves every session), **PreCompact hook**, and the live **statusline bar** showing run counts and memory stats. Claude Code will ask for your server URL and token, then configure everything automatically.
+This installs the **Stop hook** (auto-saves every session), **PreCompact hook**, and the live **statusline bar** showing run counts and memory stats.
 
 ---
 
 ## Updating Zikra
 
-**Server** — run `./update.sh` on your server host:
-
+**Server:**
 ```bash
-cd ~/zikra
-./update.sh
+cd ~/zikra && ./update.sh
 ```
 
-The script detects Docker or bare Python automatically, snapshots any local edits to a WIP branch before pulling, then restarts the right runtime. See `prompts/zikra-server-update.md` for the full runbook or to run the update via Claude Code.
-
-**Claude Code hooks** — re-run the onboarding prompt:
-
-```
-Fetch https://raw.githubusercontent.com/GetZikra/zikra/main/prompts/zikra-claude-code-setup.md
-and follow every instruction in it.
-```
-
-The prompt detects your existing install and only refreshes what changed. Your token and config are preserved.
+**Claude Code hooks** — re-run the onboarding prompt. It detects your existing install and only refreshes what changed.
 
 ---
 
@@ -142,7 +136,7 @@ The prompt detects your existing install and only refreshes what changed. Your t
 | Auto-log | SQLite ¹ | session hooks | none |
 | Full | SQLite ¹ or Postgres | hooks + daemon | asyncpg (Postgres only) |
 
-¹ **SQLite is for local / single-user development only.** SQLite is single-writer; concurrent saves from multiple agents or machines will queue and may fail under load. For team or multi-user deployments set `DB_BACKEND=postgres`.
+¹ **SQLite is for local / single-user only.** For team deployments set `DB_BACKEND=postgres`.
 
 ---
 
@@ -162,84 +156,50 @@ The prompt detects your existing install and only refreshes what changed. Your t
 | `ZIKRA_PORT` | No | `8000` | HTTP port |
 | `ZIKRA_DB_PATH` | No | `./zikra.db` | SQLite database path |
 | `ZIKRA_PROJECT` | No | `main` | Default project |
-| `ZIKRA_SKIP_ONBOARDING` | No | — | Set to `1` for CI/scripted use |
 | `OPENAI_API_BASE` | No | `https://api.openai.com/v1` | Swap for local or compatible embedding endpoint |
 | `ZIKRA_EMBEDDING_MODEL` | No | `text-embedding-3-small` | Embedding model name |
-| `ZIKRA_DECAY_DAYS` | No | `30` | Memory decay half-life in days (scoring) |
-| `ZIKRA_FREQUENCY_WEIGHT` | No | `0.1` | Weight of access-frequency boost in scoring |
-
----
-
-## Files written during install
-
-| File | Description |
-|---|---|
-| `.env` | Credentials, written by installer |
-| `zikra.db` | SQLite database (path from `ZIKRA_DB_PATH`, default `./zikra.db`) |
-| `~/.zikra/token` | Saved bearer token |
-| `~/.claude/settings.json` | MCP registration (merged, not overwritten) |
-| `~/.claude/zikra_autolog.sh` | Session hook (autolog + full profiles only) |
-| `~/.claude/notify.sh` | Notification hook (autolog + full profiles only) |
-| `~/.claude/hooks/zikra-statusline.js` | Status line (autolog + full profiles only) |
-| `~/.config/systemd/user/zikra.service` | Daemon unit (full profile, Linux only) |
+| `ZIKRA_DECAY_DAYS` | No | `30` | Memory half-life in days |
+| `ZIKRA_FREQUENCY_WEIGHT` | No | `0.1` | Access-frequency boost weight |
 
 ---
 
 ## How results are ranked
 
-Zikra does not return results in raw similarity order. Every search result passes through a scoring step that adjusts ranking based on:
+Every search result passes through scoring:
 
-- **Age** — recent memories rank higher. Half-life: 30 days. Floor: 0.05 (memories never disappear).
-- **Access frequency** — frequently used prompts surface higher in search results (log scale).
-- **Confidence** — memories saved with a lower `confidence_score` rank lower.
-
-No configuration required. This works automatically on every search.
+- **Age** — recent memories rank higher. Half-life: 30 days. Floor: 0.05.
+- **Access frequency** — frequently used prompts surface higher (log scale).
+- **Confidence** — memories saved with lower `confidence_score` rank lower.
 
 ---
 
 ## Command reference
 
-All commands are sent as `POST /webhook/zikra` with `Authorization: Bearer <token>`.
+All commands are `POST /webhook/zikra` with `Authorization: Bearer <token>`.
 
 | Command | Aliases | Description |
 |---|---|---|
-| `search` | `find`, `query`, `recall`, `retrieve` | Hybrid semantic + keyword search |
-| `save_memory` | `save`, `store`, `write` | Save a memory with embedding |
-| `get_memory` | `fetch_memory`, `read_memory` | Retrieve memory by title or `id` |
-| `get_prompt` | `fetch_prompt`, `run_prompt` | Retrieve a named prompt |
-| `log_run` | `log_session`, `end_session` | Log a completed agent run |
-| `log_error` | `log_bug`, `report_error` | Log an error or failure. Field: `message`, optional `context_md` |
+| `search` | `find`, `query`, `recall` | Hybrid semantic + keyword search |
+| `save_memory` | `save`, `store` | Save a memory with embedding |
+| `get_memory` | `fetch_memory` | Retrieve by title or `id` |
+| `get_prompt` | `fetch_prompt` | Retrieve a named prompt |
+| `log_run` | `log_session` | Log a completed agent run |
+| `log_error` | `log_bug` | Log an error |
 | `save_requirement` | — | Save a project requirement |
-| `save_prompt` | `write_prompt`, `store_prompt` | Save a prompt with semantic embedding |
+| `save_prompt` | `write_prompt` | Save a prompt with embedding |
 | `list_prompts` | `get_prompts` | List prompts for a project |
-| `list_requirements` | `list_reqs` | List requirements for a project |
-| `promote_requirement` | `promote` | Change a requirement's memory_type (default: to prompt) |
-| `create_token` | `new_token` | Generate a new bearer token (owner role required) |
-| `get_schema` | `schema` | Return database DDL introspection (engine, tables, DDL) |
-| `zikra_help` | `help` | Return full command reference with fields and aliases |
-| `debug_protocol` | — | Return backend diagnostics: engine, memory count, key status |
+| `list_requirements` | `list_reqs` | List requirements |
+| `promote_requirement` | `promote` | Change a requirement's type |
+| `create_token` | `new_token` | Generate a bearer token (owner role) |
+| `get_schema` | `schema` | DB DDL introspection |
+| `zikra_help` | `help` | Full command reference |
+| `debug_protocol` | — | Backend diagnostics |
 
-**Roles:** `owner`, `admin`, `developer`, `viewer`
-
-### Example request
-
-```json
-POST /webhook/zikra
-Authorization: Bearer your-secret-token
-
-{
-  "command": "search",
-  "project": "myapp",
-  "query": "how does authentication work",
-  "limit": 5
-}
-```
+**Roles:** `owner` · `admin` · `developer` · `viewer`
 
 ---
 
 ## PostgreSQL backend
-
-For teams that need concurrent writes, set the following in your `.env`:
 
 ```
 DB_BACKEND=postgres
@@ -250,27 +210,9 @@ DB_USER=postgres
 DB_PASSWORD=yourpassword
 ```
 
-Install with Postgres support:
-
 ```bash
 pip install -e ".[postgres]"
 ```
-
----
-
-## Run tests
-
-Requires a `.env` file with at minimum `ZIKRA_TOKEN` set.
-
-```bash
-OPENAI_API_KEY=sk-... python3 -m zikra.tests.test_all
-```
-
----
-
-## Notes on planned features
-
-- Automated weekly cleanup and errors aging out in 30 days are **planned, not yet implemented**.
 
 ---
 
@@ -279,4 +221,4 @@ OPENAI_API_KEY=sk-... python3 -m zikra.tests.test_all
 MIT — see [LICENSE](LICENSE)
 
 *Design in Claude Web. Execute in Claude Code. Share with your whole team.*
-*Claude Web · Claude Code · Gemini Web · Gemini CLI · Codex · ChatGPT · any agent that can POST.*
+*Claude Web · Claude Code · Gemini CLI · Codex · any agent that can POST.*
