@@ -94,7 +94,7 @@ detect_project_from_cwd() {
     cwd_l="$(printf '%s' "$cwd" | tr '[:upper:]' '[:lower:]')"
     host_l="$(printf '%s' "$HOSTNAME_SHORT" | tr '[:upper:]' '[:lower:]')"
     if   [[ "$cwd_l" == *"getzikra"* ]] || [[ "$cwd_l" == *"/zikra"* ]]; then echo "zikra"
-    elif [[ "$cwd_l" == *"molten8"*  ]]; then echo "molten8"
+    elif [[ "$cwd_l" == *"forgenexus"* ]];                                  then echo "forgenexus"
     elif [[ "$cwd_l" == *"veltis"*   ]]; then echo "veltisai"
     elif [[ "$host_l" == *"workstation"* ]] || [[ "$host_l" == *"desktop"* ]]; then echo "$DEFAULT_PROJECT"
     else echo "$DEFAULT_PROJECT"
