@@ -4,8 +4,13 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP](https://img.shields.io/badge/MCP-native-blue)](https://modelcontextprotocol.io/)
+[![MCP Server](https://glama.ai/mcp/servers/getzikra/zikra/badges/score.svg)](https://glama.ai/mcp/servers/getzikra/zikra)
 
 **Website:** [zikra.dev](https://zikra.dev) · Self-hosted · MIT · Scales to millions of memories
+
+**Architecture:** [Governed project memory for teams of agents](docs/architecture.md)
+
+**Promotion kit:** [submission copy, launch posts, and directory targets](PROMOTION.md)
 
 ```
 zikra 17 runs · 847 memories │ you@team-server │ Sonnet 4.6 │ ~/project (main) │ 387K/200K ████░░░░░░ 45%
