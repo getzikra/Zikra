@@ -382,6 +382,18 @@ body.resizing { cursor: col-resize; user-select: none; }
   line-height: 1.4;
 }
 .mc-meta { font-size: 10px; color: var(--tfaint); margin-top: 4px; }
+.search-counter {
+  text-align: center; font-size: 11px; color: var(--tfaint);
+  padding: 8px 0 4px;
+}
+.search-load-more {
+  display: block; width: calc(100% - 8px); margin: 4px;
+  padding: 8px; font-size: 12px;
+  background: var(--bgsec); color: var(--text2);
+  border: 1px solid var(--border); border-radius: 6px;
+  cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.search-load-more:hover { background: var(--bgsec2); color: var(--text); }
 
 /* ── Prompt Cards ── */
 .prompt-card {
@@ -861,12 +873,20 @@ function applySidebarWidth(w) {
 }
 
 const TYPE_COLORS = {
-  decision:     '#534AB7',
-  architecture: '#BA7517',
-  prompt:       '#1D9E75',
-  error:        '#A32D2D',
-  conversation: '#888780',
-  requirement:  '#185FA5'
+  conversation:  '#888780',
+  decision:      '#534AB7',
+  prompt:        '#1D9E75',
+  requirement:   '#185FA5',
+  architecture:  '#BA7517',
+  bug:           '#A32D2D',
+  error:         '#FF6B6B',
+  diary:         '#C77DA0',
+  investigation: '#D4A017',
+  reference:     '#5DADE2',
+  mockup:        '#E8730C',
+  skill:         '#58D68D',
+  feedback:      '#4ECDC4',
+  handoff:       '#9B59B6'
 };
 
 const PROJ_COLORS = {
@@ -883,6 +903,8 @@ const S = {
 
   // search
   searchResults: [], searchSelected: null,
+  searchLimit: 50, searchTotal: 0, searchQuery: '',
+  searchPageSize: 50, searchLoading: false,
 
   // graph
   gNodes: [], gEdges: [],
@@ -894,6 +916,10 @@ const S = {
   // User can click the legend to toggle them back on.
   gHiddenTypes: new Set(['conversation']),
   gTypeCounts: {},
+  // Sim cooling: gAlpha decays each tick; loop stops at < 0.005.
+  // Caches avoid rebuilding nodeMap/activeSet every frame.
+  gAlpha: 0, gNeedsDraw: false,
+  gActive: [], gActiveSet: new Set(), gNodeMap: {},
 
   // prompts
   allPrompts: [], selPrompt: null,
@@ -1430,26 +1456,46 @@ async function refreshTokenTotals() {
 
 // ── Search Tab ────────────────────────────────────────────────────
 async function loadSearch(query) {
+  // New query → reset paging
+  S.searchQuery = query || '';
+  S.searchLimit = S.searchPageSize;
+  S.searchSelected = null;
+  await fetchSearch();
+}
+
+async function loadMoreSearch() {
+  if (S.searchLoading) return;
+  S.searchLimit += S.searchPageSize;
+  await fetchSearch();
+}
+
+async function fetchSearch() {
   const type   = document.getElementById('filter-type').value;
   const status = document.getElementById('filter-status').value;
-  const params = { q: query || '*', limit: 50 };
+  const params = { q: S.searchQuery || '*', limit: S.searchLimit };
   if (type)   params.type   = type;
   if (status) params.status = status;
 
+  S.searchLoading = true;
+  renderSearchSidebar();
   const res = await apiGet('/api/ui/memories', params);
+  S.searchLoading = false;
   if (!res) return;
 
   S.searchResults = res.memories || [];
+  S.searchTotal   = res.total || 0;
   renderSearchSidebar();
 }
 
 function renderSearchSidebar() {
   const list = document.getElementById('search-list');
   if (S.searchResults.length === 0) {
-    list.innerHTML = '<div class="empty-msg">No memories found for this query.</div>';
+    list.innerHTML = S.searchLoading
+      ? '<div class="empty-msg">Searching…</div>'
+      : '<div class="empty-msg">No memories found for this query.</div>';
     return;
   }
-  list.innerHTML = S.searchResults.map((m, i) => {
+  const cards = S.searchResults.map((m, i) => {
     const c   = typeColor(m.memory_type);
     const scoreRaw = m.score != null ? m.score : null;
     const sc  = scoreRaw != null ? Math.round(scoreRaw * 100) : null;
@@ -1475,6 +1521,17 @@ function renderSearchSidebar() {
     </div>`;
   }).join('');
 
+  // Footer: counter + load-more (only when there are more rows than fetched)
+  const shown   = S.searchResults.length;
+  const total   = S.searchTotal || 0;
+  const hasMore = shown >= S.searchLimit && shown < total;
+  const counter = `<div class="search-counter">showing ${shown}${total ? ' of ' + total : ''}</div>`;
+  const loadMore = hasMore
+    ? `<button class="search-load-more" id="search-load-more">${S.searchLoading ? 'Loading…' : 'Load more'}</button>`
+    : '';
+
+  list.innerHTML = cards + counter + loadMore;
+
   list.querySelectorAll('.mem-card').forEach(el => {
     el.addEventListener('click', () => {
       const m = S.searchResults[+el.dataset.idx];
@@ -1483,6 +1540,8 @@ function renderSearchSidebar() {
       renderSearchDetail(m);
     });
   });
+  const lm = document.getElementById('search-load-more');
+  if (lm) lm.addEventListener('click', loadMoreSearch);
 }
 
 async function renderSearchDetail(m) {
@@ -1659,6 +1718,12 @@ function buildGraphData(nodes, edges) {
   S.gSel = null;
   S.gHover = null;
 
+  // Pre-warm the layout offscreen so the user doesn't watch it wiggle into place.
+  // 250 ticks with alpha=1 settles most graphs; ~80–150ms blocking on n≈150 nodes.
+  rebuildGraphCaches();
+  S.gAlpha = 1.0;
+  for (let i = 0; i < 250; i++) simStep();
+
   renderGraphLegend();
   renderGraphStats();
   startGraphSim();
@@ -1690,6 +1755,8 @@ function renderGraphLegend() {
       else S.gHiddenTypes.add(t);
       renderGraphLegend();
       renderGraphStats();
+      rebuildGraphCaches();
+      kick(0.4);
     });
   });
 }
@@ -1703,54 +1770,68 @@ function renderGraphStats() {
   el.innerHTML = `<span>${visN} nodes</span><span>${visE} links</span>`;
 }
 
+// Recompute the visible-node caches. Called when membership changes
+// (data load, legend toggle), NOT every frame.
+function rebuildGraphCaches() {
+  S.gActive = S.gNodes.filter(visibleNode);
+  S.gActiveSet = new Set(S.gActive.map(n => n.id));
+  S.gNodeMap = Object.fromEntries(S.gActive.map(n => [n.id, n]));
+}
+
+// Returns true if it actually advanced physics. Forces scale by gAlpha so
+// the layout settles instead of jittering forever on float noise.
 function simStep() {
+  if (S.gAlpha < 0.005 && !S.gDrag) return false;
   const { W, H } = graphSize();
   const cx = W / 2, cy = H / 2;
-  const active = S.gNodes.filter(visibleNode);
-  const activeSet = new Set(active.map(n => n.id));
-  const nodeMap = Object.fromEntries(active.map(n => [n.id, n]));
+  const active = S.gActive;
+  const activeSet = S.gActiveSet;
+  const nodeMap = S.gNodeMap;
+  const a2 = Math.max(S.gAlpha, S.gDrag ? 0.2 : 0);
 
-  active.forEach(n => { n.fx = 0; n.fy = 0; });
+  for (let i = 0; i < active.length; i++) { active[i].fx = 0; active[i].fy = 0; }
 
-  // Repulsion — skip hidden nodes entirely
   for (let i = 0; i < active.length; i++) {
+    const a = active[i];
     for (let j = i + 1; j < active.length; j++) {
-      const a = active[i], b = active[j];
-      let dx = b.x - a.x, dy = b.y - a.y;
-      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-      const f = 4500 / (dist * dist);
-      a.fx -= f * dx / dist; a.fy -= f * dy / dist;
-      b.fx += f * dx / dist; b.fy += f * dy / dist;
+      const b = active[j];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const d2 = dx*dx + dy*dy || 1;
+      const dist = Math.sqrt(d2);
+      const f = 4500 / d2;
+      const fx = f * dx / dist, fy = f * dy / dist;
+      a.fx -= fx; a.fy -= fy;
+      b.fx += fx; b.fy += fy;
     }
   }
 
-  // Edge springs — rest length shrinks as edge weight grows (tighter = more signal)
-  S.gEdges.forEach(e => {
-    if (!activeSet.has(e.source) || !activeSet.has(e.target)) return;
+  for (let k = 0; k < S.gEdges.length; k++) {
+    const e = S.gEdges[k];
+    if (!activeSet.has(e.source) || !activeSet.has(e.target)) continue;
     const a = nodeMap[e.source], b = nodeMap[e.target];
-    if (!a || !b) return;
+    if (!a || !b) continue;
     const dx = b.x - a.x, dy = b.y - a.y;
     const dist = Math.sqrt(dx*dx + dy*dy) || 1;
     const restLen = Math.max(60, 140 - e.weight * 12);
     const f = (dist - restLen) * 0.055;
-    a.fx += f * dx / dist; a.fy += f * dy / dist;
-    b.fx -= f * dx / dist; b.fy -= f * dy / dist;
-  });
+    const fx = f * dx / dist, fy = f * dy / dist;
+    a.fx += fx; a.fy += fy;
+    b.fx -= fx; b.fy -= fy;
+  }
 
-  // Mild center gravity so untethered nodes don't drift off
-  active.forEach(n => {
+  for (let i = 0; i < active.length; i++) {
+    const n = active[i];
     n.fx += (cx - n.x) * 0.004;
     n.fy += (cy - n.y) * 0.004;
-  });
-
-  // Integration — no hard clamp; panning handles overflow
-  active.forEach(n => {
-    if (n.dragging) return;
-    n.vx = (n.vx + n.fx) * 0.85;
-    n.vy = (n.vy + n.fy) * 0.85;
+    if (n.dragging) continue;
+    n.vx = (n.vx + n.fx * a2) * 0.85;
+    n.vy = (n.vy + n.fy * a2) * 0.85;
     n.x += n.vx;
     n.y += n.vy;
-  });
+  }
+
+  S.gAlpha *= 0.96;
+  return true;
 }
 
 function nodeRadius(n) {
@@ -1776,9 +1857,9 @@ function drawGraph() {
   ctx.translate(S.gT.x, S.gT.y);
   ctx.scale(S.gT.s, S.gT.s);
 
-  const active = S.gNodes.filter(visibleNode);
-  const activeSet = new Set(active.map(n => n.id));
-  const nodeMap = Object.fromEntries(active.map(n => [n.id, n]));
+  const active = S.gActive;
+  const activeSet = S.gActiveSet;
+  const nodeMap = S.gNodeMap;
   const selIds  = S.gSel ? new Set(
     [S.gSel.id, ...S.gEdges
       .filter(e => e.source === S.gSel.id || e.target === S.gSel.id)
@@ -1874,18 +1955,35 @@ function drawGraph() {
 }
 
 function graphLoop() {
-  simStep();
+  const stepped = simStep();
   drawGraph();
-  S.gAF = requestAnimationFrame(graphLoop);
+  const needsRedraw = S.gNeedsDraw;
+  S.gNeedsDraw = false;
+  if (stepped || needsRedraw || S.gDrag) {
+    S.gAF = requestAnimationFrame(graphLoop);
+  } else {
+    S.gAF = null;
+  }
+}
+
+// kick(): request a redraw and (optionally) re-heat the simulation.
+// Use small reheat values for interactions that nudge layout (drag, legend toggle).
+// Use 0 for pure-redraw events (hover, pan, zoom).
+function kick(reheat) {
+  S.gNeedsDraw = true;
+  if (reheat) S.gAlpha = Math.max(S.gAlpha, reheat);
+  if (!S.gAF) S.gAF = requestAnimationFrame(graphLoop);
 }
 
 function startGraphSim() {
-  if (S.gAF) cancelAnimationFrame(S.gAF);
-  S.gAF = requestAnimationFrame(graphLoop);
+  if (S.gAF) { cancelAnimationFrame(S.gAF); S.gAF = null; }
+  S.gAlpha = 0.3;       // brief warm-in animation; pre-warm already settled most of it
+  kick();
 }
 
 function stopGraphSim() {
   if (S.gAF) { cancelAnimationFrame(S.gAF); S.gAF = null; }
+  S.gAlpha = 0;
 }
 
 function startGraphTab() {
@@ -1984,6 +2082,7 @@ function closeNodeDetail() {
     if (n) {
       S.gDrag = n;
       n.dragging = true;
+      kick(0.3);
     } else {
       S.gPan = true;
       S.gPanS = { x: e.clientX - S.gT.x, y: e.clientY - S.gT.y };
@@ -1996,11 +2095,13 @@ function closeNodeDetail() {
     if (S.gDrag) {
       const w = graphToWorld(cx, cy);
       S.gDrag.x = w.x; S.gDrag.y = w.y;
+      kick();
       return;
     }
     if (S.gPan && S.gPanS) {
       S.gT.x = e.clientX - S.gPanS.x;
       S.gT.y = e.clientY - S.gPanS.y;
+      kick();
       return;
     }
     const w = graphToWorld(cx, cy);
@@ -2008,11 +2109,14 @@ function closeNodeDetail() {
     S.gHover = nodeAtPoint(w.x, w.y);
     if (S.gHover !== prev || S.gHover) showHoverTip(S.gHover, cx, cy);
     canvas.style.cursor = S.gHover ? 'pointer' : '';
+    if (S.gHover !== prev) kick();
   });
 
   canvas.addEventListener('mouseleave', () => {
+    const had = S.gHover;
     S.gHover = null;
     document.getElementById('graph-tip').classList.remove('visible');
+    if (had) kick();
   });
 
   canvas.addEventListener('mouseup', e => {
@@ -2030,6 +2134,7 @@ function closeNodeDetail() {
         if (n) openNodeDetail(n);
       }
       S.gDrag = null;
+      kick(0.15);   // brief settle after drop
     }
     S.gPan = false; S.gPanS = null;
     downPos = null;
@@ -2045,6 +2150,7 @@ function closeNodeDetail() {
     S.gT.x = cx - ratio * (cx - S.gT.x);
     S.gT.y = cy - ratio * (cy - S.gT.y);
     S.gT.s = newS;
+    kick();
   }, { passive: false });
 
   // Esc closes the detail drawer

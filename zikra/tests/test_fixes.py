@@ -296,6 +296,58 @@ def test_viewer_token_can_read_but_cannot_write(ctx: ServerContext):
     assert create.json() == {"error": "insufficient permissions", "required_role": "owner"}, create.json()
 
 
+def _mcp_tool_call(ctx: ServerContext, token: str, name: str, arguments: dict):
+    response = ctx.client.post(
+        f"{ctx.base}/mcp",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        },
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    text = payload["result"]["content"][0]["text"]
+    return json.loads(text)
+
+
+def test_mcp_enforces_project_scoped_tokens(ctx: ServerContext):
+    scoped = ctx.post(
+        "create_token",
+        {"label": "scoped-dev", "role": "developer", "project_scope": "alpha"},
+    )
+    assert scoped.status_code == 200, scoped.text
+    scoped_token = scoped.json()["token"]
+
+    blocked = _mcp_tool_call(
+        ctx,
+        scoped_token,
+        "zikra_save_memory",
+        {"project": "beta", "title": "Wrong project", "content_md": "nope"},
+    )
+    assert blocked["error"] == "token_scope_mismatch", blocked
+    assert blocked["project_scope"] == "alpha", blocked
+    assert blocked["requested_project"] == "beta", blocked
+
+    injected = _mcp_tool_call(
+        ctx,
+        scoped_token,
+        "zikra_save_memory",
+        {"title": "Implicit scoped project", "content_md": "saved into alpha"},
+    )
+    assert injected["status"] == "saved", injected
+
+    found = ctx.post("get_memory", {"project": "alpha", "title": "Implicit scoped project"})
+    assert found.status_code == 200, found.text
+    assert found.json()["project"] == "alpha", found.json()
+
+
 TESTS = [
     test_get_memory_enforces_project_scope_by_id,
     test_create_token_rejects_owner_and_arbitrary_roles,
@@ -305,6 +357,7 @@ TESTS = [
     test_bad_json_returns_400,
     test_mcp_sse_advertises_correct_messages_path,
     test_viewer_token_can_read_but_cannot_write,
+    test_mcp_enforces_project_scoped_tokens,
 ]
 
 

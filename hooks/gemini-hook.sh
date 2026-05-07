@@ -25,8 +25,8 @@ mkdir -p "$HOME/.claude/cache"
 # Read hook payload from stdin (Gemini pipes JSON on each event)
 PAYLOAD=$(cat 2>/dev/null || echo '{}')
 
-python3 - "$CACHE" "${ZIKRA_PROJECT:-global}" "$ZIKRA_URL" "$ZIKRA_TOKEN" <<PYEOF
-import json, sys, os, datetime
+python3 - "$CACHE" "${ZIKRA_PROJECT:-global}" "${ZIKRA_URL:-}" "${ZIKRA_TOKEN:-}" <<PYEOF
+import json, sys, os, datetime, urllib.request, urllib.error
 
 cache_path      = sys.argv[1]
 default_project = sys.argv[2]
@@ -124,4 +124,34 @@ if tokens_out:
 os.makedirs(os.path.dirname(cache_path), exist_ok=True)
 with open(cache_path, 'w') as fh:
     json.dump(stats, fh)
+
+# ── POST log_run to Zikra server ─────────────────────────────────────────────
+if zikra_url and zikra_token and (tokens_in or tokens_out):
+    import socket
+    runner = socket.gethostname().split('.')[0]
+    run_payload = {
+        'command':        'log_run',
+        'project':        project,
+        'runner':         runner,
+        'model':          model,
+        'status':         'success',
+        'output_summary': f'Gemini session on {project}: {tokens_in} input, {tokens_out} output tokens.',
+        'tokens_input':   tokens_in,
+        'tokens_output':  tokens_out,
+    }
+    body = json.dumps(run_payload).encode()
+    req = urllib.request.Request(
+        zikra_url,
+        data=body,
+        headers={
+            'Authorization': f'Bearer {zikra_token}',
+            'Content-Type':  'application/json',
+            'User-Agent':    'curl/7.81.0',
+        },
+        method='POST',
+    )
+    try:
+        urllib.request.urlopen(req, timeout=15)
+    except Exception:
+        pass
 PYEOF

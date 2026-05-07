@@ -1,5 +1,75 @@
 # Changelog
 
+## [1.0.13] — 2026-05-06
+
+### Added
+
+- **Memory-type color palette** (`ui.html`). `TYPE_COLORS` expanded from 6 to 14
+  presets so every memory type that exists in the database renders with its own
+  distinct color in the graph view and badges. New entries: `bug` (red),
+  `diary` (rose), `investigation` (gold), `reference` (sky blue), `mockup`
+  (orange), `skill` (mint), `feedback` (teal), `handoff` (lavender), and a
+  differentiated coral for `error` so it no longer collides with `bug`.
+
+- **Search pagination** (`ui.html`). The Search tab now shows `showing N of
+  total` underneath the result list and a "Load more" button when more results
+  are available. Replaces the silent 50-row truncation. Pagination uses a
+  growing-limit re-fetch so the hybrid vector+FTS ranking stays consistent
+  across pages.
+
+- **Hooks: server log_run** (`hooks/codex-hook.sh`, `hooks/gemini-hook.sh`).
+  Both hooks now POST a `log_run` to the Zikra server when `ZIKRA_URL` and
+  `ZIKRA_TOKEN` are present in the environment. Token counts that previously
+  only landed in `~/.claude/cache/zikra-stats.json` for the statusline now also
+  land in the server `prompt_runs` table for cross-session analytics.
+
+- **MCP project_scope enforcement** (`zikra/mcp_server.py`). Tokens minted with
+  a `project_scope` value are now enforced for all project-scoped MCP tools
+  (`zikra_search`, `zikra_save_memory`, `zikra_get_prompt`, `zikra_log_run`,
+  `zikra_log_error`, `zikra_save_requirement`, `zikra_list_requirements`,
+  `zikra_get_memory`, `zikra_delete_memory`, `zikra_promote_requirement`,
+  `zikra_save_prompt`, `zikra_list_prompts`, `zikra_hygiene_report`). A
+  scope-mismatched call returns a structured `token_scope_mismatch` error;
+  scope-matched calls have `project` injected automatically.
+
+- **`PROMOTION.md`** — public launch kit at the repo root. Canonical links,
+  positioning, taglines, and submission copy for directories, awesome lists,
+  newsletters, and launch platforms.
+
+- **`prompts/zikra-audit.md`** — Claude Code prompt that audits a Zikra
+  instance for project drift, type misclassification, ghost projects, and
+  emerging-project signals. Read-only by default; emits remediation commands
+  on confirmation.
+
+### Changed
+
+- **Search results cap raised** (`zikra/server.py`). `/api/ui/memories` `limit`
+  cap raised from 200 → 1000 so pagination can grow to cover larger projects.
+  Default still 50.
+
+- **Architecture docs rewritten** (`docs/architecture.md`). Repositioned around
+  the team-memory-OS framing. Adds Mermaid diagrams for system, request flow,
+  role/scope model, and storage layout. Replaces the original pre-formatted
+  ASCII diagram.
+
+- **`docs/commands.md`** — example URLs replaced with `http://localhost:8000`
+  to match the self-hosted default. The `User-Agent: curl/7.81.0` requirement
+  note has been removed; it was only needed for older n8n configurations.
+
+- **`setup.py`** — package version bumped from `1.0.1` to `1.0.13` to match
+  `zikra/version.py`. The two had drifted apart over 9 releases.
+
+### Fixed
+
+- **Memory type cleanup** (database). 3 merges applied to consolidate stray
+  one-off types: `run_diary` → `diary` (2 rows), `memory` → `reference` (1
+  row), `knowledge` → `reference` (3 rows). DB count of distinct types reduced
+  from 15 to 12.
+
+- **`docs/onboarding.md`** — installer URL example changed from
+  `n8n.yourdomain.com` to `zikra.yourdomain.com` to match the v1.0+ self-hosted
+  topology.
+
 ## [1.0.10] — 2026-04-22
 
 ### Added

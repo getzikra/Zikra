@@ -557,7 +557,7 @@ async def ui_memories(request: Request):
     q       = (request.query_params.get('q') or '').strip()
     mtype   = request.query_params.get('type') or None
     status  = request.query_params.get('status') or None
-    limit   = min(int(request.query_params.get('limit', '50')), 200)
+    limit   = min(int(request.query_params.get('limit', '50')), 1000)
 
     if q and q != '*':
         from zikra.embed import embed

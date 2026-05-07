@@ -66,14 +66,33 @@ logger = logging.getLogger(__name__)
 mcp = Server('zikra')
 sse_transport = SseServerTransport('/messages')
 
-# Per-connection role — ContextVar (SSE) + session dict (belt-and-suspenders)
+# Per-connection auth — ContextVar (Streamable HTTP/SSE) + session dict
+# (belt-and-suspenders for legacy SSE message posts).
 _mcp_session_role: ContextVar[str] = ContextVar('_mcp_session_role', default='viewer')
+_mcp_session_scope: ContextVar[str | None] = ContextVar('_mcp_session_scope', default=None)
 _SESSION_ROLES: dict[str, str] = {}
+_SESSION_SCOPES: dict[str, str | None] = {}
 
 # v1.0.6: per-connection runner (from X-Zikra-Runner header), injected into
 # tool arguments for get_prompt/log_run so the server-side handshake links runs.
 _mcp_session_runner: ContextVar[str] = ContextVar('_mcp_session_runner', default='')
 _SESSION_RUNNERS: dict[str, str] = {}
+
+_PROJECT_SCOPED_TOOLS = {
+    'zikra_search',
+    'zikra_save_memory',
+    'zikra_get_prompt',
+    'zikra_log_run',
+    'zikra_log_error',
+    'zikra_save_requirement',
+    'zikra_list_requirements',
+    'zikra_get_memory',
+    'zikra_delete_memory',
+    'zikra_promote_requirement',
+    'zikra_save_prompt',
+    'zikra_list_prompts',
+    'zikra_hygiene_report',
+}
 
 
 async def _check_auth_request(request: Request) -> dict | None:
@@ -252,6 +271,7 @@ _TOOLS: list[types.Tool] = [
             'properties': {
                 'label': {'type': 'string'},
                 'role': {'type': 'string', 'default': 'developer'},
+                'project_scope': {'type': 'string'},
             },
         },
     ),
@@ -338,6 +358,22 @@ async def _run_tool(name: str, arguments: dict, role: str) -> list[types.TextCon
     handler = _MCP_DISPATCH.get(name)
     if handler is None:
         return _text({'error': f'Unknown tool: {name}'})
+
+    project_scope = _mcp_session_scope.get()
+    if project_scope and name in _PROJECT_SCOPED_TOOLS:
+        requested_project = (arguments or {}).get('project')
+        if requested_project and requested_project != project_scope:
+            return _text({
+                'error': 'token_scope_mismatch',
+                'project_scope': project_scope,
+                'requested_project': requested_project,
+                'message': (
+                    f"This token is restricted to project '{project_scope}'. "
+                    f"Set \"project\": \"{project_scope}\" in your request to continue."
+                ),
+                'hint': f'Change your project parameter to "{project_scope}".',
+            })
+        arguments = {**(arguments or {}), 'project': project_scope}
 
     # v1.0.6: inject runner from X-Zikra-Runner header for the two commands
     # that participate in the prompt_id <-> run handshake. The caller never has
@@ -435,10 +471,12 @@ async def handle_streamable_http(request: Request) -> Response:
     if not auth_info:
         return Response('Unauthorized', status_code=401)
 
-    role         = auth_info.get('role', 'viewer')
-    runner_hdr   = (request.headers.get('X-Zikra-Runner') or '').strip()
-    cv_token     = _mcp_session_role.set(role)
-    cv_runner    = _mcp_session_runner.set(runner_hdr)
+    role       = auth_info.get('role', 'viewer')
+    scope      = auth_info.get('project_scope')
+    runner_hdr = (request.headers.get('X-Zikra-Runner') or '').strip()
+    cv_token   = _mcp_session_role.set(role)
+    cv_scope   = _mcp_session_scope.set(scope)
+    cv_runner  = _mcp_session_runner.set(runner_hdr)
 
     try:
         body_bytes = await request.body()
@@ -470,6 +508,7 @@ async def handle_streamable_http(request: Request) -> Response:
         return Response(err, status_code=500, media_type='application/json')
     finally:
         _mcp_session_role.reset(cv_token)
+        _mcp_session_scope.reset(cv_scope)
         _mcp_session_runner.reset(cv_runner)
 
 
@@ -497,6 +536,7 @@ async def _sse_endpoint(scope, receive, send):
         return
 
     role       = auth_info.get('role', 'viewer')
+    scope_name = auth_info.get('project_scope')
     runner_hdr = (req.headers.get('X-Zikra-Runner') or '').strip()
     session_ids: list[str] = []
 
@@ -508,11 +548,13 @@ async def _sse_endpoint(scope, receive, send):
                 sid = m.group(1)
                 session_ids.append(sid)
                 _SESSION_ROLES[sid] = role
+                _SESSION_SCOPES[sid] = scope_name
                 if runner_hdr:
                     _SESSION_RUNNERS[sid] = runner_hdr
         await send(message)
 
     cv_token  = _mcp_session_role.set(role)
+    cv_scope  = _mcp_session_scope.set(scope_name)
     cv_runner = _mcp_session_runner.set(runner_hdr)
     try:
         async with sse_transport.connect_sse(scope, receive, _capturing_send) as streams:
@@ -521,9 +563,11 @@ async def _sse_endpoint(scope, receive, send):
         logger.warning(f'SSE error: {e}')
     finally:
         _mcp_session_role.reset(cv_token)
+        _mcp_session_scope.reset(cv_scope)
         _mcp_session_runner.reset(cv_runner)
         for sid in session_ids:
             _SESSION_ROLES.pop(sid, None)
+            _SESSION_SCOPES.pop(sid, None)
             _SESSION_RUNNERS.pop(sid, None)
 
 
@@ -538,13 +582,16 @@ async def _messages_endpoint(scope, receive, send):
     qs = parse_qs(scope.get('query_string', b'').decode())
     session_id = (qs.get('session_id') or [''])[0]
     role   = _SESSION_ROLES.get(session_id, auth_info.get('role', 'viewer'))
+    scope_name = _SESSION_SCOPES.get(session_id, auth_info.get('project_scope'))
     runner = _SESSION_RUNNERS.get(session_id, (req.headers.get('X-Zikra-Runner') or '').strip())
     cv_token  = _mcp_session_role.set(role)
+    cv_scope  = _mcp_session_scope.set(scope_name)
     cv_runner = _mcp_session_runner.set(runner)
     try:
         await sse_transport.handle_post_message(scope, receive, send)
     finally:
         _mcp_session_role.reset(cv_token)
+        _mcp_session_scope.reset(cv_scope)
         _mcp_session_runner.reset(cv_runner)
 
 

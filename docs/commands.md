@@ -13,7 +13,6 @@ curl -s -X POST "$ZIKRA_URL" \
 
 **Required on every request:**
 - `Authorization: Bearer <token>` — your bearer token
-- `User-Agent: curl/7.81.0` — required by some n8n configurations
 - `"command"` field in the JSON body
 
 ---
@@ -35,7 +34,7 @@ Results are ranked by a combined score. Use this at the start of every session.
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
@@ -87,7 +86,7 @@ Existing memories are updated (content replaced, version incremented).
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
@@ -124,7 +123,7 @@ Fetch a stored prompt by name. Increments access_count.
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
@@ -169,7 +168,7 @@ Called automatically by the Stop hook and zikra_watcher.py daemon.
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
@@ -212,7 +211,7 @@ tracking and future search.
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
@@ -244,7 +243,7 @@ Fetch a specific memory by its UUID.
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
@@ -282,7 +281,7 @@ table. Does not search memories.
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
@@ -319,7 +318,7 @@ Save a product requirement or user story as a memory with memory_type=`"requirem
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
@@ -357,7 +356,7 @@ List all requirements for a project, optionally filtered by module or status.
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
@@ -400,7 +399,7 @@ by `id` (UUID) or `title`.
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-abc123" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \
@@ -433,7 +432,7 @@ Create a new bearer token. Requires an existing owner-role token for authorizati
 
 **Example:**
 ```bash
-curl -s -X POST "https://n8n.example.com/webhook/zikra" \
+curl -s -X POST "http://localhost:8000/webhook/zikra" \
   -H "Authorization: Bearer velt-OWNER-TOKEN" \
   -H "Content-Type: application/json" \
   -H "User-Agent: curl/7.81.0" \

@@ -59,7 +59,7 @@ Paste this into Claude Code to install Zikra automatically:
 ```
 Fetch https://raw.githubusercontent.com/getzikra/zikra/main/prompts/zikra-claude-code-setup.md
 and follow every instruction in it.
-URL: https://n8n.yourdomain.com/webhook/zikra, Token: from your admin, Project: global
+URL: https://zikra.yourdomain.com/webhook/zikra, Token: from your admin, Project: global
 ```
 
 The installer wires up the Stop hook, PreCompact hook, CLAUDE.md context injection, and statusline. After that, memory is automatic — every session is logged without you thinking about it.
