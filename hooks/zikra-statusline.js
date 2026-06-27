@@ -36,6 +36,36 @@ function silentRead(filePath) {
   try { return fs.readFileSync(filePath, 'utf8'); } catch { return null; }
 }
 
+// Read the stats cache with a last-good fallback. On a clean parse we refresh a
+// `.bak` snapshot; if the main file is mid-write or truncated (e.g. the
+// stats-update hook was killed by its timeout) we fall back to the snapshot
+// instead of rendering zeros. Pure local IO, still silent-fail.
+function readCache() {
+  const dir  = path.join(os.homedir(), '.claude', 'cache');
+  const main = path.join(dir, 'zikra-stats.json');
+  const bak  = path.join(dir, 'zikra-stats.json.bak');
+
+  const raw = silentRead(main);
+  if (raw) {
+    try {
+      const d = JSON.parse(raw);
+      // Refresh the last-good snapshot atomically (tmp + rename). The pid
+      // suffix avoids two concurrent statusline renders colliding on a shared
+      // temp path.
+      try {
+        const tmp = bak + '.tmp.' + process.pid;
+        fs.writeFileSync(tmp, raw);
+        fs.renameSync(tmp, bak);
+      } catch { /* snapshot is best-effort */ }
+      return d;
+    } catch { /* corrupt/partial — fall through to snapshot */ }
+  }
+
+  const rawBak = silentRead(bak);
+  if (rawBak) { try { return JSON.parse(rawBak); } catch { /* give up */ } }
+  return null;
+}
+
 // Walk up from the current directory looking for a CLAUDE.md containing a
 // `project: <name>` line (or `ZIKRA_PROJECT=<name>`). First match wins.
 // Returns null when nothing is found so the caller can fall back to the cache.
@@ -75,21 +105,15 @@ function getProjectFromCwd(payload) {
 }
 
 function getStats() {
-  const cachePath = path.join(os.homedir(), '.claude', 'cache', 'zikra-stats.json');
-  try {
-    const raw = silentRead(cachePath);
-    if (!raw) return { runs: 0, memories: 0, project: 'global', orphans: 0 };
-    const d = JSON.parse(raw);
-    return {
-      runs:     typeof d.runs_today   === 'number' ? d.runs_today   : 0,
-      memories: typeof d.memory_count === 'number' ? d.memory_count :
-                typeof d.memories_approx === 'number' ? d.memories_approx : 0,
-      project:  d.project || 'global',
-      orphans:  typeof d.orphan_count === 'number' ? d.orphan_count : 0,
-    };
-  } catch {
-    return { runs: 0, memories: 0, project: 'global', orphans: 0 };
-  }
+  const d = readCache();
+  if (!d) return { runs: 0, memories: 0, project: 'global', orphans: 0 };
+  return {
+    runs:     typeof d.runs_today   === 'number' ? d.runs_today   : 0,
+    memories: typeof d.memory_count === 'number' ? d.memory_count :
+              typeof d.memories_approx === 'number' ? d.memories_approx : 0,
+    project:  d.project || 'global',
+    orphans:  typeof d.orphan_count === 'number' ? d.orphan_count : 0,
+  };
 }
 
 function formatTokens(n) {
@@ -188,16 +212,12 @@ function formatVersion(local, latest) {
 }
 
 function getVersions() {
-  const cachePath = path.join(os.homedir(), '.claude', 'cache', 'zikra-stats.json');
-  try {
-    const raw = silentRead(cachePath);
-    if (!raw) return { server: null, latest: null };
-    const d = JSON.parse(raw);
-    return {
-      server: d.server_version || null,
-      latest: d.latest_version || null,
-    };
-  } catch { return { server: null, latest: null }; }
+  const d = readCache();
+  if (!d) return { server: null, latest: null };
+  return {
+    server: d.server_version || null,
+    latest: d.latest_version || null,
+  };
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────

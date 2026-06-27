@@ -114,6 +114,7 @@ zikra_post() {
     -H "Content-Type: application/json" \
     -H "User-Agent: $ZIKRA_USER_AGENT" \
     --connect-timeout 15 \
+    --max-time 20 \
     -d "$1" >> "$LOG_FILE" 2>&1 || echo "[$(date)] POST failed" >> "$LOG_FILE"
 }
 

@@ -215,6 +215,10 @@ if zikra_profile in ('autolog', 'full'):
     _install_hook('zikra_autolog.sh', CLAUDE_DIR / 'zikra_autolog.sh')
     _install_hook('notify.sh', CLAUDE_DIR / 'notify.sh')
     _install_hook('zikra-statusline.js', CLAUDE_HOOKS_DIR / 'zikra-statusline.js')
+    # v1.0.14: the stats updater feeds the live statusline cache. It was
+    # previously only installed by the GitHub setup prompt, leaving installer.py
+    # users with a static statusline. Install it here too.
+    _install_hook('zikra-stats-update.sh', CLAUDE_HOOKS_DIR / 'zikra-stats-update.sh')
 
 # ── Gemini CLI integration ────────────────────────────────────────────────────
 
@@ -408,11 +412,44 @@ try:
         },
     }
 
+    # v1.0.14: wire the statusline + session hooks (autolog diary + stats
+    # updater) so installer.py produces the same complete statusline as the
+    # GitHub setup prompt. This NORMALIZES the hook lists — it strips any
+    # existing Zikra entries (including the legacy duplicated autolog) and
+    # re-adds exactly one of each, so it is idempotent and self-healing.
+    if zikra_profile in ('autolog', 'full'):
+        autolog_path = str(CLAUDE_DIR / 'zikra_autolog.sh')
+        stats_cmd    = f'bash {CLAUDE_HOOKS_DIR / "zikra-stats-update.sh"}'
+        s['statusLine'] = {'type': 'command',
+                           'command': 'node ~/.claude/hooks/zikra-statusline.js'}
+        s.setdefault('hooks', {})
+
+        def _matcher_cmds(m):
+            return [h.get('command', '') for h in m.get('hooks', [])]
+
+        # Stop: keep unrelated matchers, then exactly one autolog + one updater.
+        stop_others = [m for m in s['hooks'].get('Stop', [])
+                       if not any('zikra_autolog.sh' in c or 'zikra-stats-update.sh' in c
+                                  for c in _matcher_cmds(m))]
+        s['hooks']['Stop'] = stop_others + [
+            {'matcher': '', 'hooks': [{'type': 'command', 'command': autolog_path}]},
+            {'hooks': [{'type': 'command', 'command': stats_cmd, 'timeout': 10}]},
+        ]
+
+        # PreCompact: keep unrelated matchers, then exactly one autolog.
+        pc_others = [m for m in s['hooks'].get('PreCompact', [])
+                     if not any('zikra_autolog.sh' in c for c in _matcher_cmds(m))]
+        s['hooks']['PreCompact'] = pc_others + [
+            {'matcher': '', 'hooks': [{'type': 'command', 'command': autolog_path}]},
+        ]
+
     tmp = str(settings_path) + '.tmp'
     with open(tmp, 'w') as f:
         json.dump(s, f, indent=2)
     os.replace(tmp, str(settings_path))
     print(f'  ✓ MCP server registered in {settings_path}')
+    if zikra_profile in ('autolog', 'full'):
+        print(f'  ✓ statusLine + Stop/PreCompact hooks wired in {settings_path}')
 except Exception as e:
     print(f'  WARNING: Could not update settings.json: {e}')
 

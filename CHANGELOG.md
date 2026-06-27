@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.0.14] — 2026-06-26
+
+### Fixed — statusline & hook reliability
+
+The statusline and session hooks could intermittently render `0 runs · 0
+memories` or stall. Root cause was a non-atomic cache write racing the reader,
+unbounded hook network calls, and a duplicated Stop hook. All four are fixed.
+
+- **Atomic statusline cache writes** (`hooks/zikra-stats-update.sh`). The stats
+  cache (`~/.claude/cache/zikra-stats.json`) is now written to a **per-process**
+  temp file (`.tmp.<pid>`), `fsync`'d, then `os.replace`'d into place — atomic on
+  POSIX. The statusline reader can no longer observe a half-written file, even if
+  the `Stop` hook is killed mid-write by its timeout, and concurrent Stop hooks
+  (multiple terminals closing at once) no longer collide on a shared temp path.
+
+- **Bounded hook network calls** (`hooks/zikra-stats-update.sh`,
+  `hooks/zikra_autolog.sh`). Every `curl` in the stats updater now uses
+  `--max-time 3 --connect-timeout 2` (and the daily GitHub version check uses a
+  3s timeout); the autolog diary/`log_run` POST gains `--max-time 20`. A slow or
+  unreachable server can no longer hang a hook or get it killed mid-write.
+
+- **Statusline self-heal** (`hooks/zikra-statusline.js`). The renderer now keeps
+  a last-good `.bak` snapshot, refreshed atomically on every clean read. If the
+  primary cache is corrupt or mid-write, it falls back to the snapshot instead of
+  rendering zeros. Falls back to safe defaults only when both are unreadable.
+
+- **Duplicate `Stop` hook removed** (installer/setup). The `Stop` event could be
+  wired with the autolog handler twice (once via `~/` and once via an absolute
+  path), running the diary path twice per session. Installers now de-duplicate.
+
+### Changed — installers deliver the full statusline
+
+- **`installer.py`** now installs `hooks/zikra-stats-update.sh` and wires the
+  `statusLine`, `Stop`, and `PreCompact` hooks into `~/.claude/settings.json`
+  (atomically, with de-duplication). Previously only `python` + the GitHub setup
+  prompt produced a complete statusline; `installer.py` left out the live stats
+  refresh. Both install paths are now equivalent.
+
 ## [1.0.13] — 2026-05-06
 
 ### Added

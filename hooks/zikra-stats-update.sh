@@ -35,14 +35,14 @@ else: print(fallback)
 # '187 memories' tag actually reflects what's visible in this project. When
 # PROJECT resolves to 'global', the server treats it as a wildcard and
 # returns the cross-project total (the same behavior as before).
-MEMORY_COUNT=$(curl -s -X POST "$ZIKRA_URL" \
+MEMORY_COUNT=$(curl -s --max-time 3 --connect-timeout 2 -X POST "$ZIKRA_URL" \
   -H "Authorization: Bearer $ZIKRA_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"command\":\"search\",\"query\":\"*\",\"limit\":1,\"project\":\"$PROJECT\"}" \
   | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('total', d.get('count', 0)))" 2>/dev/null || echo "0")
 
 # Fetch server version
-SERVER_VERSION=$(curl -s -X POST "$ZIKRA_URL" \
+SERVER_VERSION=$(curl -s --max-time 3 --connect-timeout 2 -X POST "$ZIKRA_URL" \
   -H "Authorization: Bearer $ZIKRA_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"command":"version"}' \
@@ -50,7 +50,7 @@ SERVER_VERSION=$(curl -s -X POST "$ZIKRA_URL" \
 
 # Fetch orphan/stale count for statusline warning. Silent fail on older
 # servers that don't know the hygiene_report command.
-ORPHAN_COUNT=$(curl -s -X POST "$ZIKRA_URL" \
+ORPHAN_COUNT=$(curl -s --max-time 3 --connect-timeout 2 -X POST "$ZIKRA_URL" \
   -H "Authorization: Bearer $ZIKRA_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"command\":\"hygiene_report\",\"project\":\"$PROJECT\",\"stale_days\":30}" \
@@ -113,7 +113,7 @@ if version_checked != today:
             "https://api.github.com/repos/getzikra/zikra/tags",
             headers={"User-Agent": "zikra-stats/1.0"}
         )
-        resp = urllib.request.urlopen(req, timeout=5)
+        resp = urllib.request.urlopen(req, timeout=3)
         tags = json.loads(resp.read().decode())
         if tags and isinstance(tags, list) and "name" in tags[0]:
             stats["latest_version"] = tags[0]["name"]
@@ -121,6 +121,22 @@ if version_checked != today:
     except:
         pass  # silent fail — keep previous cached value
 
-with open(cache_path, 'w') as f:
-    json.dump(stats, f)
+# Atomic write: serialize to a PER-PROCESS temp file in the same dir, fsync,
+# then os.replace. os.replace is atomic on POSIX, so the statusline reader can
+# never observe a half-written cache even if this process is killed by the hook
+# timeout. The pid suffix keeps concurrent Stop hooks (multiple terminals
+# closing at once) from colliding on a shared temp path.
+tmp_path = '%s.tmp.%d' % (cache_path, os.getpid())
+try:
+    with open(tmp_path, 'w') as f:
+        json.dump(stats, f)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, cache_path)
+finally:
+    try:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+    except OSError:
+        pass
 PYEOF
