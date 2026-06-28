@@ -1,6 +1,9 @@
 node_modules/
 *.log
+# Secrets: ignore all .env variants, but keep the committed template
 .env
+.env.*
+!.env.example
 .DS_Store
 __pycache__/
 *.py[cod]
