@@ -162,10 +162,14 @@ def run_update():
 # ── Server entry point ────────────────────────────────────────────────────────
 
 def main():
-    # Handle `zikra update` before argparse so the server flags don't interfere
+    # Handle `zikra update` / `zikra doctor` before argparse so the server
+    # flags don't interfere
     if len(sys.argv) > 1 and sys.argv[1] == 'update':
         run_update()
         return
+    if len(sys.argv) > 1 and sys.argv[1] == 'doctor':
+        from zikra.doctor import run_doctor
+        sys.exit(run_doctor('--json' in sys.argv))
 
     parser = argparse.ArgumentParser(description='Zikra \u2014 local MCP memory server')
     parser.add_argument('--host', default=None,

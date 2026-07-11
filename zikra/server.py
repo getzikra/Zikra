@@ -299,10 +299,12 @@ async def _get_latest_github_version() -> str | None:
 @app.get('/health')
 async def health():
     latest = await _get_latest_github_version()
+    from zikra.distill import llm_available
     result = {
         'status':  'ok',
         'version': __version__,
         'backend': os.getenv('DB_BACKEND', 'sqlite'),
+        'distiller': llm_available(),
     }
     if latest:
         result['latest_version'] = latest
