@@ -44,8 +44,10 @@ CREATE TABLE IF NOT EXISTS memories (
     searchable       INTEGER DEFAULT 1,
     resolved         INTEGER DEFAULT 0,
     pending_review   INTEGER DEFAULT 0,
+    pinned           INTEGER DEFAULT 0,
     created_at   TIMESTAMPTZ DEFAULT NOW(),
     updated_at   TIMESTAMPTZ DEFAULT NOW(),
+    last_accessed_at TIMESTAMPTZ,
     embedding    halfvec(3072),
     UNIQUE (title, memory_type, project)
 );
@@ -66,6 +68,7 @@ CREATE TABLE IF NOT EXISTS prompt_runs (
     tokens_cache_read      INTEGER,
     tokens_cache_creation  INTEGER,
     cost_usd               REAL,
+    session_id             TEXT,
     created_at             TIMESTAMPTZ DEFAULT NOW()
 );
 -- NOTE: indexes on prompt_id/prompt_name live in the _migrations block below
@@ -102,6 +105,17 @@ CREATE TABLE IF NOT EXISTS token_hits (
 
 CREATE INDEX IF NOT EXISTS idx_token_hits_label_ts ON token_hits (label, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_token_hits_ts ON token_hits (ts DESC);
+
+CREATE TABLE IF NOT EXISTS retrievals (
+    id        TEXT PRIMARY KEY,
+    memory_id TEXT NOT NULL,
+    source    TEXT NOT NULL,
+    query     TEXT,
+    ts        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_retrievals_memory_ts ON retrievals (memory_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_retrievals_ts ON retrievals (ts DESC);
 """
 
 # Separate so a missing pgvector extension doesn't break table creation
@@ -200,6 +214,21 @@ async def init_pg() -> 'asyncpg.Pool':
             "CREATE INDEX IF NOT EXISTS idx_token_hits_ts ON token_hits (ts DESC)",
             # v1.0.10: per-project token scoping (null = unrestricted)
             "ALTER TABLE access_tokens ADD COLUMN IF NOT EXISTS project_scope TEXT NULL",
+            # v1.1.0: retrieval logging + pin/access-aware scoring + session-level run dedup
+            """CREATE TABLE IF NOT EXISTS retrievals (
+                id        TEXT PRIMARY KEY,
+                memory_id TEXT NOT NULL,
+                source    TEXT NOT NULL,
+                query     TEXT,
+                ts        TIMESTAMPTZ DEFAULT NOW()
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_retrievals_memory_ts ON retrievals (memory_id, ts DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_retrievals_ts ON retrievals (ts DESC)",
+            "ALTER TABLE memories ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ NULL",
+            "ALTER TABLE memories ADD COLUMN IF NOT EXISTS pinned INTEGER DEFAULT 0",
+            "ALTER TABLE prompt_runs ADD COLUMN IF NOT EXISTS session_id TEXT NULL",
+            """CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_runs_runner_session
+               ON prompt_runs (runner, session_id) WHERE session_id IS NOT NULL""",
         ]
         for stmt in _migrations:
             try:
