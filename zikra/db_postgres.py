@@ -861,6 +861,19 @@ async def run_stats_pg(pool, project: str = 'global', prompt_id: str = None,
     return dict(row) if row else {}
 
 
+async def count_recent_errors_pg(pool, project: str, error_type: str,
+                                 message: str, days: int = 7) -> int:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """SELECT COUNT(*) AS n FROM error_log
+               WHERE project = $1 AND COALESCE(error_type,'') = COALESCE($2,'')
+                 AND message = $3
+                 AND created_at >= NOW() - ($4 * interval '1 day')""",
+            project, error_type, message, int(days),
+        )
+    return row['n'] if row else 0
+
+
 async def log_error_pg(pool, data: dict, error_id: str) -> None:
     async with pool.acquire() as conn:
         await conn.execute("""

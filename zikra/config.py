@@ -40,3 +40,8 @@ LLM_TIMEOUT_S = int(os.getenv('ZIKRA_LLM_TIMEOUT_S', '120'))
 DISTILL_ENABLED = _flag('ZIKRA_DISTILL_ENABLED', '1')
 DISTILL_MAX_TAIL_BYTES = int(os.getenv('ZIKRA_DISTILL_MAX_TAIL_BYTES', '200000'))
 DISTILL_CONCURRENCY = int(os.getenv('ZIKRA_DISTILL_CONCURRENCY', '2'))
+
+# Recurring-error promotion: identical errors logged this many times within
+# the window become a searchable 'bug' memory (pending_review=1)
+ERROR_PROMOTE_THRESHOLD = int(os.getenv('ZIKRA_ERROR_PROMOTE_THRESHOLD', '3'))
+ERROR_PROMOTE_WINDOW_DAYS = int(os.getenv('ZIKRA_ERROR_PROMOTE_WINDOW_DAYS', '7'))

@@ -957,6 +957,24 @@ async def run_stats(project: str = 'global', prompt_id: str = None,
     return dict(row) if row else {}
 
 
+async def count_recent_errors(project: str, error_type: str, message: str,
+                              days: int = 7) -> int:
+    """How often this exact error has been logged recently — used to promote
+    recurring errors into searchable bug memories."""
+    if _is_pg:
+        from zikra.db_postgres import count_recent_errors_pg, get_pg_pool
+        return await count_recent_errors_pg(get_pg_pool(), project, error_type, message, days)
+    async with _aio_db.execute(
+        """SELECT COUNT(*) AS n FROM error_log
+           WHERE project = ? AND COALESCE(error_type,'') = COALESCE(?,'')
+             AND message = ?
+             AND created_at >= datetime('now', ?)""",
+        [project, error_type, message, f'-{int(days)} days']
+    ) as cur:
+        row = await cur.fetchone()
+    return row['n'] if row else 0
+
+
 async def record_error(data: dict, error_id: str) -> None:
     """Insert an error_log record."""
     if _is_pg:
