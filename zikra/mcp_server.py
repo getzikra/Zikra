@@ -214,7 +214,7 @@ _TOOLS: list[types.Tool] = [
             'type': 'object',
             'properties': {
                 'project': {'type': 'string'},
-                'status': {'type': 'string', 'enum': ['open', 'resolved']},
+                'status': {'type': 'string', 'enum': ['pending', 'resolved']},
                 'limit': {'type': 'integer', 'default': 50},
             },
         },

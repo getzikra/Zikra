@@ -505,11 +505,13 @@ async def ui_bootstrap(request: Request):
     project = scope or (request.query_params.get('project') or 'global')
     prompts = await list_by_memory_type('prompt', project, 8)
     requirements = await list_by_memory_type('requirement', project, 8)
+    from zikra.db import list_memory_types
     return {
         'role': auth_info.get('role', 'viewer'),
         'project': project,
         'project_scope': scope,
         'projects': await list_projects(),
+        'memory_types': await list_memory_types(),
         'memory_total': await debug_memory_count(),
         'recent_prompts': prompts,
         'recent_requirements': requirements,

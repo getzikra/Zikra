@@ -1,5 +1,81 @@
 # Changelog
 
+## [1.1.0] — 2026-07-11
+
+### Added — automatic memory: distill, recall, capture
+
+The release theme: Zikra stops being a diary pile and starts being a brain.
+Capture became typed and server-side, recall became automatic, and old
+diaries consolidate themselves.
+
+- **Server-side distiller** (`ingest_session` command, `zikra/distill.py`,
+  migration 010). The Stop hook uploads the transcript tail; a background
+  worker distills it via any OpenAI-compatible LLM (`ZIKRA_LLM_BASE_URL` /
+  `ZIKRA_LLM_MODEL` / `ZIKRA_LLM_API_KEY` — point it at LiteLLM, OpenRouter,
+  or OpenAI) into one conversation diary plus 0-5 typed decision/bug/reference
+  memories flagged `pending_review`. Hooks fall back to the local `claude -p`
+  diary when the server has no LLM. Pending ingests drain on startup.
+
+- **Auto-recall** (`get_context` command, `hooks/zikra-context.sh`,
+  `zikra_get_context` MCP tool). Token-budgeted markdown briefing per project
+  (pinned → recent decisions → open bugs → top-scored), injected as
+  `additionalContext` by a new SessionStart hook. Sessions start already
+  knowing the project.
+
+- **Automatic error capture** (`hooks/zikra-error-capture.sh`, PostToolUse).
+  Failed shell commands auto-log to `error_log` (6h local dedup); the same
+  error recurring 3+ times in a week is promoted to a searchable `bug` memory.
+
+- **Weekly consolidation** (`run_consolidation` command, `zikra/consolidate.py`).
+  Unpinned conversation diaries older than 14 days are grouped per project and
+  ISO week and LLM-distilled into durable memories (`pending_review`); sources
+  are archived (`searchable=0`, reversible). Runs weekly in the background.
+
+- **Retrieval-aware scoring** (migration 009). New `retrievals` table;
+  search hits and fetches bump `access_count` and `last_accessed_at`, and
+  retrieval now RESETS the decay clock. The `pinned` column exists at last —
+  the scoring pin multiplier is live, hygiene skips pinned memories and idles
+  on real retrieval instead of `updated_at`.
+
+- **Session-level run dedup**. `log_run` upserts on `(runner, session_id)` —
+  the Stop hook and watcher daemon converge on one run row (max token counts,
+  longer summary wins) instead of double-logging.
+
+- **Kimi CLI / Kimi Code CLI integration** (`hooks/kimi-hook.sh`). Stop/
+  SessionEnd transcript capture with distillation, PostToolUse error capture,
+  SessionStart context injection — registered via `[[hooks]]` TOML.
+
+- **`zikra doctor`** (`zikra/doctor.py`). Full pipeline self-diagnosis:
+  credentials, server/auth/distiller, hook freshness, settings.json wiring,
+  split-brain/duplicate watcher detection via /proc, systemd state.
+
+- **Installer v2**. `--non-interactive` flag-driven install; installs the new
+  hooks and wires SessionStart/PostToolUse; seeds `~/.zikra/projects.map`;
+  distiller LLM configurable at install; Gemini CLI demoted to `--with-gemini`.
+
+- **Smart project detection** (`hooks/zikra-project.sh`). projects.map prefix
+  mappings → git remote name → directory basename, shared by all hooks
+  (replaces hardcoded cwd matches).
+
+- **Dashboard Activity tab + debt**. Per-day runs/tokens/memories/errors
+  charts, latest-memories feed with pin/promote/approve/archive quick actions,
+  recent-errors view, token-usage table, dynamic type filter, server-computed
+  score in the detail panel, requirement status enum unified (pending/resolved).
+
+### Fixed
+
+- Stop hook diaried the WRONG session on busy machines (it globbed the newest
+  transcript across all projects) — now uses the payload `transcript_path`.
+- Global 120s diary cooldown silently dropped closely-spaced sessions — the
+  sentinel is per-session now.
+- `search` never counted as memory access (`access_count` only moved on
+  explicit fetch), so decay/hygiene ran on a false signal.
+- MCP `list_requirements` status enum said `open`; the server accepts
+  `pending` — aligned.
+- Webhook `search` rejected 11 real memory types (`bug`, `reference`,
+  `diary`, ...) with "Invalid memory_type".
+- `zikra update` never refreshed hooks installed under `~/.claude/hooks/`.
+
 ## [1.0.14] — 2026-06-26
 
 ### Fixed — statusline & hook reliability

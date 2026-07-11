@@ -8,6 +8,8 @@ CHARS_PER_TOKEN = 4
 
 VALID_MEMORY_TYPES = {
     'conversation', 'decision', 'requirement', 'error', 'prompt', 'note',
+    'bug', 'reference', 'diary', 'architecture', 'investigation', 'audit',
+    'module', 'index', 'implementation', 'mockup', 'auto-compact',
 }
 
 

@@ -1401,6 +1401,18 @@ async def change_memory_type(memory_id: str, new_type: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+async def list_memory_types() -> list[str]:
+    """Distinct memory types in use — feeds the dashboard type filter."""
+    if _is_pg:
+        from zikra.db_postgres import list_memory_types_pg, get_pg_pool
+        return await list_memory_types_pg(get_pg_pool())
+    async with _aio_db.execute(
+        "SELECT DISTINCT memory_type FROM memories WHERE memory_type IS NOT NULL ORDER BY memory_type"
+    ) as cur:
+        rows = await cur.fetchall()
+    return [r['memory_type'] for r in rows]
+
+
 async def list_projects() -> list[str]:
     """Return distinct project names."""
     if _is_pg:

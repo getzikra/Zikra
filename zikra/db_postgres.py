@@ -1221,6 +1221,13 @@ async def change_memory_type_pg(pool, memory_id: str, new_type: str) -> Optional
     return dict(row) if row else None
 
 
+async def list_memory_types_pg(pool) -> list[str]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT DISTINCT memory_type FROM memories WHERE memory_type IS NOT NULL ORDER BY memory_type")
+    return [r['memory_type'] for r in rows]
+
+
 async def list_projects_pg(pool) -> list[str]:
     async with pool.acquire() as conn:
         rows = await conn.fetch("""

@@ -53,9 +53,13 @@ Rules:
 
 
 def _llm_conf() -> dict:
-    """Re-read env at call time — .env may load after config import."""
+    """Re-read env at call time — .env may load after config import.
+    Falls back to OPENAI_API_BASE (the embeddings endpoint, often a LiteLLM
+    proxy that also serves chat) so one proxy config powers both."""
     return {
-        'base_url': (os.getenv('ZIKRA_LLM_BASE_URL') or config.LLM_BASE_URL).rstrip('/'),
+        'base_url': (os.getenv('ZIKRA_LLM_BASE_URL')
+                     or os.getenv('OPENAI_API_BASE')
+                     or config.LLM_BASE_URL).rstrip('/'),
         'model': os.getenv('ZIKRA_LLM_MODEL') or config.LLM_MODEL,
         'api_key': os.getenv('ZIKRA_LLM_API_KEY') or os.getenv('OPENAI_API_KEY') or config.LLM_API_KEY,
         'timeout': config.LLM_TIMEOUT_S,
