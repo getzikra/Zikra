@@ -454,3 +454,68 @@ curl -s -X POST "http://localhost:8000/webhook/zikra" \
 ```
 
 > The `token` value is shown only once. Store it securely immediately.
+
+---
+
+## get_context
+
+*(v1.1.0)* Token-budgeted markdown briefing for a project — pinned memories,
+recent decisions, open bugs, and the highest-scoring remaining memories.
+Designed for session-start injection (the SessionStart hook uses it) but works
+anywhere you want a project digest. Included memories are logged as
+retrievals, which resets their decay clock.
+
+**Required fields:**
+- `command` — `"get_context"`
+
+**Optional fields:**
+- `project` — string (default: `"global"`)
+- `max_tokens` — integer budget for the briefing (default: 2000, max: 8000)
+
+Aliases: `context`, `briefing`, `session_context`. Minimum role: viewer.
+
+**Response:** `{ "project", "context_md", "memories_used", "tokens_estimate" }`
+
+---
+
+## ingest_session
+
+*(v1.1.0)* Upload a session transcript tail for server-side distillation.
+A background worker turns it into one `conversation` diary plus 0-5 typed
+`decision`/`bug`/`reference` memories (flagged `pending_review`), and enriches
+the session's run row. Requires a distiller LLM on the server
+(`ZIKRA_LLM_API_KEY` or `OPENAI_API_KEY`; base URL via `ZIKRA_LLM_BASE_URL`
+or `OPENAI_API_BASE` — LiteLLM proxies work). Without one the command answers
+`{"status": "no_distiller"}` and callers should fall back to client-side
+summarization.
+
+**Required fields:**
+- `command` — `"ingest_session"`
+- `runner` — string, machine hostname
+- `transcript_tail` — string, tail of the session transcript (≤200 KB kept)
+
+**Optional fields:**
+- `project`, `session_id`, `cwd`
+
+Aliases: `ingest`, `upload_session`. Minimum role: developer.
+
+**Response:** `{ "id", "status": "queued" }` or `{ "status": "no_distiller" }`
+
+---
+
+## run_consolidation
+
+*(v1.1.0)* Consolidate old session diaries into durable memories. Unpinned
+`conversation`/`diary` memories older than 14 days are grouped per project and
+ISO week, LLM-distilled into up to 8 `decision`/`reference`/`bug` memories
+(`pending_review`), and the sources archived (`searchable=0`, reversible).
+Also runs automatically every `ZIKRA_CONSOLIDATE_INTERVAL_HOURS` (default:
+weekly).
+
+**Optional fields:**
+- `project` — one project (default: all; `"global"` also means all)
+- `dry_run` — boolean, report clusters without distilling or archiving
+
+Alias: `consolidate`. Minimum role: admin.
+
+**Response:** `{ "status", "dry_run", "projects": [{ "project", "candidates", "weeks", "memories_created", "diaries_archived" }] }`
