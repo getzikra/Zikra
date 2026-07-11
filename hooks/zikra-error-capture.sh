@@ -57,7 +57,9 @@ try:
 except Exception:
     sys.exit(0)
 
-if d.get('tool_name') not in ('Bash', 'bash'):
+# Claude Code names it Bash; Kimi CLI names it Shell; be liberal about
+# shell-ish tool names — the settings matcher already pre-filters events.
+if not re.match(r'(?i)^(bash|shell|run_shell|execute|exec|cmd|terminal)', d.get('tool_name') or ''):
     sys.exit(0)
 
 tool_input = d.get('tool_input') or {}

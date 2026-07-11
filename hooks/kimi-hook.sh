@@ -160,24 +160,44 @@ print(json.dumps({
   fi
 
   # ── log_run with best-effort token totals ────────────────────────────────
+  # Token usage lives in wire.jsonl (kimi's TokenUsage records:
+  # input_other/output/input_cache_read/input_cache_creation), not in
+  # context.jsonl. Scan the wire file next to the transcript when present.
+  TOKEN_SRC="$TRANSCRIPT"
+  _WIRE="$(dirname "$TRANSCRIPT")/wire.jsonl"
+  [[ -f "$_WIRE" ]] && TOKEN_SRC="$_WIRE"
   read T_IN T_OUT T_CR T_CC <<< $(python3 -c "
 import json, sys
 ti = to = cr = cc = 0
+
+def walk(d):
+    found = []
+    if isinstance(d, dict):
+        for k, v in d.items():
+            if k in ('usage', 'token_usage') and isinstance(v, dict):
+                found.append(v)
+            else:
+                found.extend(walk(v))
+    elif isinstance(d, list):
+        for v in d:
+            found.extend(walk(v))
+    return found
+
 try:
     for line in open(sys.argv[1], errors='replace'):
         try:
             e = json.loads(line)
         except Exception:
             continue
-        u = e.get('usage') or (e.get('message') or {}).get('usage') or {}
-        if isinstance(u, dict):
-            ti += u.get('input_tokens', 0) or 0
-            to += u.get('output_tokens', 0) or 0
-            cr += u.get('cache_read_input_tokens', u.get('cached_tokens', 0)) or 0
-            cc += u.get('cache_creation_input_tokens', 0) or 0
+        for u in walk(e):
+            # Claude-style keys OR Kimi TokenUsage keys, one record per step
+            ti += (u.get('input_tokens', 0) or 0) + (u.get('input_other', 0) or 0)
+            to += (u.get('output_tokens', 0) or 0) + (u.get('output', 0) or 0)
+            cr += u.get('cache_read_input_tokens', u.get('input_cache_read', u.get('cached_tokens', 0))) or 0
+            cc += u.get('cache_creation_input_tokens', u.get('input_cache_creation', 0)) or 0
 except Exception:
     pass
-print(ti, to, cr, cc)" "$TRANSCRIPT" 2>/dev/null)
+print(ti, to, cr, cc)" "$TOKEN_SRC" 2>/dev/null)
   T_IN=${T_IN:-0}; T_OUT=${T_OUT:-0}; T_CR=${T_CR:-0}; T_CC=${T_CC:-0}
 
   RUN_BODY="$(python3 -c "

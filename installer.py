@@ -328,7 +328,7 @@ def install_kimi_hooks(cfg, _install_hook) -> None:
     entries = [
         ('Stop',         str(hook_dst), ''),
         ('SessionEnd',   str(hook_dst), ''),
-        ('PostToolUse',  str(err_hook), 'shell|bash'),
+        ('PostToolUse',  str(err_hook), '[Ss]hell|[Bb]ash'),
         ('SessionStart', f'{ctx_hook} --plain', ''),
     ]
 
