@@ -312,6 +312,54 @@ async def save_memory_pg(pool: 'asyncpg.Pool', data: dict, embedding: list) -> s
     return resolved_id
 
 
+async def nearest_projects_pg(pool: 'asyncpg.Pool', embedding: list, k: int) -> list[dict]:
+    vec = _vec_str(embedding)
+    if vec is None:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT project, 1.0 - (embedding <=> $1::halfvec) AS sim
+            FROM memories
+            WHERE embedding IS NOT NULL AND searchable = 1
+            ORDER BY embedding <=> $1::halfvec
+            LIMIT $2
+        """, vec, k)
+    return [{'project': row['project'], 'sim': float(row['sim'])} for row in rows]
+
+
+async def find_recent_similar_pg(pool: 'asyncpg.Pool', created_by, project,
+                                 memory_types: list, window_min: int,
+                                 embedding: list) -> Optional[dict]:
+    if not created_by:
+        return None
+    vec = _vec_str(embedding)
+    if vec is None:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT id, title, 1.0 - (embedding <=> $1::halfvec) AS sim
+            FROM memories
+            WHERE embedding IS NOT NULL
+              AND searchable=1
+              AND created_by=$2
+              AND project=$3
+              AND memory_type = ANY($4)
+              AND created_at >= NOW() - ($5 * interval '1 minute')
+            ORDER BY embedding <=> $1::halfvec
+            LIMIT 1
+        """, vec, created_by, project, memory_types, window_min)
+    return {'id': row['id'], 'title': row['title'], 'sim': float(row['sim'])} if row else None
+
+
+async def update_memory_content_pg(pool: 'asyncpg.Pool', memory_id: str,
+                                   content_md: str, embedding: list) -> None:
+    vec = _vec_str(embedding)
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            UPDATE memories SET content_md=$1, embedding=$2::halfvec, updated_at=NOW() WHERE id=$3
+        """, content_md, vec, memory_id)
+
+
 # ── search_memories ───────────────────────────────────────────────────────────
 
 async def _fts_search_pg(conn, query_text: str, project: str, limit: int,

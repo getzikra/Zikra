@@ -473,6 +473,106 @@ async def store_memory(data: dict, embedding: list) -> str:
     return await _sqlite_save_memory(_aio_db, data, embedding)
 
 
+async def nearest_projects(embedding: list, k: int) -> list[dict]:
+    """Return nearest searchable memory projects across all projects."""
+    if _is_pg:
+        from zikra.db_postgres import nearest_projects_pg, get_pg_pool
+        return await nearest_projects_pg(get_pg_pool(), embedding, k)
+
+    vec_bytes = struct.pack(f'{len(embedding)}f', *embedding)
+    async with _aio_db.execute("""
+        SELECT m.project, 1.0 - v.distance AS sim
+        FROM (
+            SELECT rowid, distance
+            FROM memories_vec
+            WHERE embedding MATCH ?
+              AND k = ?
+        ) v
+        JOIN memories m ON m.rowid = v.rowid
+        WHERE m.searchable = 1
+        ORDER BY v.distance
+        LIMIT ?
+    """, [vec_bytes, k, k]) as cur:
+        rows = await cur.fetchall()
+    return [{'project': row['project'], 'sim': float(row['sim'])} for row in rows]
+
+
+async def find_recent_similar(created_by, project, memory_types: list,
+                              window_min: int, embedding: list) -> Optional[dict]:
+    """Find one recent similar memory for write-time deduplication."""
+    if not created_by:
+        return None
+    if _is_pg:
+        from zikra.db_postgres import find_recent_similar_pg, get_pg_pool
+        return await find_recent_similar_pg(
+            get_pg_pool(), created_by, project, memory_types, window_min, embedding
+        )
+
+    vec_bytes = struct.pack(f'{len(embedding)}f', *embedding)
+    placeholders = ','.join('?' * len(memory_types))
+    sql = f"""
+        SELECT m.id, m.title, 1.0 - v.distance AS sim
+        FROM (
+            SELECT rowid, distance
+            FROM memories_vec
+            WHERE embedding MATCH ?
+              AND k = ?
+        ) v
+        JOIN memories m ON m.rowid = v.rowid
+        WHERE m.searchable = 1
+          AND m.created_by = ?
+          AND m.project = ?
+          AND m.memory_type IN ({placeholders})
+          AND m.created_at >= datetime('now', ?)
+        ORDER BY v.distance
+        LIMIT 1
+    """
+    params = [
+        vec_bytes,
+        VECTOR_SEARCH_K,
+        created_by,
+        project,
+        *memory_types,
+        f'-{window_min} minutes',
+    ]
+    async with _aio_db.execute(sql, params) as cur:
+        row = await cur.fetchone()
+    return {'id': row['id'], 'title': row['title'], 'sim': float(row['sim'])} if row else None
+
+
+async def update_memory_content(memory_id: str, content_md: str, embedding: list) -> None:
+    """Refresh an existing memory content and vector in place."""
+    if _is_pg:
+        from zikra.db_postgres import update_memory_content_pg, get_pg_pool
+        await update_memory_content_pg(get_pg_pool(), memory_id, content_md, embedding)
+        return
+
+    vec_bytes = struct.pack(f'{len(embedding)}f', *embedding)
+    async with _aio_db.execute(
+        "SELECT rowid, title FROM memories WHERE id = ?",
+        [memory_id],
+    ) as cur:
+        row = await cur.fetchone()
+    if not row:
+        return
+
+    rowid = row['rowid']
+    await _aio_db.execute(
+        "UPDATE memories SET content_md = ?, updated_at = datetime('now') WHERE id = ?",
+        [content_md, memory_id],
+    )
+    await _aio_db.execute("DELETE FROM memories_vec WHERE rowid = ?", [rowid])
+    await _aio_db.execute(
+        "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
+        [rowid, vec_bytes],
+    )
+    await _aio_db.execute(
+        "INSERT OR REPLACE INTO memories_fts(rowid, title, content_md) VALUES (?, ?, ?)",
+        [rowid, row['title'], content_md],
+    )
+    await _aio_db.commit()
+
+
 async def find_memories(query_text: str, query_embedding: list,
                         project: str, limit: int, memory_type: str = None) -> tuple:
     """Hybrid vector + FTS search. Returns (results, degraded, reason)."""
