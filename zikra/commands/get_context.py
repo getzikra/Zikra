@@ -58,25 +58,32 @@ async def cmd_get_context(body: dict) -> dict:
         key=created, reverse=True,
     )
 
+    header = f'# Zikra context — project: {project}'
+    budget_chars = max_tokens * CHARS_PER_TOKEN
+    out = [header]
+    used = [len(header)]
     chosen_ids = set()
-    sections = []
 
     def take(items, cap, heading, per_item_chars):
-        picked = []
+        """Pack items into the briefing one at a time — the budget cuts a
+        section short rather than dropping it whole."""
+        picked = 0
+        heading_md = f'## {heading}'
         for m in items:
-            if m['id'] in chosen_ids:
+            if m['id'] in chosen_ids or picked >= cap:
                 continue
-            picked.append(m)
-            chosen_ids.add(m['id'])
-            if len(picked) >= cap:
+            body_txt = _clip(m.get('content_md') or m.get('snippet') or '', per_item_chars)
+            entry = f"### {m['title']}\n{body_txt}"
+            cost = len(entry) + (len(heading_md) if picked == 0 else 0)
+            if used[0] + cost > budget_chars:
                 break
-        if picked:
-            lines = [f'## {heading}']
-            for m in picked:
-                body_txt = _clip(m.get('content_md') or m.get('snippet') or '', per_item_chars)
-                lines.append(f"### {m['title']}\n{body_txt}")
-            sections.append('\n'.join(lines))
-        return picked
+            if picked == 0:
+                out.append(heading_md)
+                used[0] += len(heading_md)
+            out.append(entry)
+            used[0] += len(entry)
+            chosen_ids.add(m['id'])
+            picked += 1
 
     take(pinned, SECTION_CAPS['pinned'], 'Pinned', 600)
     take(decisions, SECTION_CAPS['decisions'], 'Recent decisions', 450)
@@ -88,16 +95,6 @@ async def cmd_get_context(body: dict) -> dict:
         key=lambda m: compute_score(m), reverse=True,
     )
     take(remaining, SECTION_CAPS['top'], 'Most relevant memories', 350)
-
-    header = f'# Zikra context — project: {project}'
-    budget_chars = max_tokens * CHARS_PER_TOKEN
-    out = [header]
-    used = len(header)
-    for section in sections:
-        if used + len(section) > budget_chars:
-            break
-        out.append(section)
-        used += len(section)
 
     context_md = '\n\n'.join(out)
     included = list(chosen_ids)
