@@ -1,4 +1,4 @@
-from zikra.db import find_memories, count_memories_by_project
+from zikra.db import find_memories, count_memories_by_project, log_retrievals
 from zikra.scoring import compute_score
 from zikra.embed import embed
 from zikra.commands import _require_project, _parse_limit
@@ -61,6 +61,9 @@ async def cmd_search(body: dict) -> dict:
     results, tokens_used = apply_token_budget(results_list, max_tokens)
     for r in results:
         r['score'] = round(compute_score(r), 4)
+
+    # Returned results count as retrievals: bump access, reset decay clock
+    await log_retrievals([r.get('id') for r in results], 'search', query)
 
     total = await count_memories_by_project(project)
     response = {'results': results, 'count': len(results), 'total': total, 'tokens_used': tokens_used}

@@ -212,6 +212,14 @@ async def _sqlite_save_memory(db: 'aiosqlite.Connection', data: dict, embedding:
         data.get('project', 'global'),
     )
 
+    # Pin state changes only when the caller explicitly sends 'pinned' —
+    # a re-save without the field never silently unpins.
+    if 'pinned' in data:
+        await db.execute(
+            "UPDATE memories SET pinned = ? WHERE id = ?",
+            [1 if data['pinned'] else 0, resolved_id]
+        )
+
     await db.commit()
     return resolved_id
 
@@ -229,7 +237,8 @@ async def _fts_query(db: 'aiosqlite.Connection', match_expr: str, project: str, 
                 SUBSTR(m.content_md, 1, 500) AS snippet,
                 m.memory_type, m.project, m.module,
                 m.created_at, f.rank AS fts_score,
-                m.access_count, m.confidence_score
+                m.access_count, m.confidence_score,
+                m.pinned, m.last_accessed_at
             FROM memories m
             JOIN memories_fts f ON f.rowid = m.rowid
             WHERE memories_fts MATCH ?
@@ -243,7 +252,8 @@ async def _fts_query(db: 'aiosqlite.Connection', match_expr: str, project: str, 
                 SUBSTR(m.content_md, 1, 500) AS snippet,
                 m.memory_type, m.project, m.module,
                 m.created_at, f.rank AS fts_score,
-                m.access_count, m.confidence_score
+                m.access_count, m.confidence_score,
+                m.pinned, m.last_accessed_at
             FROM memories m
             JOIN memories_fts f ON f.rowid = m.rowid
             WHERE memories_fts MATCH ?
@@ -297,7 +307,8 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
                         SUBSTR(content_md, 1, 500) AS snippet,
                         memory_type, project, module, created_at,
                         -0.5 AS fts_score,
-                        access_count, confidence_score
+                        access_count, confidence_score,
+                        pinned, last_accessed_at
                     FROM memories
                     WHERE (title LIKE ? OR content_md LIKE ?)
                       AND searchable = 1
@@ -310,7 +321,8 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
                         SUBSTR(content_md, 1, 500) AS snippet,
                         memory_type, project, module, created_at,
                         -0.5 AS fts_score,
-                        access_count, confidence_score
+                        access_count, confidence_score,
+                        pinned, last_accessed_at
                     FROM memories
                     WHERE (title LIKE ? OR content_md LIKE ?)
                       AND searchable = 1
@@ -338,8 +350,10 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
         raw = round(min(fts, 1.0), 4)
         mem = {
             'created_at': row['created_at'],
+            'last_accessed_at': row['last_accessed_at'],
             'access_count': row['access_count'],
             'confidence_score': row['confidence_score'],
+            'pinned': row['pinned'],
         }
         results.append({
             'id': row['id'],
@@ -350,8 +364,10 @@ async def _fts_search(db: 'aiosqlite.Connection', query_text: str, project: str,
             'module': row['module'],
             'score': round(rescore(raw, mem), 4),
             'created_at': row['created_at'],
+            'last_accessed_at': row['last_accessed_at'],
             'access_count': row['access_count'],
             'confidence_score': row['confidence_score'],
+            'pinned': row['pinned'],
         })
     return results, degraded, reason
 
@@ -393,7 +409,8 @@ async def search_memories(db: 'aiosqlite.Connection', query_text: str, query_emb
                 m.memory_type, m.project, m.module,
                 m.created_at,
                 COALESCE(f.rank, 0.0) AS fts_score,
-                m.access_count, m.confidence_score
+                m.access_count, m.confidence_score,
+                m.pinned, m.last_accessed_at
             FROM memories m
             LEFT JOIN (
                 SELECT rowid, rank
@@ -413,7 +430,8 @@ async def search_memories(db: 'aiosqlite.Connection', query_text: str, query_emb
                 m.memory_type, m.project, m.module,
                 m.created_at,
                 COALESCE(f.rank, 0.0) AS fts_score,
-                m.access_count, m.confidence_score
+                m.access_count, m.confidence_score,
+                m.pinned, m.last_accessed_at
             FROM memories m
             LEFT JOIN (
                 SELECT rowid, rank
@@ -440,8 +458,10 @@ async def search_memories(db: 'aiosqlite.Connection', query_text: str, query_emb
         raw = round(0.7 * cosine_sim + 0.3 * min(fts, 1.0), 4)
         mem = {
             'created_at': row['created_at'],
+            'last_accessed_at': row['last_accessed_at'],
             'access_count': row['access_count'],
             'confidence_score': row['confidence_score'],
+            'pinned': row['pinned'],
         }
         results.append({
             'id': row['id'],
@@ -452,8 +472,10 @@ async def search_memories(db: 'aiosqlite.Connection', query_text: str, query_emb
             'module': row['module'],
             'score': round(rescore(raw, mem), 4),
             'created_at': row['created_at'],
+            'last_accessed_at': row['last_accessed_at'],
             'access_count': row['access_count'],
             'confidence_score': row['confidence_score'],
+            'pinned': row['pinned'],
         })
 
     results.sort(key=lambda x: x['score'], reverse=True)
@@ -592,7 +614,8 @@ async def fetch_memory(memory_id: str = None, title: str = None,
         return await get_memory_pg(get_pg_pool(), memory_id, title, memory_type, project)
 
     _COLS = ("id, title, content_md, memory_type, project, module, "
-             "tags, resolution, access_count, created_at, updated_at")
+             "tags, resolution, access_count, created_at, updated_at, "
+             "pinned, last_accessed_at, confidence_score")
 
     if memory_id:
         if project:
@@ -669,14 +692,15 @@ async def hygiene_report(project: str, stale_days: int) -> list:
             m.access_count,
             CAST(
                 (julianday('now') -
-                 julianday(COALESCE(m.updated_at, m.created_at))
+                 julianday(COALESCE(m.last_accessed_at, m.updated_at, m.created_at))
                 ) AS INTEGER
             ) AS days_idle,
             (SELECT COUNT(*) FROM memory_links l WHERE l.to_id = m.id) AS backlink_count
         FROM memories m
         WHERE m.project = ?
+          AND COALESCE(m.pinned, 0) = 0
           AND (julianday('now') -
-               julianday(COALESCE(m.updated_at, m.created_at))) > ?
+               julianday(COALESCE(m.last_accessed_at, m.updated_at, m.created_at))) > ?
           AND (SELECT COUNT(*) FROM memory_links l WHERE l.to_id = m.id) = 0
         ORDER BY days_idle DESC
         """,
@@ -938,18 +962,38 @@ async def delete_memory(memory_id: str) -> Optional[dict]:
     }
 
 
-async def bump_access_count(memory_id: str) -> None:
-    """Increment access_count for a memory."""
-    if _is_pg:
-        from zikra.db_postgres import bump_access_count_pg, get_pg_pool
-        await bump_access_count_pg(get_pg_pool(), memory_id)
+async def log_retrievals(memory_ids: list, source: str, query: str = None) -> None:
+    """Record that memories were retrieved: bump access_count, refresh
+    last_accessed_at (resets the decay clock), and append retrievals rows.
+    source is 'search', 'get', or 'context'. Never raises — retrieval
+    logging must not break the read path."""
+    memory_ids = [m for m in (memory_ids or []) if m]
+    if not memory_ids:
         return
+    try:
+        if _is_pg:
+            from zikra.db_postgres import log_retrievals_pg, get_pg_pool
+            await log_retrievals_pg(get_pg_pool(), memory_ids, source, query)
+            return
 
-    await _aio_db.execute(
-        "UPDATE memories SET access_count = access_count + 1 WHERE id = ?",
-        [memory_id]
-    )
-    await _aio_db.commit()
+        placeholders = ','.join('?' * len(memory_ids))
+        await _aio_db.execute(
+            f"UPDATE memories SET access_count = access_count + 1, "
+            f"last_accessed_at = datetime('now') WHERE id IN ({placeholders})",
+            memory_ids
+        )
+        await _aio_db.executemany(
+            "INSERT INTO retrievals (id, memory_id, source, query) VALUES (?, ?, ?, ?)",
+            [[new_id(), mid, source, query] for mid in memory_ids]
+        )
+        await _aio_db.commit()
+    except Exception:
+        logger.exception('retrieval logging failed')
+
+
+async def bump_access_count(memory_id: str) -> None:
+    """Increment access_count for a memory (explicit fetch)."""
+    await log_retrievals([memory_id], 'get')
 
 
 async def add_token(token_id: str, token: str, person_name: str, role: str,
@@ -1129,7 +1173,8 @@ async def list_all_memories(project: str = 'global', limit: int = 250) -> list[d
         sql = """
             SELECT id, title, SUBSTR(content_md, 1, 280) AS snippet,
                    content_md, memory_type, project, module, tags,
-                   access_count, created_by, pending_review, resolved, created_at
+                   access_count, created_by, pending_review, resolved, created_at,
+                   pinned, last_accessed_at, confidence_score
             FROM memories
             WHERE searchable = 1
             ORDER BY access_count DESC, created_at DESC
@@ -1140,7 +1185,8 @@ async def list_all_memories(project: str = 'global', limit: int = 250) -> list[d
         sql = """
             SELECT id, title, SUBSTR(content_md, 1, 280) AS snippet,
                    content_md, memory_type, project, module, tags,
-                   access_count, created_by, pending_review, resolved, created_at
+                   access_count, created_by, pending_review, resolved, created_at,
+                   pinned, last_accessed_at, confidence_score
             FROM memories
             WHERE searchable = 1
               AND project = ?

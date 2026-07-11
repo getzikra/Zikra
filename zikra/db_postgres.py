@@ -146,7 +146,7 @@ def _iso(ts) -> str:
 def _row_to_dict(row) -> dict:
     """asyncpg Record → plain dict with ISO timestamp strings."""
     d = dict(row)
-    for k in ('created_at', 'updated_at'):
+    for k in ('created_at', 'updated_at', 'last_accessed_at'):
         if k in d:
             d[k] = _iso(d[k])
     return d
@@ -338,6 +338,14 @@ async def save_memory_pg(pool: 'asyncpg.Pool', data: dict, embedding: list) -> s
             data.get('project', 'global'),
         )
 
+        # Pin state changes only when the caller explicitly sends 'pinned' —
+        # a re-save without the field never silently unpins.
+        if 'pinned' in data:
+            await conn.execute(
+                "UPDATE memories SET pinned = $1 WHERE id = $2",
+                1 if data['pinned'] else 0, resolved_id
+            )
+
     return resolved_id
 
 
@@ -408,6 +416,7 @@ async def _fts_search_pg(conn, query_text: str, project: str, limit: int,
                        SUBSTRING(content_md, 1, 500)  AS snippet,
                        memory_type, project, module,
                        created_at, access_count, confidence_score,
+                       pinned, last_accessed_at,
                        ts_rank(
                            to_tsvector('english', title || ' ' || content_md),
                            plainto_tsquery('english', $1)
@@ -427,6 +436,7 @@ async def _fts_search_pg(conn, query_text: str, project: str, limit: int,
                        SUBSTRING(content_md, 1, 500)  AS snippet,
                        memory_type, project, module,
                        created_at, access_count, confidence_score,
+                       pinned, last_accessed_at,
                        ts_rank(
                            to_tsvector('english', title || ' ' || content_md),
                            plainto_tsquery('english', $1)
@@ -451,6 +461,7 @@ async def _fts_search_pg(conn, query_text: str, project: str, limit: int,
                            SUBSTRING(content_md, 1, 500) AS snippet,
                            memory_type, project, module,
                            created_at, access_count, confidence_score,
+                           pinned, last_accessed_at,
                            0.5::float AS fts_score
                     FROM memories
                     WHERE (title ILIKE $1 OR content_md ILIKE $1)
@@ -465,6 +476,7 @@ async def _fts_search_pg(conn, query_text: str, project: str, limit: int,
                            SUBSTRING(content_md, 1, 500) AS snippet,
                            memory_type, project, module,
                            created_at, access_count, confidence_score,
+                           pinned, last_accessed_at,
                            0.5::float AS fts_score
                     FROM memories
                     WHERE (title ILIKE $1 OR content_md ILIKE $1)
@@ -485,8 +497,10 @@ async def _fts_search_pg(conn, query_text: str, project: str, limit: int,
         created_str = _iso(row['created_at'])
         mem = {
             'created_at': created_str,
+            'last_accessed_at': row['last_accessed_at'],
             'access_count': row['access_count'],
             'confidence_score': row['confidence_score'],
+            'pinned': row['pinned'],
         }
         results.append({
             'id': row['id'],
@@ -497,6 +511,10 @@ async def _fts_search_pg(conn, query_text: str, project: str, limit: int,
             'module': row['module'],
             'score': round(rescore(raw, mem), 4),
             'created_at': created_str,
+            'last_accessed_at': _iso(row['last_accessed_at']),
+            'access_count': row['access_count'],
+            'confidence_score': row['confidence_score'],
+            'pinned': row['pinned'],
         })
     return results, degraded, reason
 
@@ -555,6 +573,7 @@ async def search_memories_pg(pool: 'asyncpg.Pool', query_text: str,
                    SUBSTRING(m.content_md, 1, 500) AS snippet,
                    m.memory_type, m.project, m.module,
                    m.created_at, m.access_count, m.confidence_score,
+                   m.pinned, m.last_accessed_at,
                    COALESCE(ts_rank(
                        to_tsvector('english', m.title || ' ' || m.content_md),
                        plainto_tsquery('english', $1)
@@ -571,8 +590,10 @@ async def search_memories_pg(pool: 'asyncpg.Pool', query_text: str,
             created_str = _iso(row['created_at'])
             mem = {
                 'created_at': created_str,
+                'last_accessed_at': row['last_accessed_at'],
                 'access_count': row['access_count'],
                 'confidence_score': row['confidence_score'],
+                'pinned': row['pinned'],
             }
             results.append({
                 'id': row['id'],
@@ -583,6 +604,10 @@ async def search_memories_pg(pool: 'asyncpg.Pool', query_text: str,
                 'module': row['module'],
                 'score': round(rescore(raw, mem), 4),
                 'created_at': created_str,
+                'last_accessed_at': _iso(row['last_accessed_at']),
+                'access_count': row['access_count'],
+                'confidence_score': row['confidence_score'],
+                'pinned': row['pinned'],
             })
 
         results.sort(key=lambda x: x['score'], reverse=True)
@@ -597,39 +622,45 @@ async def get_memory_pg(pool, memory_id=None, title=None, memory_type=None, proj
             if project:
                 row = await conn.fetchrow("""
                     SELECT id, title, content_md, memory_type, project, module,
-                           tags, resolution, access_count, created_at, updated_at
+                           tags, resolution, access_count, created_at, updated_at,
+                           pinned, last_accessed_at, confidence_score
                     FROM memories WHERE id = $1 AND project = $2
                 """, memory_id, project)
             else:
                 row = await conn.fetchrow("""
                     SELECT id, title, content_md, memory_type, project, module,
-                           tags, resolution, access_count, created_at, updated_at
+                           tags, resolution, access_count, created_at, updated_at,
+                           pinned, last_accessed_at, confidence_score
                     FROM memories WHERE id = $1
                 """, memory_id)
         elif memory_type:
             if project:
                 row = await conn.fetchrow("""
                     SELECT id, title, content_md, memory_type, project, module,
-                           tags, resolution, access_count, created_at, updated_at
+                           tags, resolution, access_count, created_at, updated_at,
+                           pinned, last_accessed_at, confidence_score
                     FROM memories WHERE title = $1 AND memory_type = $2 AND project = $3
                 """, title, memory_type, project)
             else:
                 row = await conn.fetchrow("""
                     SELECT id, title, content_md, memory_type, project, module,
-                           tags, resolution, access_count, created_at, updated_at
+                           tags, resolution, access_count, created_at, updated_at,
+                           pinned, last_accessed_at, confidence_score
                     FROM memories WHERE title = $1 AND memory_type = $2
                 """, title, memory_type)
         else:
             if project:
                 row = await conn.fetchrow("""
                     SELECT id, title, content_md, memory_type, project, module,
-                           tags, resolution, access_count, created_at, updated_at
+                           tags, resolution, access_count, created_at, updated_at,
+                           pinned, last_accessed_at, confidence_score
                     FROM memories WHERE title = $1 AND project = $2 LIMIT 1
                 """, title, project)
             else:
                 row = await conn.fetchrow("""
                     SELECT id, title, content_md, memory_type, project, module,
-                           tags, resolution, access_count, created_at, updated_at
+                           tags, resolution, access_count, created_at, updated_at,
+                           pinned, last_accessed_at, confidence_score
                     FROM memories WHERE title = $1 LIMIT 1
                 """, title)
     return _row_to_dict(row) if row else None
@@ -818,16 +849,17 @@ async def hygiene_report_pg(pool, project: str, stale_days: int) -> list:
                 m.project,
                 m.access_count,
                 EXTRACT(
-                    day FROM now() - COALESCE(m.updated_at, m.created_at)
+                    day FROM now() - COALESCE(m.last_accessed_at, m.updated_at, m.created_at)
                 )::int AS days_idle,
                 COUNT(l.from_id)::int AS backlink_count
             FROM memories m
             LEFT JOIN memory_links l ON l.to_id = m.id
             WHERE m.project = $1
+              AND COALESCE(m.pinned, 0) = 0
             GROUP BY m.id, m.title, m.memory_type, m.project,
-                     m.access_count, m.updated_at, m.created_at
+                     m.access_count, m.last_accessed_at, m.updated_at, m.created_at
             HAVING EXTRACT(
-                       day FROM now() - COALESCE(m.updated_at, m.created_at)
+                       day FROM now() - COALESCE(m.last_accessed_at, m.updated_at, m.created_at)
                    ) > $2
                AND COUNT(l.from_id) = 0
             ORDER BY days_idle DESC
@@ -881,11 +913,22 @@ async def delete_memory_pg(pool, memory_id: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
-async def bump_access_count_pg(pool, memory_id: str) -> None:
+async def log_retrievals_pg(pool, memory_ids: list, source: str, query: str = None) -> None:
+    from zikra.db import new_id
     async with pool.acquire() as conn:
         await conn.execute("""
-            UPDATE memories SET access_count = access_count + 1 WHERE id = $1
-        """, memory_id)
+            UPDATE memories
+            SET access_count = access_count + 1, last_accessed_at = NOW()
+            WHERE id = ANY($1::text[])
+        """, memory_ids)
+        await conn.executemany(
+            "INSERT INTO retrievals (id, memory_id, source, query) VALUES ($1,$2,$3,$4)",
+            [(new_id(), mid, source, query) for mid in memory_ids]
+        )
+
+
+async def bump_access_count_pg(pool, memory_id: str) -> None:
+    await log_retrievals_pg(pool, [memory_id], 'get')
 
 
 async def add_token_pg(pool, token_id: str, token: str, person_name: str, role: str,
@@ -992,7 +1035,8 @@ async def list_all_memories_pg(pool, project: str = 'global', limit: int = 250) 
             SELECT id, title,
                    SUBSTRING(content_md, 1, 280) AS snippet,
                    content_md, memory_type, project, module, tags,
-                   access_count, created_by, pending_review, resolved, created_at
+                   access_count, created_by, pending_review, resolved, created_at,
+                   pinned, last_accessed_at, confidence_score
             FROM memories
             WHERE searchable = 1
               AND ($1::text IS NULL OR project = $1)

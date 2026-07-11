@@ -1,18 +1,16 @@
 """Orphan / stale memory detection.
 
-A memory is flagged when BOTH conditions are true:
-  - No updates in STALE_DAYS days (based on updated_at, which the save path
-    bumps on every re-save; fall back to created_at if updated_at is NULL).
+A memory is flagged when ALL conditions are true:
+  - Not pinned.
+  - Idle for more than STALE_DAYS days. The idle clock is
+    COALESCE(last_accessed_at, updated_at, created_at) — every search hit or
+    explicit fetch refreshes last_accessed_at, so "idle" means genuinely
+    unretrieved, not just unedited.
   - Zero incoming wikilinks — nothing currently [[links]] to it.
 
 Verdict:
   - days_idle > 90  → 'archive'
   - days_idle > 30  → 'review'
-
-The memories table in this repo has no last_accessed_at column, so we use
-updated_at as the staleness clock (it is refreshed on every save_memory and
-on bump_access_count). That is a looser definition of "idle" than pure
-retrieval, but it's the best signal the current schema carries.
 """
 
 from zikra.commands import _require_project
