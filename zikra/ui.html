@@ -357,6 +357,7 @@ body.resizing { cursor: col-resize; user-select: none; }
 .spill-success   { background: rgba(29,158,117,0.15); color: #1D9E75; border: 1px solid rgba(29,158,117,0.25); }
 .spill-fail      { background: rgba(163,45,45,0.15); color: #A32D2D; border: 1px solid rgba(163,45,45,0.25); }
 .spill-new       { background: rgba(136,135,128,0.15); color: #888780; border: 1px solid rgba(136,135,128,0.25); }
+.spill-resolved  { background: rgba(29,158,117,0.15); color: #1D9E75; border: 1px solid rgba(29,158,117,0.25); }
 
 /* ── Memory Cards ── */
 .mem-card {
@@ -639,6 +640,62 @@ body.resizing { cursor: col-resize; user-select: none; }
 /* ── Meta Row ── */
 .meta-row { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--tfaint); line-height: 1.7; }
 
+/* ── Activity Tab ── */
+#view-activity.active { display: block; }
+.activity-scroll { position: absolute; inset: 0; overflow-y: auto; padding: 14px; }
+.act-charts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.act-card {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; min-width: 0;
+}
+.act-card-hdr {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; margin-bottom: 8px;
+}
+.act-card-title {
+  font-size: 10px; font-weight: 600; color: var(--tfaint);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.act-card-max { font-size: 10px; color: var(--tmuted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.act-axis { display: flex; justify-content: space-between; font-size: 9px; color: var(--tfaint); margin-top: 3px; }
+.act-empty { color: var(--tmuted); font-size: 11px; text-align: center; padding: 26px 0; }
+.act-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; align-items: start; }
+.act-col { min-width: 0; }
+.act-feed-item, .act-err-item {
+  border: 1px solid var(--border); border-left-width: 3px;
+  border-radius: 7px; padding: 9px 10px; margin-bottom: 5px;
+  background: rgba(12,13,20,0.5);
+}
+.act-err-item { border-left-color: #A32D2D; }
+.act-err-msg { font-size: 12px; color: var(--text2); margin-top: 3px; word-break: break-word; }
+.act-actions { display: flex; gap: 5px; margin-top: 7px; flex-wrap: wrap; }
+.act-btn {
+  font-size: 10px; padding: 3px 8px; border-radius: 5px;
+  background: var(--bgsec); border: 1px solid var(--border);
+  color: var(--tmuted); transition: color 0.15s, border-color 0.15s;
+}
+.act-btn:hover { color: var(--text); border-color: rgba(83,74,183,0.5); }
+.act-btn:disabled { opacity: 0.5; cursor: default; }
+.act-ctx {
+  background: var(--bgsec); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 10px; margin-top: 6px;
+  font-size: 11px; color: var(--text2); overflow-x: auto;
+  font-family: monospace; line-height: 1.5;
+}
+.act-tokens-sec { margin-top: 14px; }
+.act-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.act-table th {
+  text-align: left; padding: 5px 8px; color: var(--tfaint);
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border); font-weight: 600;
+}
+.act-table td {
+  padding: 5px 8px; color: var(--text2);
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.act-table tr:last-child td { border-bottom: none; }
+
 /* scrollbar styling */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -708,6 +765,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   <nav class="tabbar">
     <button class="tab-btn active" data-tab="search">Search</button>
     <button class="tab-btn" data-tab="graph">Graph</button>
+    <button class="tab-btn" data-tab="activity">Activity</button>
     <button class="tab-btn" data-tab="prompts">Prompts</button>
     <button class="tab-btn" data-tab="requirements">Requirements</button>
   </nav>
@@ -763,6 +821,46 @@ body.resizing { cursor: col-resize; user-select: none; }
         <div class="graph-stats" id="graph-stats"></div>
       </div>
 
+      <!-- ACTIVITY TAB -->
+      <div class="tab-view" id="view-activity">
+        <div class="activity-scroll">
+          <div class="act-charts">
+            <div class="act-card">
+              <div class="act-card-hdr">
+                <span class="act-card-title">Runs / day</span>
+                <span class="act-card-max" id="act-runs-max"></span>
+              </div>
+              <div id="act-chart-runs"><div class="act-empty">Connect to load activity.</div></div>
+            </div>
+            <div class="act-card">
+              <div class="act-card-hdr">
+                <span class="act-card-title">Tokens / day</span>
+                <span class="act-card-max" id="act-tokens-max"></span>
+              </div>
+              <div id="act-chart-tokens"></div>
+            </div>
+            <div class="act-card">
+              <div class="act-card-hdr">
+                <span class="act-card-title">Memories / day <span style="color:#f87171;text-transform:none;letter-spacing:normal">· errors</span></span>
+                <span class="act-card-max" id="act-mems-max"></span>
+              </div>
+              <div id="act-chart-mems"></div>
+            </div>
+          </div>
+          <div class="act-cols">
+            <div class="act-col">
+              <span class="slabel">Latest memories</span>
+              <div id="act-feed-list"><div class="empty-msg">Connect to load the feed.</div></div>
+            </div>
+            <div class="act-col">
+              <span class="slabel">Recent errors</span>
+              <div id="act-err-list"><div class="empty-msg">Connect to load errors.</div></div>
+            </div>
+          </div>
+          <div class="act-tokens-sec" id="act-tokens"></div>
+        </div>
+      </div>
+
       <!-- PROMPTS TAB -->
       <div class="tab-view two-panel" id="view-prompts">
         <div class="sidebar">
@@ -800,8 +898,7 @@ body.resizing { cursor: col-resize; user-select: none; }
               <select id="req-status">
                 <option value="">all</option>
                 <option value="pending">pending</option>
-                <option value="approved">approved</option>
-                <option value="rejected">rejected</option>
+                <option value="resolved">resolved</option>
               </select>
               <select id="req-sort">
                 <option value="created">created</option>
@@ -921,6 +1018,10 @@ const S = {
   gAlpha: 0, gNeedsDraw: false,
   gActive: [], gActiveSet: new Set(), gNodeMap: {},
 
+  // activity
+  activity: null, tokenUsage: [],
+  memoryTypes: [],
+
   // prompts
   allPrompts: [], selPrompt: null,
   promptFilter: 'all', promptSort: 'last_run',
@@ -965,6 +1066,18 @@ function daysAgo(v) {
   if (days === 0) return 'today';
   if (days === 1) return '1d ago';
   return days + 'd ago';
+}
+
+// Finer-grained relative time for feed items ("just now" / "5m ago" / "3h ago" / "2d ago")
+function relTime(v) {
+  if (!v) return '';
+  const diff = Date.now() - parseUTCDate(v).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return hrs + 'h ago';
+  return Math.floor(hrs / 24) + 'd ago';
 }
 
 function cmpVer(a, b) {
@@ -1097,6 +1210,29 @@ async function apiPost(command, extra = {}) {
     return await res.json();
   } catch (e) {
     showBanner('Cannot reach ' + url + ' — is the server running?');
+    return null;
+  }
+}
+
+// POST /api/ui/memories/{id}/action — dashboard quick actions
+// (pin/unpin/archive/approve/promote). 403 = viewer token.
+async function memoryAction(id, action, extra = {}) {
+  const url = baseUrl() + '/api/ui/memories/' + encodeURIComponent(id) + '/action';
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + S.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ action, ...extra })
+    });
+    if (res.status === 401) { handle401(); return null; }
+    if (res.status === 403) { showBanner('Your token cannot modify memories (viewer role)'); return null; }
+    if (!res.ok) { showBanner('Action failed: ' + res.status); return null; }
+    return await res.json();
+  } catch (e) {
+    showBanner('Cannot reach ' + baseUrl() + ' — is the server running?');
     return null;
   }
 }
@@ -1373,6 +1509,7 @@ function reloadActiveTab() {
   switch (S.activeTab) {
     case 'search':      loadSearch(document.getElementById('search-query').value || '*'); break;
     case 'graph':       loadGraph(); break;
+    case 'activity':    loadActivity(); break;
     case 'prompts':     loadPrompts(); break;
     case 'requirements': loadRequirements(); break;
   }
@@ -1390,6 +1527,8 @@ async function connect() {
 
   S.role     = info.role     || 'viewer';
   S.projects = info.projects || [];
+  S.memoryTypes = info.memory_types || [];
+  populateTypeFilter(S.memoryTypes);
   if (info.project_scope) {
     S.project = info.project_scope;
     localStorage.setItem(K_PROJECT, info.project_scope);
@@ -1452,6 +1591,24 @@ async function refreshTokenTotals() {
              + fmtTok((Number(s.sum_in)||0) + (Number(s.sum_out)||0) + (Number(s.sum_cache_read)||0))
              + ' tokens';
   pill.style.display = 'flex';
+}
+
+// Rebuild the type <select> from the distinct types the server actually has
+// (bootstrap memory_types). Keeps "All types" first and preserves the current
+// selection even if that type has since vanished from the DB.
+function populateTypeFilter(types) {
+  const sel = document.getElementById('filter-type');
+  if (!sel) return;
+  const cur = sel.value;
+  const opts = ['<option value="">All types</option>'];
+  (types || []).forEach(t => {
+    opts.push(`<option value="${esc(t)}">${esc(t)}</option>`);
+  });
+  if (cur && !(types || []).includes(cur)) {
+    opts.push(`<option value="${esc(cur)}">${esc(cur)}</option>`);
+  }
+  sel.innerHTML = opts.join('');
+  sel.value = cur;
 }
 
 // ── Search Tab ────────────────────────────────────────────────────
@@ -1566,6 +1723,9 @@ async function renderSearchDetail(m) {
     }
   }
 
+  // Headline % is the server-computed `score` (compute_score in scoring.py) —
+  // the UI no longer re-derives it. The signal bars below only visualise its
+  // components (recency/frequency/confidence).
   const sc  = m.score != null ? Math.round(m.score * 100) : 0;
   const scC = scoreColor(sc);
   const acc = m.access_count || 0;
@@ -1574,9 +1734,13 @@ async function renderSearchDetail(m) {
   const tags = Array.isArray(m.tags) ? m.tags : [];
   const tagHtml = tags.map(t => `<span class="tag-pill">${esc(t)}</span>`).join('');
 
-  // Timezone-safe age: SQLite returns "YYYY-MM-DD HH:MM:SS" (no Z) → treated as local without fix
-  const ageMs     = Math.max(0, Date.now() - parseUTCDate(m.created_at).getTime());
-  const ageDays   = ageMs / 86400000;
+  // Timezone-safe age: SQLite returns "YYYY-MM-DD HH:MM:SS" (no Z) → treated as local without fix.
+  // Recall resets the decay clock, so reference = max(created_at, last_accessed_at) like the server.
+  const touchedMs = Math.max(
+    parseUTCDate(m.created_at).getTime(),
+    m.last_accessed_at ? parseUTCDate(m.last_accessed_at).getTime() : 0
+  );
+  const ageDays   = Math.max(0, Date.now() - touchedMs) / 86400000;
   const recency   = Math.round(Math.max(0.05, Math.exp(-0.693 * ageDays / 30)) * 100);
   const frequency = Math.round(Math.min(1.0, Math.log1p(acc) / Math.log1p(100)) * 100);
   const conf      = Math.round((m.confidence_score != null ? m.confidence_score : 1.0) * 100);
@@ -1598,7 +1762,9 @@ async function renderSearchDetail(m) {
       <div class="dh-r1">
         ${typeBadge(m.memory_type)}
         ${statusPill(m.status || 'active')}
+        ${m.pinned ? '<span class="spill" style="background:rgba(232,115,12,0.12);color:#E8730C;border:1px solid rgba(232,115,12,0.3)">📌 pinned</span>' : ''}
         <span style="font-size:10px;color:var(--tfaint)">accessed ${acc}×</span>
+        ${m.last_accessed_at ? `<span style="font-size:10px;color:var(--tfaint)">· last recalled ${relTime(m.last_accessed_at)}</span>` : ''}
       </div>
       <div class="dh-title">${esc(m.title || 'Untitled')}</div>
       <div class="gauge-block">
@@ -1635,6 +1801,10 @@ async function renderSearchDetail(m) {
           <span>archive &lt; 20</span><span>stale &lt; 50</span><span>trusted &gt; 80</span>
         </div>
       </div>
+      ${S.role !== 'viewer' ? `<div class="act-actions">
+        <button class="act-btn" id="dp-pin-btn">${m.pinned ? 'Unpin' : 'Pin'}</button>
+        <button class="act-btn" id="dp-archive-btn">Archive</button>
+      </div>` : ''}
     </div>
     <div class="detail-body">
       <span class="slabel">Content</span>
@@ -1649,6 +1819,28 @@ async function renderSearchDetail(m) {
         ${m.module ? `<span>Module: ${esc(m.module)}</span>` : ''}
       </div>
     </div>`;
+
+  // Quick actions — pin/unpin refetches the row (score changes with pin),
+  // archive removes it from search results entirely.
+  const pinBtn = panel.querySelector('#dp-pin-btn');
+  if (pinBtn) pinBtn.addEventListener('click', async () => {
+    pinBtn.disabled = true;
+    const r = await memoryAction(m.id, m.pinned ? 'unpin' : 'pin');
+    if (!r) { pinBtn.disabled = false; return; }
+    const full = await apiGet('/api/ui/memories/' + encodeURIComponent(m.id));
+    const next = (full && !full.error) ? full : { ...m, pinned: m.pinned ? 0 : 1 };
+    S.searchSelected = next;
+    renderSearchDetail(next);
+  });
+  const archBtn = panel.querySelector('#dp-archive-btn');
+  if (archBtn) archBtn.addEventListener('click', async () => {
+    archBtn.disabled = true;
+    const r = await memoryAction(m.id, 'archive');
+    if (!r) { archBtn.disabled = false; return; }
+    S.searchSelected = null;
+    panel.innerHTML = '<div class="detail-empty"><span>Memory archived.</span></div>';
+    fetchSearch();
+  });
 }
 
 // ── Graph Tab ─────────────────────────────────────────────────────
@@ -2161,6 +2353,240 @@ function closeNodeDetail() {
   });
 })();
 
+// ── Activity Tab ──────────────────────────────────────────────────
+// Three 30-day sparkline charts (runs / tokens / memories+errors), the
+// latest-memories feed with quick actions, recent errors, and the per-token
+// usage table. All SVG is hand-drawn with viewBox — no chart library.
+const ACT_W = 300, ACT_H = 80;
+
+async function loadActivity() {
+  // Two independent fetches — run them in parallel
+  const [act, usage] = await Promise.all([
+    apiGet('/api/ui/activity', { days: 30, feed: 20 }),
+    apiGet('/api/ui/token-usage')
+  ]);
+  if (act) {
+    S.activity = act;
+    renderActivityCharts();
+    renderActivityFeed();
+    renderActivityErrors();
+  }
+  if (usage) {
+    S.tokenUsage = Array.isArray(usage) ? usage : [];
+    renderTokenUsage();
+  }
+}
+
+// Consecutive day keys 'YYYY-MM-DD' (UTC — matches SQLite DATE(created_at))
+function lastNDays(n) {
+  const out = [];
+  const now = Date.now();
+  for (let i = n - 1; i >= 0; i--) {
+    out.push(new Date(now - i * 86400000).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+function fmtDayLabel(iso) {
+  const d = parseUTCDate(iso + ' 12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+// Simple bar series over the day axis; heights scale to max.
+function actBarSvg(values, max, color) {
+  const bw = ACT_W / values.length;
+  const bars = values.map((v, i) => {
+    if (!v) return '';
+    const h = Math.max(1.5, (v / max) * (ACT_H - 2));
+    return `<rect x="${(i * bw + 0.5).toFixed(1)}" y="${(ACT_H - h).toFixed(1)}" width="${Math.max(1, bw - 1).toFixed(1)}" height="${h.toFixed(1)}" fill="${color}" rx="1"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${ACT_W} ${ACT_H}" width="100%" height="${ACT_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+}
+
+// Per-day bars stacked by memory_type (TYPE_COLORS) + red error markers/line.
+function actStackedSvg(days, memRows, errRows, max) {
+  const byDay = {};
+  memRows.forEach(r => {
+    const d = byDay[r.d] || (byDay[r.d] = {});
+    d[r.memory_type || 'conversation'] = (d[r.memory_type || 'conversation'] || 0) + (r.n || 0);
+  });
+  const errByDay = {};
+  errRows.forEach(r => { errByDay[r.d] = r.n || 0; });
+
+  const bw = ACT_W / days.length;
+  let rects = '';
+  days.forEach((day, i) => {
+    const types = byDay[day];
+    if (!types) return;
+    let y = ACT_H;
+    Object.keys(types).sort().forEach(t => {
+      const h = Math.max(1, (types[t] / max) * (ACT_H - 4));
+      y -= h;
+      rects += `<rect x="${(i * bw + 0.5).toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1, bw - 1).toFixed(1)}" height="${h.toFixed(1)}" fill="${typeColor(t)}" rx="1"/>`;
+    });
+  });
+
+  // Errors overlay: red line through days that have errors + a marker per day
+  const errPts = [];
+  let markers = '';
+  days.forEach((day, i) => {
+    const n = errByDay[day];
+    if (!n) return;
+    const x = (i * bw + bw / 2).toFixed(1);
+    const y = (ACT_H - 3 - (n / max) * (ACT_H - 8)).toFixed(1);
+    errPts.push(`${x},${y}`);
+    markers += `<circle cx="${x}" cy="${y}" r="2.5" fill="#A32D2D" stroke="#f87171" stroke-width="0.8"/>`;
+  });
+  const line = errPts.length > 1
+    ? `<polyline points="${errPts.join(' ')}" fill="none" stroke="#f87171" stroke-width="1.2" stroke-dasharray="3 2" opacity="0.8"/>`
+    : '';
+  return `<svg viewBox="0 0 ${ACT_W} ${ACT_H}" width="100%" height="${ACT_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${rects}${line}${markers}</svg>`;
+}
+
+function actAxis(days) {
+  return `<div class="act-axis"><span>${fmtDayLabel(days[0])}</span><span>${fmtDayLabel(days[days.length - 1])}</span></div>`;
+}
+
+function renderActivityCharts() {
+  const a = S.activity;
+  if (!a) return;
+  const days = lastNDays(a.days || 30);
+  const empty = '<div class="act-empty">no activity yet</div>';
+  const setMax = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  // (1) runs per day
+  const runsBy = {};
+  (a.runs || []).forEach(r => { runsBy[r.d] = r; });
+  const runVals = days.map(d => runsBy[d] ? (runsBy[d].n || 0) : 0);
+  const runMax  = Math.max(...runVals);
+  const runsEl  = document.getElementById('act-chart-runs');
+  runsEl.innerHTML = runMax > 0 ? actBarSvg(runVals, runMax, '#534AB7') + actAxis(days) : empty;
+  setMax('act-runs-max', runMax > 0 ? 'max ' + runMax : '');
+
+  // (2) tokens per day (in + out)
+  const tokVals = days.map(d => runsBy[d]
+    ? (Number(runsBy[d].tokens_in) || 0) + (Number(runsBy[d].tokens_out) || 0) : 0);
+  const tokMax  = Math.max(...tokVals);
+  const tokEl   = document.getElementById('act-chart-tokens');
+  tokEl.innerHTML = tokMax > 0 ? actBarSvg(tokVals, tokMax, '#E8730C') + actAxis(days) : empty;
+  setMax('act-tokens-max', tokMax > 0 ? 'max ' + fmtTok(tokMax) : '');
+
+  // (3) memories per day stacked by type + errors overlay
+  const memRows = a.memories || [];
+  const errRows = a.errors || [];
+  const memTotals = {};
+  memRows.forEach(r => { memTotals[r.d] = (memTotals[r.d] || 0) + (r.n || 0); });
+  const memMax = Math.max(
+    ...days.map(d => memTotals[d] || 0),
+    ...errRows.map(r => r.n || 0),
+    0
+  );
+  const memEl = document.getElementById('act-chart-mems');
+  memEl.innerHTML = memMax > 0
+    ? actStackedSvg(days, memRows, errRows, memMax) + actAxis(days)
+    : empty;
+  setMax('act-mems-max', memMax > 0 ? 'max ' + memMax : '');
+}
+
+function renderActivityFeed() {
+  const list = document.getElementById('act-feed-list');
+  const feed = (S.activity && S.activity.feed) || [];
+  if (feed.length === 0) {
+    list.innerHTML = '<div class="empty-msg">No memories yet.</div>';
+    return;
+  }
+  const canAct = S.role !== 'viewer';
+  list.innerHTML = feed.map(m => {
+    const c = typeColor(m.memory_type);
+    const snippet = (m.snippet || '').replace(/\n+/g, ' ').trim().slice(0, 110);
+    const showPromote = ['conversation', 'diary'].includes(m.memory_type) || !!m.pending_review;
+    const btns = canAct ? `<div class="act-actions">
+        <button class="act-btn" data-mid="${esc(m.id)}" data-act="${m.pinned ? 'unpin' : 'pin'}">${m.pinned ? 'Unpin' : 'Pin'}</button>
+        ${showPromote ? `<button class="act-btn" data-mid="${esc(m.id)}" data-act="promote">Promote → decision</button>` : ''}
+        ${m.pending_review ? `<button class="act-btn" data-mid="${esc(m.id)}" data-act="approve">Approve</button>` : ''}
+        <button class="act-btn" data-mid="${esc(m.id)}" data-act="archive">Archive</button>
+      </div>` : '';
+    return `<div class="act-feed-item" style="border-left-color:${c}">
+      <div class="mc-top">
+        ${typeBadge(m.memory_type)}
+        <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          ${m.pinned ? '<span style="font-size:10px" title="Pinned">📌</span>' : ''}
+          ${m.pending_review ? '<span class="spill spill-pending">needs review</span>' : ''}
+          <span class="run-ts">${relTime(m.created_at)}</span>
+        </span>
+      </div>
+      <div class="mc-title">${esc(m.title || 'Untitled')}</div>
+      ${snippet ? `<div class="mc-snippet">${esc(snippet)}</div>` : ''}
+      <div class="mc-meta">${esc(m.project || '')}${m.created_by ? '  ·  ' + esc(m.created_by) : ''}</div>
+      ${btns}
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.act-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      const act = btn.dataset.act;
+      const extra = act === 'promote' ? { memory_type: 'decision' } : {};
+      const r = await memoryAction(btn.dataset.mid, act, extra);
+      if (r) loadActivity();
+      else btn.disabled = false;
+    });
+  });
+}
+
+function renderActivityErrors() {
+  const list = document.getElementById('act-err-list');
+  const errors = (S.activity && S.activity.recent_errors) || [];
+  if (errors.length === 0) {
+    list.innerHTML = '<div class="empty-msg">No errors logged. 🎉</div>';
+    return;
+  }
+  list.innerHTML = errors.map((e, i) => {
+    const ctxId = 'act-ctx-' + i;
+    return `<div class="act-err-item">
+      <div class="mc-top">
+        <span class="tbadge" style="background:rgba(163,45,45,0.15);color:#f87171;border:1px solid rgba(163,45,45,0.3)">${esc(e.error_type || 'error')}</span>
+        <span class="run-ts">${relTime(e.created_at)}</span>
+      </div>
+      <div class="act-err-msg">${esc(e.message || '')}</div>
+      <div class="mc-meta">${esc(e.project || '')}${e.runner ? '  ·  ' + esc(e.runner) : ''}</div>
+      ${e.context_md ? `<span class="show-toggle" data-ctx="${ctxId}">↓ context</span>
+      <pre class="act-ctx" id="${ctxId}" style="display:none">${esc(e.context_md)}</pre>` : ''}
+    </div>`;
+  }).join('');
+
+  list.querySelectorAll('.show-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pre = document.getElementById(btn.dataset.ctx);
+      const open = pre.style.display !== 'none';
+      pre.style.display = open ? 'none' : 'block';
+      btn.textContent = open ? '↓ context' : '↑ hide context';
+    });
+  });
+}
+
+function renderTokenUsage() {
+  const el = document.getElementById('act-tokens');
+  if (!el) return;
+  const rows = S.tokenUsage || [];
+  if (rows.length === 0) {
+    el.innerHTML = '<span class="slabel">Tokens</span><div class="empty-msg">No token activity recorded.</div>';
+    return;
+  }
+  const body = rows.map(r => `<tr>
+    <td>${esc(r.label || '—')}</td>
+    <td>${Number(r.hits_24h) || 0}</td>
+    <td>${Number(r.hits_7d) || 0}</td>
+    <td>${Number(r.hits_total) || 0}</td>
+    <td>${r.last_seen ? relTime(r.last_seen) : '—'}</td>
+  </tr>`).join('');
+  el.innerHTML = `<span class="slabel">Tokens</span>
+    <div style="overflow-x:auto"><table class="act-table">
+      <thead><tr><th>label</th><th>hits 24h</th><th>hits 7d</th><th>hits total</th><th>last seen</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>`;
+}
+
 // ── Prompts Tab ───────────────────────────────────────────────────
 async function loadPrompts() {
   const res = await apiGet('/api/ui/prompts');
@@ -2386,10 +2812,17 @@ async function renderPromptsDetail(p) {
 }
 
 // ── Requirements Tab ──────────────────────────────────────────────
+// The server enum is 'pending' | 'resolved' (mapped from pending_review),
+// but the list rows don't carry the flag — so fetch each status separately
+// and tag the rows client-side. Filtering then works on r.status.
 async function loadRequirements() {
-  const res = await apiGet('/api/ui/requirements');
-  if (!res) return;
-  S.allReqs = res.requirements || [];
+  const [pend, resv] = await Promise.all([
+    apiGet('/api/ui/requirements', { status: 'pending' }),
+    apiGet('/api/ui/requirements', { status: 'resolved' })
+  ]);
+  if (!pend && !resv) return;
+  const tag = (res, st) => ((res && res.requirements) || []).map(r => ({ ...r, status: st }));
+  S.allReqs = [...tag(pend, 'pending'), ...tag(resv, 'resolved')];
   renderReqSidebar();
 }
 
@@ -2408,7 +2841,7 @@ function renderReqSidebar() {
     return;
   }
 
-  const statusBorderColor = { pending:'#BA7517', approved:'#1D9E75', rejected:'#A32D2D' };
+  const statusBorderColor = { pending:'#BA7517', resolved:'#1D9E75' };
   list.innerHTML = items.map((r, i) => {
     const c      = statusBorderColor[r.status] || '#888780';
     const active = S.selReq && S.selReq.id === r.id ? 'active' : '';
@@ -2507,6 +2940,13 @@ document.getElementById('s-clear').addEventListener('click', () => {
   document.getElementById('search-detail').innerHTML  = '<div class="detail-empty"><span>Select a memory to view details</span></div>';
   document.getElementById('prompts-detail').innerHTML = '<div class="detail-empty"><span>Select a prompt to view details</span></div>';
   document.getElementById('req-detail').innerHTML     = '<div class="detail-empty"><span>Select a requirement to view details</span></div>';
+  S.activity = null; S.tokenUsage = [];
+  document.getElementById('act-chart-runs').innerHTML   = '<div class="act-empty">Connect to load activity.</div>';
+  document.getElementById('act-chart-tokens').innerHTML = '';
+  document.getElementById('act-chart-mems').innerHTML   = '';
+  document.getElementById('act-feed-list').innerHTML    = '<div class="empty-msg">Connect to load the feed.</div>';
+  document.getElementById('act-err-list').innerHTML     = '<div class="empty-msg">Connect to load errors.</div>';
+  document.getElementById('act-tokens').innerHTML       = '';
   S.gNodes = []; S.gEdges = [];
   stopGraphSim();
 });
@@ -2649,7 +3089,7 @@ window.addEventListener('resize', () => {
 
   // Restore active tab
   const savedTab = localStorage.getItem(K_ACTIVE_TAB);
-  if (savedTab && ['search','graph','prompts','requirements'].includes(savedTab)) {
+  if (savedTab && ['search','graph','activity','prompts','requirements'].includes(savedTab)) {
     switchTab(savedTab);
   }
 

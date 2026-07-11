@@ -1379,16 +1379,22 @@ async def list_by_memory_type(memory_type: str, project: str, limit: int,
     return [dict(r) for r in rows]
 
 
-async def change_memory_type(memory_id: str, new_type: str) -> Optional[dict]:
-    """Promote a requirement to a different memory_type. Returns the row or None."""
+async def change_memory_type(memory_id: str, new_type: str,
+                             from_type: str = None) -> Optional[dict]:
+    """Change a memory's type (e.g. promote a requirement or a diary to a
+    decision). When from_type is given, only a memory of that type matches —
+    promote_requirement uses this guard. Returns the row or None."""
     if _is_pg:
         from zikra.db_postgres import change_memory_type_pg, get_pg_pool
-        return await change_memory_type_pg(get_pg_pool(), memory_id, new_type)
+        return await change_memory_type_pg(get_pg_pool(), memory_id, new_type, from_type)
 
-    async with _aio_db.execute(
-        "SELECT id, title FROM memories WHERE id = ? AND memory_type = 'requirement'",
-        [memory_id]
-    ) as cur:
+    if from_type:
+        sql = "SELECT id, title FROM memories WHERE id = ? AND memory_type = ?"
+        params = [memory_id, from_type]
+    else:
+        sql = "SELECT id, title FROM memories WHERE id = ?"
+        params = [memory_id]
+    async with _aio_db.execute(sql, params) as cur:
         row = await cur.fetchone()
     if not row:
         return None

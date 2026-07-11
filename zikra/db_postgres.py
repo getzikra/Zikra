@@ -1205,12 +1205,13 @@ async def list_by_type_pg(pool, memory_type: str, project: str, limit: int,
     return [_row_to_dict(r) for r in rows]
 
 
-async def change_memory_type_pg(pool, memory_id: str, new_type: str) -> Optional[dict]:
+async def change_memory_type_pg(pool, memory_id: str, new_type: str,
+                                from_type: str = None) -> Optional[dict]:
     async with pool.acquire() as conn:
         row = await conn.fetchrow("""
             SELECT id, title FROM memories
-            WHERE id = $1 AND memory_type = 'requirement'
-        """, memory_id)
+            WHERE id = $1 AND ($2::text IS NULL OR memory_type = $2)
+        """, memory_id, from_type)
         if not row:
             return None
         await conn.execute("""

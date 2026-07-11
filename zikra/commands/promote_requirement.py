@@ -16,7 +16,7 @@ async def cmd_promote_requirement(body: dict) -> dict:
         req_id = found['id']
 
     promote_to = body.get('promote_to', 'prompt')
-    row = await change_memory_type(req_id, promote_to)
+    row = await change_memory_type(req_id, promote_to, from_type='requirement')
 
     if not row:
         return {'error': 'Requirement not found or already promoted'}
