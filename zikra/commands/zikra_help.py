@@ -29,6 +29,13 @@ async def cmd_zikra_help(body: dict) -> dict:
             'optional': ['memory_type', 'project'],
         },
         {
+            'command': 'ingest_session',
+            'aliases': ['ingest', 'upload_session'],
+            'description': 'Upload a session transcript tail for server-side distillation into typed memories.',
+            'required': ['runner', 'transcript_tail'],
+            'optional': ['project', 'session_id', 'cwd'],
+        },
+        {
             'command': 'hygiene_report',
             'aliases': ['orphan_report', 'stale_report'],
             'description': 'Find orphaned or stale memories with no retrievals and no incoming wikilinks.',

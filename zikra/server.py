@@ -47,6 +47,7 @@ from zikra.commands.save_prompt import cmd_save_prompt
 from zikra.commands.list_prompts import cmd_list_prompts
 from zikra.commands.zikra_help import cmd_zikra_help
 from zikra.commands.version import cmd_version
+from zikra.commands.ingest_session import cmd_ingest_session
 from zikra.mcp_server import build_mcp_app, handle_streamable_http
 from zikra.version import __version__
 
@@ -70,7 +71,12 @@ async def lifespan(app: FastAPI):
     host = os.getenv('ZIKRA_HOST', '0.0.0.0')
     port = os.getenv('ZIKRA_PORT', '8000')
     logger.info(f'Zikra running at http://{host}:{port}/webhook/zikra (backend: {backend})')
+    # Distill any ingests left pending by a previous crash/restart
+    import asyncio as _asyncio
+    from zikra.distill import drain_pending
+    _drain_task = _asyncio.create_task(drain_pending())
     yield
+    _drain_task.cancel()
     if backend == 'sqlite' and hasattr(app.state, 'sqlite_db'):
         await app.state.sqlite_db.close()
 
@@ -131,6 +137,7 @@ COMMAND_MIN_ROLE = {
     'promote_requirement':  'developer',
     'log_run':              'developer',
     'log_error':            'developer',
+    'ingest_session':       'developer',
     'get_schema':           'admin',
     'delete_memory':        'admin',
     'debug_protocol':       'admin',
@@ -173,6 +180,7 @@ DISPATCH: dict = {
     'version':              cmd_version,
     'debug_protocol':       _cmd_debug_protocol,
     'hygiene_report':       cmd_hygiene,
+    'ingest_session':       cmd_ingest_session,
     # search aliases
     'find':                 cmd_search,
     'query':                cmd_search,
@@ -229,6 +237,9 @@ DISPATCH: dict = {
     # save_prompt aliases
     'write_prompt':         cmd_save_prompt,
     'store_prompt':         cmd_save_prompt,
+    # ingest_session aliases
+    'ingest':               cmd_ingest_session,
+    'upload_session':       cmd_ingest_session,
     # zikra_help aliases
     'help':                 cmd_zikra_help,
     # version aliases

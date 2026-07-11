@@ -789,6 +789,69 @@ async def record_run(data: dict, run_id: str) -> str:
     return run_id
 
 
+async def create_ingest(data: dict, ingest_id: str) -> None:
+    """Queue a transcript tail for server-side distillation."""
+    if _is_pg:
+        from zikra.db_postgres import create_ingest_pg, get_pg_pool
+        await create_ingest_pg(get_pg_pool(), data, ingest_id)
+        return
+    await _aio_db.execute(
+        """INSERT INTO session_ingests
+           (id, runner, project, session_id, cwd, transcript_tail, status)
+           VALUES (?, ?, ?, ?, ?, ?, 'pending')""",
+        [
+            ingest_id,
+            data.get('runner'),
+            data.get('project', 'global'),
+            data.get('session_id'),
+            data.get('cwd'),
+            data.get('transcript_tail', ''),
+        ]
+    )
+    await _aio_db.commit()
+
+
+async def fetch_ingest(ingest_id: str) -> Optional[dict]:
+    if _is_pg:
+        from zikra.db_postgres import fetch_ingest_pg, get_pg_pool
+        return await fetch_ingest_pg(get_pg_pool(), ingest_id)
+    async with _aio_db.execute(
+        "SELECT * FROM session_ingests WHERE id = ?", [ingest_id]
+    ) as cur:
+        row = await cur.fetchone()
+    return dict(row) if row else None
+
+
+async def finish_ingest(ingest_id: str, status: str, error: str = None,
+                        memories_created: int = 0) -> None:
+    if _is_pg:
+        from zikra.db_postgres import finish_ingest_pg, get_pg_pool
+        await finish_ingest_pg(get_pg_pool(), ingest_id, status, error, memories_created)
+        return
+    await _aio_db.execute(
+        """UPDATE session_ingests
+           SET status = ?, error = ?, memories_created = ?,
+               distilled_at = datetime('now'),
+               transcript_tail = CASE WHEN ? = 'distilled' THEN '' ELSE transcript_tail END
+           WHERE id = ?""",
+        [status, error, memories_created, status, ingest_id]
+    )
+    await _aio_db.commit()
+
+
+async def list_pending_ingests(limit: int = 20) -> list:
+    """Oldest-first pending ingests — drained on server startup."""
+    if _is_pg:
+        from zikra.db_postgres import list_pending_ingests_pg, get_pg_pool
+        return await list_pending_ingests_pg(get_pg_pool(), limit)
+    async with _aio_db.execute(
+        "SELECT id FROM session_ingests WHERE status = 'pending' ORDER BY created_at LIMIT ?",
+        [limit]
+    ) as cur:
+        rows = await cur.fetchall()
+    return [r['id'] for r in rows]
+
+
 async def record_pending_run(runner: str, prompt_id: str, project: str) -> None:
     """Record that `runner` just fetched `prompt_id`. UPSERT — last write wins.
     v1.0.6: server-side handshake, replaces the dead /tmp/zikra_prompt_id rendezvous."""

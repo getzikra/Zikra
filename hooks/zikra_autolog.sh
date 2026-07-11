@@ -256,6 +256,41 @@ fi
   [[ "$LINE_COUNT" -lt 200 ]] && TAIL_LINES="$LINE_COUNT"
   [[ "$TAIL_LINES" -lt 80 ]] && TAIL_LINES=80
 
+  # ── Server-side distillation (v1.1) ─────────────────────────────────────
+  # Upload the transcript tail; the server distills it into a diary plus
+  # typed memories (decision/bug/reference). Only when the server has no
+  # distiller LLM configured do we fall back to the local claude -p diary.
+  DISTILLED=0
+  INGEST_TMP="$(mktemp "${ZIKRA_TMP}/.zikra_ingest.XXXXXX" 2>/dev/null)"
+  if [[ -n "$INGEST_TMP" ]]; then
+    tail -"$TAIL_LINES" "$LATEST" 2>/dev/null | head -c 200000 | python3 -c "
+import json, sys
+body = {
+    'command': 'ingest_session',
+    'project': sys.argv[1],
+    'runner':  sys.argv[2],
+    'transcript_tail': sys.stdin.read(),
+}
+if sys.argv[3]:
+    body['session_id'] = sys.argv[3]
+if sys.argv[4]:
+    body['cwd'] = sys.argv[4]
+json.dump(body, open(sys.argv[5], 'w'))" \
+      "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" "$SESSION_ID" "$HOOK_CWD" "$INGEST_TMP" 2>/dev/null
+    if [[ -s "$INGEST_TMP" ]]; then
+      INGEST_RESP="$(curl -s -X POST "$ZIKRA_URL" \
+        -H "Authorization: Bearer $ZIKRA_TOKEN" \
+        -H "Content-Type: application/json" \
+        -H "User-Agent: $ZIKRA_USER_AGENT" \
+        --connect-timeout 15 --max-time 30 \
+        --data-binary @"$INGEST_TMP" 2>/dev/null)"
+      [[ "$INGEST_RESP" == *'"queued"'* ]] && DISTILLED=1
+    fi
+    rm -f "$INGEST_TMP"
+  fi
+
+  DIARY=""
+  if [[ "$DISTILLED" -eq 0 ]]; then
   DIARY="$(tail -"$TAIL_LINES" "$LATEST" 2>/dev/null \
     | head -c 200000 \
     | $_TIMEOUT_CMD "$CLAUDE_BIN" -p \
@@ -293,6 +328,7 @@ print(json.dumps({
 }))" "$TITLE" "$DIARY" "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" 2>/dev/null)"
 
   [[ -n "$BODY" ]] && zikra_post "$BODY"
+  fi  # DISTILLED -eq 0 — local diary fallback ends here
 
   # ── Log run for every session ────────────────────────────────────────
   # v1.0.6: prompt_id linkage is now handled server-side via the pending_runs
@@ -318,6 +354,11 @@ print(ti, to, cr, cc)
   # memory with no prompt_id/run_id linkage, so clicking a run in the Zikra UI
   # showed "auto-logged by zikra_autolog.sh" instead of the real story.
   SUMMARY_TEXT="$DIARY"
+  if [[ "$DISTILLED" -eq 1 ]]; then
+    # Server will upsert the distilled diary into this run row (longer
+    # summary wins), so a short placeholder is fine here.
+    SUMMARY_TEXT="session queued for server-side distillation"
+  fi
   [[ -z "$SUMMARY_TEXT" || "$SUMMARY_TEXT" == "Session diary generation failed." ]] \
       && SUMMARY_TEXT="auto-logged by zikra_autolog.sh (diary unavailable)"
 

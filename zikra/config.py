@@ -28,3 +28,15 @@ SAVE_DEDUP_ENABLED = _flag('ZIKRA_SAVE_DEDUP_ENABLED', '1')
 SAVE_DEDUP_TYPES = {'conversation', 'diary', 'auto-compact'}
 SAVE_DEDUP_SIM_THRESHOLD = float(os.getenv('ZIKRA_SAVE_DEDUP_SIM_THRESHOLD', '0.90'))
 SAVE_DEDUP_WINDOW_MIN = int(os.getenv('ZIKRA_SAVE_DEDUP_WINDOW_MIN', '45'))
+
+# Server-side distiller LLM (OpenAI-compatible chat completions endpoint).
+# Point ZIKRA_LLM_BASE_URL at any proxy (LiteLLM, OpenRouter, ...) or leave
+# the OpenAI default. Distillation is disabled unless an API key is set
+# (ZIKRA_LLM_API_KEY, falling back to OPENAI_API_KEY).
+LLM_BASE_URL = os.getenv('ZIKRA_LLM_BASE_URL', 'https://api.openai.com/v1').rstrip('/')
+LLM_MODEL = os.getenv('ZIKRA_LLM_MODEL', 'gpt-4o-mini')
+LLM_API_KEY = os.getenv('ZIKRA_LLM_API_KEY') or os.getenv('OPENAI_API_KEY') or ''
+LLM_TIMEOUT_S = int(os.getenv('ZIKRA_LLM_TIMEOUT_S', '120'))
+DISTILL_ENABLED = _flag('ZIKRA_DISTILL_ENABLED', '1')
+DISTILL_MAX_TAIL_BYTES = int(os.getenv('ZIKRA_DISTILL_MAX_TAIL_BYTES', '200000'))
+DISTILL_CONCURRENCY = int(os.getenv('ZIKRA_DISTILL_CONCURRENCY', '2'))

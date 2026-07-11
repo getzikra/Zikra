@@ -229,6 +229,22 @@ async def init_pg() -> 'asyncpg.Pool':
             "ALTER TABLE prompt_runs ADD COLUMN IF NOT EXISTS session_id TEXT NULL",
             """CREATE UNIQUE INDEX IF NOT EXISTS idx_prompt_runs_runner_session
                ON prompt_runs (runner, session_id) WHERE session_id IS NOT NULL""",
+            # v1.1.0: server-side transcript distillation queue
+            """CREATE TABLE IF NOT EXISTS session_ingests (
+                id               TEXT PRIMARY KEY,
+                runner           TEXT NOT NULL,
+                project          TEXT NOT NULL DEFAULT 'global',
+                session_id       TEXT,
+                cwd              TEXT,
+                transcript_tail  TEXT NOT NULL,
+                status           TEXT NOT NULL DEFAULT 'pending',
+                error            TEXT,
+                memories_created INTEGER DEFAULT 0,
+                created_at       TIMESTAMPTZ DEFAULT NOW(),
+                distilled_at     TIMESTAMPTZ
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_session_ingests_status ON session_ingests (status, created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_session_ingests_session ON session_ingests (runner, session_id)",
         ]
         for stmt in _migrations:
             try:
@@ -706,6 +722,55 @@ async def log_run_pg(pool, data: dict, run_id: str) -> str:
             data.get('session_id'),
         )
     return row['id'] if row else run_id
+
+
+async def create_ingest_pg(pool, data: dict, ingest_id: str) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO session_ingests
+               (id, runner, project, session_id, cwd, transcript_tail, status)
+            VALUES ($1,$2,$3,$4,$5,$6,'pending')
+        """,
+            ingest_id,
+            data.get('runner'),
+            data.get('project', 'global'),
+            data.get('session_id'),
+            data.get('cwd'),
+            data.get('transcript_tail', ''),
+        )
+
+
+async def fetch_ingest_pg(pool, ingest_id: str) -> Optional[dict]:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT * FROM session_ingests WHERE id = $1", ingest_id)
+    if not row:
+        return None
+    d = dict(row)
+    for k in ('created_at', 'distilled_at'):
+        if k in d:
+            d[k] = _iso(d[k])
+    return d
+
+
+async def finish_ingest_pg(pool, ingest_id: str, status: str, error: str = None,
+                           memories_created: int = 0) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            UPDATE session_ingests
+            SET status = $1, error = $2, memories_created = $3,
+                distilled_at = NOW(),
+                transcript_tail = CASE WHEN $1 = 'distilled' THEN '' ELSE transcript_tail END
+            WHERE id = $4
+        """, status, error, memories_created, ingest_id)
+
+
+async def list_pending_ingests_pg(pool, limit: int = 20) -> list:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id FROM session_ingests WHERE status = 'pending' ORDER BY created_at LIMIT $1",
+            limit,
+        )
+    return [r['id'] for r in rows]
 
 
 async def record_pending_run_pg(pool, runner: str, prompt_id: str, project: str) -> None:
