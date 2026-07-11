@@ -45,3 +45,10 @@ DISTILL_CONCURRENCY = int(os.getenv('ZIKRA_DISTILL_CONCURRENCY', '2'))
 # the window become a searchable 'bug' memory (pending_review=1)
 ERROR_PROMOTE_THRESHOLD = int(os.getenv('ZIKRA_ERROR_PROMOTE_THRESHOLD', '3'))
 ERROR_PROMOTE_WINDOW_DAYS = int(os.getenv('ZIKRA_ERROR_PROMOTE_WINDOW_DAYS', '7'))
+
+# Weekly consolidation of old conversation diaries into durable memories
+CONSOLIDATE_ENABLED = _flag('ZIKRA_CONSOLIDATE_ENABLED', '1')
+CONSOLIDATE_INTERVAL_HOURS = int(os.getenv('ZIKRA_CONSOLIDATE_INTERVAL_HOURS', '168'))
+CONSOLIDATE_MIN_AGE_DAYS = int(os.getenv('ZIKRA_CONSOLIDATE_MIN_AGE_DAYS', '14'))
+CONSOLIDATE_BATCH = int(os.getenv('ZIKRA_CONSOLIDATE_BATCH', '200'))
+CONSOLIDATE_MAX_CLUSTER_CHARS = int(os.getenv('ZIKRA_CONSOLIDATE_MAX_CLUSTER_CHARS', '60000'))

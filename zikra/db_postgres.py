@@ -861,6 +861,32 @@ async def run_stats_pg(pool, project: str = 'global', prompt_id: str = None,
     return dict(row) if row else {}
 
 
+async def list_consolidation_candidates_pg(pool, project: str, min_age_days: int,
+                                           limit: int = 200) -> list:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT id, title, content_md, created_at FROM memories
+               WHERE project = $1
+                 AND memory_type IN ('conversation', 'diary')
+                 AND searchable = 1
+                 AND COALESCE(pinned, 0) = 0
+                 AND created_at < NOW() - ($2 * interval '1 day')
+               ORDER BY created_at
+               LIMIT $3""",
+            project, int(min_age_days), limit,
+        )
+    return [{**dict(r), 'created_at': _iso(r['created_at'])} for r in rows]
+
+
+async def archive_memories_pg(pool, memory_ids: list, note: str) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """UPDATE memories SET searchable = 0, resolution = $1, updated_at = NOW()
+               WHERE id = ANY($2::text[])""",
+            note, list(memory_ids),
+        )
+
+
 async def count_recent_errors_pg(pool, project: str, error_type: str,
                                  message: str, days: int = 7) -> int:
     async with pool.acquire() as conn:

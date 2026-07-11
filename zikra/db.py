@@ -957,6 +957,44 @@ async def run_stats(project: str = 'global', prompt_id: str = None,
     return dict(row) if row else {}
 
 
+async def list_consolidation_candidates(project: str, min_age_days: int,
+                                        limit: int = 200) -> list:
+    """Old, unpinned conversation/diary memories eligible for consolidation."""
+    if _is_pg:
+        from zikra.db_postgres import list_consolidation_candidates_pg, get_pg_pool
+        return await list_consolidation_candidates_pg(get_pg_pool(), project, min_age_days, limit)
+    async with _aio_db.execute(
+        """SELECT id, title, content_md, created_at FROM memories
+           WHERE project = ?
+             AND memory_type IN ('conversation', 'diary')
+             AND searchable = 1
+             AND COALESCE(pinned, 0) = 0
+             AND created_at < datetime('now', ?)
+           ORDER BY created_at
+           LIMIT ?""",
+        [project, f'-{int(min_age_days)} days', limit]
+    ) as cur:
+        rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def archive_memories(memory_ids: list, note: str) -> None:
+    """Archive memories (searchable=0) with a resolution note. Reversible."""
+    if not memory_ids:
+        return
+    if _is_pg:
+        from zikra.db_postgres import archive_memories_pg, get_pg_pool
+        await archive_memories_pg(get_pg_pool(), memory_ids, note)
+        return
+    placeholders = ','.join('?' * len(memory_ids))
+    await _aio_db.execute(
+        f"UPDATE memories SET searchable = 0, resolution = ?, "
+        f"updated_at = datetime('now') WHERE id IN ({placeholders})",
+        [note] + list(memory_ids)
+    )
+    await _aio_db.commit()
+
+
 async def count_recent_errors(project: str, error_type: str, message: str,
                               days: int = 7) -> int:
     """How often this exact error has been logged recently — used to promote

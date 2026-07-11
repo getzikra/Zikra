@@ -49,6 +49,7 @@ from zikra.commands.zikra_help import cmd_zikra_help
 from zikra.commands.version import cmd_version
 from zikra.commands.ingest_session import cmd_ingest_session
 from zikra.commands.get_context import cmd_get_context
+from zikra.commands.run_consolidation import cmd_run_consolidation
 from zikra.mcp_server import build_mcp_app, handle_streamable_http
 from zikra.version import __version__
 
@@ -72,12 +73,16 @@ async def lifespan(app: FastAPI):
     host = os.getenv('ZIKRA_HOST', '0.0.0.0')
     port = os.getenv('ZIKRA_PORT', '8000')
     logger.info(f'Zikra running at http://{host}:{port}/webhook/zikra (backend: {backend})')
-    # Distill any ingests left pending by a previous crash/restart
+    # Distill any ingests left pending by a previous crash/restart,
+    # and start the weekly consolidation scheduler
     import asyncio as _asyncio
     from zikra.distill import drain_pending
+    from zikra.consolidate import scheduler_loop
     _drain_task = _asyncio.create_task(drain_pending())
+    _consolidate_task = _asyncio.create_task(scheduler_loop())
     yield
     _drain_task.cancel()
+    _consolidate_task.cancel()
     if backend == 'sqlite' and hasattr(app.state, 'sqlite_db'):
         await app.state.sqlite_db.close()
 
@@ -142,6 +147,7 @@ COMMAND_MIN_ROLE = {
     'ingest_session':       'developer',
     'get_schema':           'admin',
     'delete_memory':        'admin',
+    'run_consolidation':    'admin',
     'debug_protocol':       'admin',
     'create_token':         'owner',
 }
@@ -184,6 +190,7 @@ DISPATCH: dict = {
     'hygiene_report':       cmd_hygiene,
     'ingest_session':       cmd_ingest_session,
     'get_context':          cmd_get_context,
+    'run_consolidation':    cmd_run_consolidation,
     # search aliases
     'find':                 cmd_search,
     'query':                cmd_search,
@@ -247,6 +254,8 @@ DISPATCH: dict = {
     'context':              cmd_get_context,
     'briefing':             cmd_get_context,
     'session_context':      cmd_get_context,
+    # run_consolidation aliases
+    'consolidate':          cmd_run_consolidation,
     # zikra_help aliases
     'help':                 cmd_zikra_help,
     # version aliases

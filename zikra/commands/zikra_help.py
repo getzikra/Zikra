@@ -29,6 +29,13 @@ async def cmd_zikra_help(body: dict) -> dict:
             'optional': ['memory_type', 'project'],
         },
         {
+            'command': 'run_consolidation',
+            'aliases': ['consolidate'],
+            'description': 'Consolidate old session diaries into durable decision/reference/bug memories (LLM, pending_review). Admin role required.',
+            'required': [],
+            'optional': ['project', 'dry_run'],
+        },
+        {
             'command': 'get_context',
             'aliases': ['context', 'briefing', 'session_context'],
             'description': 'Token-budgeted markdown briefing for a project: pinned memories, recent decisions, open bugs, top-scored memories. For session-start injection.',
