@@ -14,5 +14,8 @@ async def cmd_log_run(body: dict) -> dict:
                 body = {**body, 'prompt_id': pending}
 
     run_id = new_id()
-    await record_run(body, run_id)
-    return {'id': run_id, 'status': 'logged'}
+    resolved_id = await record_run(body, run_id)
+    result = {'id': resolved_id, 'status': 'logged'}
+    if resolved_id != run_id:
+        result['deduped'] = True  # merged into the existing row for this session
+    return result

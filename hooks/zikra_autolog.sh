@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zikra_autolog.sh v8
+# zikra_autolog.sh v9
 # Claude Code hook handler for Stop and PreCompact events.
 # Saves session diary and pre-compact summaries to Zikra persistent memory.
 #
@@ -86,6 +86,11 @@ TRANSCRIPT_PATH="$(printf '%s' "$PAYLOAD" | python3 -c \
 HOOK_CWD="$(printf '%s' "$PAYLOAD" | python3 -c \
   "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" \
   2>/dev/null || echo "")"
+
+SESSION_ID="$(printf '%s' "$PAYLOAD" | python3 -c \
+  "import sys,json; d=json.load(sys.stdin); print(d.get('session_id',''))" \
+  2>/dev/null || echo "")"
+SID8="${SESSION_ID:0:8}"
 
 # ── Dynamic project detection — CWD overrides install-time DEFAULT_PROJECT ───
 detect_project_from_cwd() {
@@ -200,7 +205,10 @@ else
   trap 'rm -rf "${LOCKFILE}.d"' EXIT
 fi
 
-# ── Sentinel cooldown: skip if a diary was saved in the last 120 seconds ─────
+# ── Sentinel cooldown: throttle PER SESSION so rapid Stops in one session
+# don't hammer claude -p, while concurrent sessions never block each other.
+# (The old global 120s sentinel silently dropped closely-spaced sessions.)
+[[ -n "$SID8" ]] && SENTINEL="${SENTINEL}_${SID8}"
 NOW="$(date +%s)"
 if [[ -f "$SENTINEL" ]]; then
   LAST="$(cat "$SENTINEL" 2>/dev/null || echo 0)"
@@ -217,6 +225,8 @@ if [[ -f "$SENTINEL" ]]; then
   fi
 fi
 echo "$NOW" > "$SENTINEL"
+# Prune per-session sentinels older than a day
+find "$ZIKRA_TMP" -maxdepth 1 -name '.zikra_sentinel*' -mmin +1440 -delete 2>/dev/null || true
 
 # ── Portable timeout — GNU coreutils on Linux/WSL, gtimeout on macOS ─────────
 _TIMEOUT_CMD=""
@@ -227,9 +237,13 @@ elif command -v gtimeout >/dev/null 2>&1; then
 fi
 
 (
-  # Find the most recently modified transcript (space-safe)
+  # The payload names THIS session's transcript — use it. Globbing for the
+  # newest transcript across all projects grabs the wrong session on a busy
+  # machine, so it is only a fallback for ancient Claude Code versions.
   LATEST=""
-  if command -v find >/dev/null 2>&1; then
+  if [[ -n "$TRANSCRIPT_PATH" && -f "$TRANSCRIPT_PATH" ]]; then
+    LATEST="$TRANSCRIPT_PATH"
+  elif command -v find >/dev/null 2>&1; then
     LATEST="$(find "$HOME/.claude/projects" -maxdepth 3 -name '*.jsonl' \
       2>/dev/null | xargs ls -t 2>/dev/null | head -1)"
   fi
@@ -253,7 +267,14 @@ fi
 Be thorough — this is the only record of this session. 300-500 words. Factual, first-person, present tense.' \
       2>/dev/null || echo "Session diary generation failed.")"
 
-  TITLE="diary:$(date +%Y-%m-%d-%H%M):${HOSTNAME_SHORT}"
+  # Stable per-session title: later Stops in the same session UPDATE the one
+  # diary memory (save_memory upserts on title+type+project) instead of
+  # piling up a new conversation memory per turn.
+  if [[ -n "$SID8" ]]; then
+    TITLE="diary:$(date +%Y-%m-%d):${SID8}:${HOSTNAME_SHORT}"
+  else
+    TITLE="diary:$(date +%Y-%m-%d-%H%M):${HOSTNAME_SHORT}"
+  fi
 
   BODY="$(python3 -c "
 import json, sys
@@ -300,9 +321,11 @@ print(ti, to, cr, cc)
   [[ -z "$SUMMARY_TEXT" || "$SUMMARY_TEXT" == "Session diary generation failed." ]] \
       && SUMMARY_TEXT="auto-logged by zikra_autolog.sh (diary unavailable)"
 
+  # session_id makes the server upsert one run row per session — the watcher
+  # daemon and repeated Stop events merge instead of double-logging.
   RUN_BODY="$(python3 -c "
 import json, sys
-print(json.dumps({
+body = {
   'command':               'log_run',
   'project':               sys.argv[1],
   'runner':                sys.argv[2],
@@ -312,9 +335,12 @@ print(json.dumps({
   'tokens_output':         int(sys.argv[5]),
   'tokens_cache_read':     int(sys.argv[6]),
   'tokens_cache_creation': int(sys.argv[7]),
-}))" \
+}
+if sys.argv[8]:
+    body['session_id'] = sys.argv[8]
+print(json.dumps(body))" \
     "$DEFAULT_PROJECT" "$HOSTNAME_SHORT" "$SUMMARY_TEXT" \
-    "$T_IN" "$T_OUT" "$T_CR" "$T_CC" 2>/dev/null)"
+    "$T_IN" "$T_OUT" "$T_CR" "$T_CC" "$SESSION_ID" 2>/dev/null)"
 
   [[ -n "$RUN_BODY" ]] && zikra_post "$RUN_BODY"
   # ──────────────────────────────────────────────────────────────────────

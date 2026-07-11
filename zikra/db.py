@@ -732,18 +732,33 @@ async def fetch_links_between(memory_ids: list) -> list:
     return [dict(r) for r in rows]
 
 
-async def record_run(data: dict, run_id: str) -> None:
-    """Insert a prompt_run record."""
+async def record_run(data: dict, run_id: str) -> str:
+    """Insert a prompt_run record. When session_id is present, upserts on
+    (runner, session_id) so the Stop hook and the watcher daemon converge on
+    ONE row per session instead of double-logging. Returns the row id."""
     if _is_pg:
         from zikra.db_postgres import log_run_pg, get_pg_pool
-        await log_run_pg(get_pg_pool(), data, run_id)
-        return
+        return await log_run_pg(get_pg_pool(), data, run_id)
 
     await _aio_db.execute(
         """INSERT INTO prompt_runs
            (id, project, runner, prompt_id, prompt_name, status, output_summary,
-            tokens_input, tokens_output, tokens_cache_read, tokens_cache_creation, cost_usd)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            tokens_input, tokens_output, tokens_cache_read, tokens_cache_creation,
+            cost_usd, session_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (runner, session_id) WHERE session_id IS NOT NULL DO UPDATE SET
+               project               = excluded.project,
+               prompt_id             = COALESCE(excluded.prompt_id, prompt_runs.prompt_id),
+               prompt_name           = COALESCE(excluded.prompt_name, prompt_runs.prompt_name),
+               status                = excluded.status,
+               output_summary        = CASE
+                   WHEN LENGTH(COALESCE(excluded.output_summary, '')) > LENGTH(COALESCE(prompt_runs.output_summary, ''))
+                   THEN excluded.output_summary ELSE prompt_runs.output_summary END,
+               tokens_input          = MAX(COALESCE(excluded.tokens_input, 0), COALESCE(prompt_runs.tokens_input, 0)),
+               tokens_output         = MAX(COALESCE(excluded.tokens_output, 0), COALESCE(prompt_runs.tokens_output, 0)),
+               tokens_cache_read     = MAX(COALESCE(excluded.tokens_cache_read, 0), COALESCE(prompt_runs.tokens_cache_read, 0)),
+               tokens_cache_creation = MAX(COALESCE(excluded.tokens_cache_creation, 0), COALESCE(prompt_runs.tokens_cache_creation, 0)),
+               cost_usd              = COALESCE(excluded.cost_usd, prompt_runs.cost_usd)""",
         [
             run_id,
             data.get('project', 'global'),
@@ -757,9 +772,21 @@ async def record_run(data: dict, run_id: str) -> None:
             data.get('tokens_cache_read'),
             data.get('tokens_cache_creation'),
             data.get('cost_usd'),
+            data.get('session_id'),
         ]
     )
     await _aio_db.commit()
+
+    session_id = data.get('session_id')
+    if session_id and data.get('runner'):
+        async with _aio_db.execute(
+            "SELECT id FROM prompt_runs WHERE runner = ? AND session_id = ?",
+            [data.get('runner'), session_id]
+        ) as cur:
+            row = await cur.fetchone()
+        if row:
+            return row['id']
+    return run_id
 
 
 async def record_pending_run(runner: str, prompt_id: str, project: str) -> None:

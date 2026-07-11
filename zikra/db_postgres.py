@@ -666,13 +666,30 @@ async def get_memory_pg(pool, memory_id=None, title=None, memory_type=None, proj
     return _row_to_dict(row) if row else None
 
 
-async def log_run_pg(pool, data: dict, run_id: str) -> None:
+async def log_run_pg(pool, data: dict, run_id: str) -> str:
+    """Insert a run row; upserts on (runner, session_id) when session_id is
+    present so hook + watcher converge on one row per session. Returns row id."""
     async with pool.acquire() as conn:
-        await conn.execute("""
+        row = await conn.fetchrow("""
             INSERT INTO prompt_runs
                (id, project, runner, prompt_id, prompt_name, status, output_summary,
-                tokens_input, tokens_output, tokens_cache_read, tokens_cache_creation, cost_usd)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+                tokens_input, tokens_output, tokens_cache_read, tokens_cache_creation,
+                cost_usd, session_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            ON CONFLICT (runner, session_id) WHERE session_id IS NOT NULL DO UPDATE SET
+                project               = EXCLUDED.project,
+                prompt_id             = COALESCE(EXCLUDED.prompt_id, prompt_runs.prompt_id),
+                prompt_name           = COALESCE(EXCLUDED.prompt_name, prompt_runs.prompt_name),
+                status                = EXCLUDED.status,
+                output_summary        = CASE
+                    WHEN LENGTH(COALESCE(EXCLUDED.output_summary, '')) > LENGTH(COALESCE(prompt_runs.output_summary, ''))
+                    THEN EXCLUDED.output_summary ELSE prompt_runs.output_summary END,
+                tokens_input          = GREATEST(COALESCE(EXCLUDED.tokens_input, 0), COALESCE(prompt_runs.tokens_input, 0)),
+                tokens_output         = GREATEST(COALESCE(EXCLUDED.tokens_output, 0), COALESCE(prompt_runs.tokens_output, 0)),
+                tokens_cache_read     = GREATEST(COALESCE(EXCLUDED.tokens_cache_read, 0), COALESCE(prompt_runs.tokens_cache_read, 0)),
+                tokens_cache_creation = GREATEST(COALESCE(EXCLUDED.tokens_cache_creation, 0), COALESCE(prompt_runs.tokens_cache_creation, 0)),
+                cost_usd              = COALESCE(EXCLUDED.cost_usd, prompt_runs.cost_usd)
+            RETURNING id
         """,
             run_id,
             data.get('project', 'global'),
@@ -686,7 +703,9 @@ async def log_run_pg(pool, data: dict, run_id: str) -> None:
             data.get('tokens_cache_read'),
             data.get('tokens_cache_creation'),
             data.get('cost_usd'),
+            data.get('session_id'),
         )
+    return row['id'] if row else run_id
 
 
 async def record_pending_run_pg(pool, runner: str, prompt_id: str, project: str) -> None:
