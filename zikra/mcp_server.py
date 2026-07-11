@@ -52,6 +52,7 @@ from zikra.commands.list_requirements import cmd_list_requirements
 from zikra.commands.get_memory import cmd_get_memory
 from zikra.commands.delete_memory import cmd_delete_memory
 from zikra.commands.hygiene import cmd_hygiene
+from zikra.commands.get_context import cmd_get_context
 from zikra.commands.get_schema import cmd_get_schema
 from zikra.commands.promote_requirement import cmd_promote_requirement
 from zikra.commands.create_token import cmd_create_token
@@ -92,6 +93,7 @@ _PROJECT_SCOPED_TOOLS = {
     'zikra_save_prompt',
     'zikra_list_prompts',
     'zikra_hygiene_report',
+    'zikra_get_context',
 }
 
 
@@ -307,6 +309,22 @@ _TOOLS: list[types.Tool] = [
         inputSchema={'type': 'object', 'properties': {}},
     ),
     types.Tool(
+        name='zikra_get_context',
+        description=(
+            'Get a token-budgeted markdown briefing for a project: pinned '
+            'memories, recent decisions, open bugs, and the most relevant '
+            'remaining memories. Inject it as context at session start.'
+        ),
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'project':    {'type': 'string', 'description': 'Project to brief on'},
+                'max_tokens': {'type': 'integer', 'description': 'Context budget (default: 2000)'},
+            },
+            'required': ['project'],
+        },
+    ),
+    types.Tool(
         name='zikra_hygiene_report',
         description=(
             'Find orphaned or stale memories in a project. Returns memories '
@@ -342,6 +360,7 @@ _MCP_DISPATCH = {
     'zikra_list_prompts':         cmd_list_prompts,
     'zikra_help':                 cmd_zikra_help,
     'zikra_hygiene_report':       cmd_hygiene,
+    'zikra_get_context':          cmd_get_context,
 }
 
 

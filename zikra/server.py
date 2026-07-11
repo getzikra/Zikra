@@ -48,6 +48,7 @@ from zikra.commands.list_prompts import cmd_list_prompts
 from zikra.commands.zikra_help import cmd_zikra_help
 from zikra.commands.version import cmd_version
 from zikra.commands.ingest_session import cmd_ingest_session
+from zikra.commands.get_context import cmd_get_context
 from zikra.mcp_server import build_mcp_app, handle_streamable_http
 from zikra.version import __version__
 
@@ -131,6 +132,7 @@ COMMAND_MIN_ROLE = {
     'zikra_help':           'viewer',
     'version':              'viewer',
     'hygiene_report':       'viewer',
+    'get_context':          'viewer',
     'save_memory':          'developer',
     'save_prompt':          'developer',
     'save_requirement':     'developer',
@@ -181,6 +183,7 @@ DISPATCH: dict = {
     'debug_protocol':       _cmd_debug_protocol,
     'hygiene_report':       cmd_hygiene,
     'ingest_session':       cmd_ingest_session,
+    'get_context':          cmd_get_context,
     # search aliases
     'find':                 cmd_search,
     'query':                cmd_search,
@@ -240,6 +243,10 @@ DISPATCH: dict = {
     # ingest_session aliases
     'ingest':               cmd_ingest_session,
     'upload_session':       cmd_ingest_session,
+    # get_context aliases
+    'context':              cmd_get_context,
+    'briefing':             cmd_get_context,
+    'session_context':      cmd_get_context,
     # zikra_help aliases
     'help':                 cmd_zikra_help,
     # version aliases

@@ -29,6 +29,13 @@ async def cmd_zikra_help(body: dict) -> dict:
             'optional': ['memory_type', 'project'],
         },
         {
+            'command': 'get_context',
+            'aliases': ['context', 'briefing', 'session_context'],
+            'description': 'Token-budgeted markdown briefing for a project: pinned memories, recent decisions, open bugs, top-scored memories. For session-start injection.',
+            'required': [],
+            'optional': ['project', 'max_tokens'],
+        },
+        {
             'command': 'ingest_session',
             'aliases': ['ingest', 'upload_session'],
             'description': 'Upload a session transcript tail for server-side distillation into typed memories.',
