@@ -93,20 +93,13 @@ SESSION_ID="$(printf '%s' "$PAYLOAD" | python3 -c \
 SID8="${SESSION_ID:0:8}"
 
 # ── Dynamic project detection — CWD overrides install-time DEFAULT_PROJECT ───
-detect_project_from_cwd() {
-    local cwd="${1:-}"
-    local cwd_l host_l
-    cwd_l="$(printf '%s' "$cwd" | tr '[:upper:]' '[:lower:]')"
-    host_l="$(printf '%s' "$HOSTNAME_SHORT" | tr '[:upper:]' '[:lower:]')"
-    if   [[ "$cwd_l" == *"getzikra"* ]] || [[ "$cwd_l" == *"/zikra"* ]]; then echo "zikra"
-    elif [[ "$cwd_l" == *"forgenexus"* ]];                                  then echo "forgenexus"
-    elif [[ "$cwd_l" == *"veltis"*   ]]; then echo "veltisai"
-    elif [[ "$host_l" == *"workstation"* ]] || [[ "$host_l" == *"desktop"* ]]; then echo "$DEFAULT_PROJECT"
-    else echo "$DEFAULT_PROJECT"
-    fi
-}
-if [[ -n "$HOOK_CWD" ]]; then
-    DEFAULT_PROJECT="$(detect_project_from_cwd "$HOOK_CWD")"
+# Shared helper: ~/.zikra/projects.map prefix mappings, then git remote name,
+# then directory basename. Falls back to DEFAULT_PROJECT when unavailable.
+for _pd in "$HOME/.claude/zikra-project.sh" "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/zikra-project.sh"; do
+  [[ -f "$_pd" ]] && { source "$_pd"; break; }
+done
+if [[ -n "$HOOK_CWD" ]] && declare -f zikra_detect_project >/dev/null; then
+    DEFAULT_PROJECT="$(zikra_detect_project "$HOOK_CWD" "$DEFAULT_PROJECT")"
 fi
 
 # ── POST helper — logs failures to ~/.zikra/autolog_errors.log ───────────────

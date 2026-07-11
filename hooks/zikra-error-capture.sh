@@ -34,6 +34,16 @@ HOSTNAME_SHORT="${HOSTNAME_SHORT:-unknown}"
 
 PAYLOAD="$(cat 2>/dev/null || echo '{}')"
 
+HOOK_CWD="$(printf '%s' "$PAYLOAD" | python3 -c \
+  "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" \
+  2>/dev/null || echo "")"
+for _pd in "$HOME/.claude/zikra-project.sh" "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/zikra-project.sh"; do
+  [[ -f "$_pd" ]] && { source "$_pd"; break; }
+done
+if [[ -n "$HOOK_CWD" ]] && declare -f zikra_detect_project >/dev/null; then
+  DEFAULT_PROJECT="$(zikra_detect_project "$HOOK_CWD" "$DEFAULT_PROJECT")"
+fi
+
 ERRDIR="$HOME/.zikra/errcache"
 mkdir -p "$ERRDIR" 2>/dev/null
 

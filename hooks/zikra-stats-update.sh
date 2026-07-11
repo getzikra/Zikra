@@ -18,18 +18,17 @@ HOOK_CWD="$(printf '%s' "$PAYLOAD" | python3 -c \
   "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" \
   2>/dev/null || echo "")"
 
-# Detect project from CWD now (same logic as the python block below) so the
-# memory-count query can be scoped to the current project. Without this the
-# statusline shows the global total even when you're inside a specific repo.
-PROJECT=$(python3 -c "
-import sys
-cwd = sys.argv[1].lower() if len(sys.argv) > 1 else ''
-fallback = sys.argv[2] if len(sys.argv) > 2 else 'global'
-if 'getzikra' in cwd or '/zikra' in cwd: print('zikra')
-elif 'molten8'  in cwd: print('molten8')
-elif 'veltis'   in cwd: print('veltisai')
-else: print(fallback)
-" "$HOOK_CWD" "${ZIKRA_PROJECT:-global}")
+# Detect project from CWD so the memory-count query can be scoped to the
+# current project. Uses the shared helper (projects.map + git remote) when
+# installed; otherwise falls back to the configured default.
+for _pd in "$HOME/.claude/zikra-project.sh" "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/zikra-project.sh"; do
+  [[ -f "$_pd" ]] && { source "$_pd"; break; }
+done
+if declare -f zikra_detect_project >/dev/null; then
+  PROJECT="$(zikra_detect_project "$HOOK_CWD" "${ZIKRA_PROJECT:-global}")"
+else
+  PROJECT="${ZIKRA_PROJECT:-global}"
+fi
 
 # Fetch live memory count from Zikra, scoped to the current project so the
 # '187 memories' tag actually reflects what's visible in this project. When
@@ -56,7 +55,7 @@ ORPHAN_COUNT=$(curl -s --max-time 3 --connect-timeout 2 -X POST "$ZIKRA_URL" \
   -d "{\"command\":\"hygiene_report\",\"project\":\"$PROJECT\",\"stale_days\":30}" \
   | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('orphan_count',0))" 2>/dev/null || echo "0")
 
-python3 - "$MEMORY_COUNT" "$HOOK_CWD" "${ZIKRA_PROJECT:-global}" "$SERVER_VERSION" "$ORPHAN_COUNT" <<'PYEOF'
+python3 - "$MEMORY_COUNT" "$HOOK_CWD" "$PROJECT" "$SERVER_VERSION" "$ORPHAN_COUNT" <<'PYEOF'
 import json, os, datetime, sys, socket
 
 cache_path = os.path.expanduser('~/.claude/cache/zikra-stats.json')
@@ -66,14 +65,8 @@ default_project    = sys.argv[3] if len(sys.argv) > 3 else 'global'
 server_version_arg = sys.argv[4].strip() if len(sys.argv) > 4 else ''
 orphan_count_arg   = int(sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5].lstrip('-').isdigit() else 0
 
-def detect_project(cwd, fallback):
-    c = cwd.lower()
-    if 'getzikra' in c or '/zikra' in c: return 'zikra'
-    if 'molten8'  in c:                  return 'molten8'
-    if 'veltis'   in c:                  return 'veltisai'
-    return fallback
-
-project = detect_project(hook_cwd, default_project)
+# Project is resolved in bash via the shared zikra-project.sh helper
+project = default_project
 
 try:
     with open(cache_path) as f:
