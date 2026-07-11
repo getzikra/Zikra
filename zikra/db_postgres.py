@@ -861,6 +861,87 @@ async def run_stats_pg(pool, project: str = 'global', prompt_id: str = None,
     return dict(row) if row else {}
 
 
+async def update_memory_flags_pg(pool, memory_id: str, pinned: int = None,
+                                 searchable: int = None,
+                                 pending_review: int = None) -> bool:
+    sets, params = [], []
+    if pinned is not None:
+        params.append(int(pinned)); sets.append(f'pinned = ${len(params)}')
+    if searchable is not None:
+        params.append(int(searchable)); sets.append(f'searchable = ${len(params)}')
+    if pending_review is not None:
+        params.append(int(pending_review)); sets.append(f'pending_review = ${len(params)}')
+    if not sets:
+        return False
+    params.append(memory_id)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            f"UPDATE memories SET {', '.join(sets)}, updated_at = NOW() WHERE id = ${len(params)}",
+            *params)
+    return result.endswith('1')
+
+
+async def activity_stats_pg(pool, project: str = 'global', days: int = 30) -> dict:
+    project_param = None if project == 'global' else project
+    async with pool.acquire() as conn:
+        runs = await conn.fetch(
+            """SELECT DATE(created_at)::text AS d, COUNT(*)::int AS n,
+                      COALESCE(SUM(tokens_input),0)::bigint AS tokens_in,
+                      COALESCE(SUM(tokens_output),0)::bigint AS tokens_out,
+                      COALESCE(SUM(tokens_cache_read),0)::bigint AS tokens_cache
+               FROM prompt_runs
+               WHERE created_at >= NOW() - ($2 * interval '1 day')
+                 AND ($1::text IS NULL OR project = $1)
+               GROUP BY DATE(created_at) ORDER BY d""",
+            project_param, int(days))
+        memories = await conn.fetch(
+            """SELECT DATE(created_at)::text AS d, memory_type, COUNT(*)::int AS n
+               FROM memories
+               WHERE created_at >= NOW() - ($2 * interval '1 day')
+                 AND ($1::text IS NULL OR project = $1)
+               GROUP BY DATE(created_at), memory_type ORDER BY d""",
+            project_param, int(days))
+        errors = await conn.fetch(
+            """SELECT DATE(created_at)::text AS d, COUNT(*)::int AS n
+               FROM error_log
+               WHERE created_at >= NOW() - ($2 * interval '1 day')
+                 AND ($1::text IS NULL OR project = $1)
+               GROUP BY DATE(created_at) ORDER BY d""",
+            project_param, int(days))
+    return {
+        'runs': [dict(r) for r in runs],
+        'memories': [dict(r) for r in memories],
+        'errors': [dict(r) for r in errors],
+        'days': days,
+    }
+
+
+async def recent_memories_pg(pool, project: str = 'global', limit: int = 20) -> list:
+    project_param = None if project == 'global' else project
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT id, title, SUBSTRING(content_md, 1, 280) AS snippet, memory_type,
+                      project, created_by, pending_review, pinned, created_at
+               FROM memories WHERE searchable = 1
+                 AND ($1::text IS NULL OR project = $1)
+               ORDER BY created_at DESC LIMIT $2""",
+            project_param, limit)
+    return [{**dict(r), 'created_at': _iso(r['created_at'])} for r in rows]
+
+
+async def recent_errors_pg(pool, project: str = 'global', limit: int = 20) -> list:
+    project_param = None if project == 'global' else project
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT id, project, runner, error_type, message,
+                      SUBSTRING(context_md, 1, 500) AS context_md, created_at
+               FROM error_log
+               WHERE ($1::text IS NULL OR project = $1)
+               ORDER BY created_at DESC LIMIT $2""",
+            project_param, limit)
+    return [{**dict(r), 'created_at': _iso(r['created_at'])} for r in rows]
+
+
 async def list_consolidation_candidates_pg(pool, project: str, min_age_days: int,
                                            limit: int = 200) -> list:
     async with pool.acquire() as conn:

@@ -957,6 +957,114 @@ async def run_stats(project: str = 'global', prompt_id: str = None,
     return dict(row) if row else {}
 
 
+async def update_memory_flags(memory_id: str, pinned: int = None,
+                              searchable: int = None,
+                              pending_review: int = None) -> bool:
+    """Set pin/archive/review flags on a memory. Returns True if it existed."""
+    sets, params = [], []
+    if pinned is not None:
+        sets.append('pinned = ?'); params.append(int(pinned))
+    if searchable is not None:
+        sets.append('searchable = ?'); params.append(int(searchable))
+    if pending_review is not None:
+        sets.append('pending_review = ?'); params.append(int(pending_review))
+    if not sets:
+        return False
+    if _is_pg:
+        from zikra.db_postgres import update_memory_flags_pg, get_pg_pool
+        return await update_memory_flags_pg(get_pg_pool(), memory_id, pinned,
+                                            searchable, pending_review)
+    cur = await _aio_db.execute(
+        f"UPDATE memories SET {', '.join(sets)}, updated_at = datetime('now') WHERE id = ?",
+        params + [memory_id]
+    )
+    await _aio_db.commit()
+    return cur.rowcount > 0
+
+
+async def activity_stats(project: str = 'global', days: int = 30) -> dict:
+    """Per-day activity for the dashboard: runs + tokens, memories created
+    by type, errors. 'global' aggregates every project."""
+    if _is_pg:
+        from zikra.db_postgres import activity_stats_pg, get_pg_pool
+        return await activity_stats_pg(get_pg_pool(), project, days)
+
+    scope_runs, scope_mems, scope_errs = '', '', ''
+    params: list = []
+    if project and project != 'global':
+        scope_runs = 'AND project = ?'
+        scope_mems = 'AND project = ?'
+        scope_errs = 'AND project = ?'
+        params = [project]
+    since = f'-{int(days)} days'
+
+    async with _aio_db.execute(
+        f"""SELECT DATE(created_at) AS d, COUNT(*) AS n,
+                   COALESCE(SUM(tokens_input),0) AS tokens_in,
+                   COALESCE(SUM(tokens_output),0) AS tokens_out,
+                   COALESCE(SUM(tokens_cache_read),0) AS tokens_cache
+            FROM prompt_runs
+            WHERE created_at >= datetime('now', ?) {scope_runs}
+            GROUP BY DATE(created_at) ORDER BY d""",
+        [since] + params
+    ) as cur:
+        runs = [dict(r) for r in await cur.fetchall()]
+
+    async with _aio_db.execute(
+        f"""SELECT DATE(created_at) AS d, memory_type, COUNT(*) AS n
+            FROM memories
+            WHERE created_at >= datetime('now', ?) {scope_mems}
+            GROUP BY DATE(created_at), memory_type ORDER BY d""",
+        [since] + params
+    ) as cur:
+        memories = [dict(r) for r in await cur.fetchall()]
+
+    async with _aio_db.execute(
+        f"""SELECT DATE(created_at) AS d, COUNT(*) AS n
+            FROM error_log
+            WHERE created_at >= datetime('now', ?) {scope_errs}
+            GROUP BY DATE(created_at) ORDER BY d""",
+        [since] + params
+    ) as cur:
+        errors = [dict(r) for r in await cur.fetchall()]
+
+    return {'runs': runs, 'memories': memories, 'errors': errors, 'days': days}
+
+
+async def recent_memories(project: str = 'global', limit: int = 20) -> list:
+    """Latest memories by creation time — the dashboard 'today feed'."""
+    if _is_pg:
+        from zikra.db_postgres import recent_memories_pg, get_pg_pool
+        return await recent_memories_pg(get_pg_pool(), project, limit)
+    scope = '' if project == 'global' else 'AND project = ?'
+    params = [] if project == 'global' else [project]
+    async with _aio_db.execute(
+        f"""SELECT id, title, SUBSTR(content_md, 1, 280) AS snippet, memory_type,
+                   project, created_by, pending_review, pinned, created_at
+            FROM memories WHERE searchable = 1 {scope}
+            ORDER BY created_at DESC LIMIT ?""",
+        params + [limit]
+    ) as cur:
+        return [dict(r) for r in await cur.fetchall()]
+
+
+async def recent_errors(project: str = 'global', limit: int = 20) -> list:
+    """Latest error_log rows — surfaced in the dashboard Activity tab."""
+    if _is_pg:
+        from zikra.db_postgres import recent_errors_pg, get_pg_pool
+        return await recent_errors_pg(get_pg_pool(), project, limit)
+    scope = '' if project == 'global' else 'WHERE project = ?'
+    params = [] if project == 'global' else [project]
+    async with _aio_db.execute(
+        f"""SELECT id, project, runner, error_type, message,
+                   SUBSTR(context_md, 1, 500) AS context_md, created_at
+            FROM error_log {scope}
+            ORDER BY created_at DESC LIMIT ?""",
+        params + [limit]
+    ) as cur:
+        return [dict(r) for r in await cur.fetchall()]
+
+
 async def list_consolidation_candidates(project: str, min_age_days: int,
                                         limit: int = 200) -> list:
     """Old, unpinned conversation/diary memories eligible for consolidation."""

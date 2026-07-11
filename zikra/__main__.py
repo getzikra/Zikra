@@ -113,8 +113,11 @@ def run_update():
         for hook_file in sorted(hooks_dir.iterdir()):
             if hook_file.name.startswith('__') or hook_file.suffix == '.pyc':
                 continue
-            dest = claude_dir / hook_file.name
-            if not dest.exists():
+            # hooks are installed either at ~/.claude/ or ~/.claude/hooks/
+            dest = next((d for d in (claude_dir / hook_file.name,
+                                     claude_dir / 'hooks' / hook_file.name)
+                         if d.exists()), None)
+            if dest is None:
                 continue
             if not filecmp.cmp(str(hook_file), str(dest), shallow=False):
                 shutil.copy2(str(dest), str(backup_dir / (hook_file.name + '.bak')))

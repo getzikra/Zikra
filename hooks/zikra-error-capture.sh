@@ -65,7 +65,8 @@ command = (tool_input.get('command') or '').strip()
 if not command:
     sys.exit(0)
 
-resp = d.get('tool_response')
+# Claude Code sends tool_response; Kimi CLI sends tool_output
+resp = d.get('tool_response') if d.get('tool_response') is not None else d.get('tool_output')
 if isinstance(resp, dict):
     stdout = str(resp.get('stdout') or '')
     stderr = str(resp.get('stderr') or '')

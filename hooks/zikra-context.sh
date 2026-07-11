@@ -15,6 +15,11 @@ DEFAULT_PROJECT="DEFAULT_PROJECT_PLACEHOLDER"
 ZIKRA_USER_AGENT="curl/7.81.0"
 CONTEXT_TOKENS="${ZIKRA_CONTEXT_TOKENS:-1500}"
 
+# --plain: print raw markdown instead of Claude's hookSpecificOutput JSON.
+# Kimi CLI adds exit-0 stdout to context directly, so it gets --plain.
+PLAIN=0
+[[ "${1:-}" == "--plain" ]] && PLAIN=1
+
 _ZIKRA_TOKEN_FILE="$HOME/.zikra/token"
 if [[ -f "$_ZIKRA_TOKEN_FILE" ]]; then
   _load_kv() { grep "^$1=" "$_ZIKRA_TOKEN_FILE" 2>/dev/null | head -1 | cut -d= -f2-; }
@@ -63,22 +68,27 @@ RESP="$(curl -s -X POST "$ZIKRA_URL" \
   -d "$BODY" 2>/dev/null)"
 [[ -z "$RESP" ]] && exit 0
 
-# Emit hookSpecificOutput.additionalContext; empty/errored responses exit silently
+# Emit hookSpecificOutput.additionalContext (or raw markdown with --plain);
+# empty/errored responses exit silently
 printf '%s' "$RESP" | python3 -c "
 import json, sys
+plain = sys.argv[1] == '1'
 try:
     d = json.load(sys.stdin)
     ctx = d.get('context_md') or ''
     if not ctx.strip() or d.get('memories_used', 0) == 0:
         sys.exit(0)
-    print(json.dumps({
-        'hookSpecificOutput': {
-            'hookEventName': 'SessionStart',
-            'additionalContext': ctx,
-        }
-    }))
+    if plain:
+        print(ctx)
+    else:
+        print(json.dumps({
+            'hookSpecificOutput': {
+                'hookEventName': 'SessionStart',
+                'additionalContext': ctx,
+            }
+        }))
 except Exception:
     sys.exit(0)
-" 2>/dev/null
+" "$PLAIN" 2>/dev/null
 
 exit 0

@@ -572,6 +572,62 @@ def _prep_memories(rows: list) -> list:
     return out
 
 
+@app.get('/api/ui/activity')
+async def ui_activity(request: Request):
+    """Activity tab payload: per-day runs/tokens/memories/errors time-series
+    plus the latest-memories feed and recent errors."""
+    from zikra.db import activity_stats, recent_memories, recent_errors
+    auth_info = await verify_auth(request)
+    project = request.query_params.get('project') or 'global'
+    assert_scope(auth_info, project)
+    days = min(int(request.query_params.get('days', '30')), 90)
+    feed_limit = min(int(request.query_params.get('feed', '20')), 100)
+
+    stats = await activity_stats(project, days)
+    feed = await recent_memories(project, feed_limit)
+    errors = await recent_errors(project, feed_limit)
+    for row in feed + errors:
+        if row.get('created_at') is not None:
+            row['created_at'] = str(row['created_at'])
+    return {'project': project, **stats, 'feed': feed, 'recent_errors': errors}
+
+
+@app.post('/api/ui/memories/{memory_id}/action')
+async def ui_memory_action(memory_id: str, request: Request):
+    """Quick actions from the dashboard feed: pin/unpin, archive/unarchive,
+    approve (clear pending_review), promote (change memory_type)."""
+    from zikra.db import update_memory_flags, change_memory_type
+    auth_info = await verify_auth(request)
+    if auth_info.get('role') == 'viewer':
+        return JSONResponse(status_code=403, content={'error': 'insufficient permissions'})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    action = (body.get('action') or '').lower()
+
+    if action in ('pin', 'unpin'):
+        ok = await update_memory_flags(memory_id, pinned=1 if action == 'pin' else 0)
+    elif action in ('archive', 'unarchive'):
+        ok = await update_memory_flags(memory_id, searchable=1 if action == 'unarchive' else 0)
+    elif action == 'approve':
+        ok = await update_memory_flags(memory_id, pending_review=0)
+    elif action == 'promote':
+        new_type = body.get('memory_type') or 'decision'
+        row = await change_memory_type(memory_id, new_type)
+        if row:
+            await update_memory_flags(memory_id, pending_review=0)
+        ok = bool(row)
+    else:
+        return JSONResponse(status_code=400, content={
+            'error': f'unknown action {action!r}',
+            'valid': ['pin', 'unpin', 'archive', 'unarchive', 'approve', 'promote']})
+
+    if not ok:
+        return JSONResponse(status_code=404, content={'error': 'Memory not found'})
+    return {'id': memory_id, 'action': action, 'status': 'ok'}
+
+
 @app.get('/api/ui/memories')
 async def ui_memories(request: Request):
     """
