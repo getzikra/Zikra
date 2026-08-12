@@ -26,3 +26,4 @@ Thumbs.db
 CLAUDE.md
 Dockerfile
 docker-compose.local.yml
+container-secrets.local

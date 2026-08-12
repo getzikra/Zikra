@@ -18,6 +18,7 @@ import os
 from typing import Optional
 
 from zikra.config import VECTOR_SEARCH_K
+from zikra.embed import embedding_dimensions
 from zikra.scoring import score as rescore
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ _pg_pool: Optional['asyncpg.Pool'] = None
 
 # ── Schema DDL ────────────────────────────────────────────────────────────────
 
-_PG_TABLES = """
+_PG_TABLES = f"""
 CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS memories (
@@ -48,7 +49,7 @@ CREATE TABLE IF NOT EXISTS memories (
     created_at   TIMESTAMPTZ DEFAULT NOW(),
     updated_at   TIMESTAMPTZ DEFAULT NOW(),
     last_accessed_at TIMESTAMPTZ,
-    embedding    halfvec(3072),
+    embedding    halfvec({embedding_dimensions()}),
     UNIQUE (title, memory_type, project)
 );
 
@@ -179,6 +180,20 @@ async def init_pg() -> 'asyncpg.Pool':
 
     async with _pg_pool.acquire() as conn:
         await conn.execute(_PG_TABLES)
+        actual_dimensions = await conn.fetchval("""
+            SELECT atttypmod
+            FROM pg_attribute
+            WHERE attrelid = 'memories'::regclass
+              AND attname = 'embedding'
+              AND NOT attisdropped
+        """)
+        expected_dimensions = embedding_dimensions()
+        if actual_dimensions != expected_dimensions:
+            raise RuntimeError(
+                'configured embedding dimension does not match the existing PostgreSQL schema: '
+                f'configured={expected_dimensions}, schema={actual_dimensions}. '
+                'Changing dimensions requires a new database or an explicit embedding migration.'
+            )
         # Migration guards — safe to run on every startup (IF NOT EXISTS / no-ops on current schema)
         _migrations = [
             "ALTER TABLE prompt_runs ADD COLUMN IF NOT EXISTS prompt_name TEXT NULL",

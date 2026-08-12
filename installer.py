@@ -38,6 +38,11 @@ def parse_args():
     p.add_argument('--host', default=os.getenv('ZIKRA_HOST', '0.0.0.0'))
     p.add_argument('--port', default=os.getenv('ZIKRA_PORT', '8000'))
     p.add_argument('--openai-key', default=os.getenv('OPENAI_API_KEY', ''))
+    p.add_argument('--embedding-base-url', default=os.getenv('OPENAI_API_BASE', ''),
+                   help='OpenAI-compatible embedding endpoint')
+    p.add_argument('--embedding-model', default=os.getenv('ZIKRA_EMBEDDING_MODEL', ''))
+    p.add_argument('--embedding-dimensions', type=int,
+                   default=int(os.getenv('ZIKRA_EMBEDDING_DIMENSIONS', '1536')))
     p.add_argument('--llm-base-url', default=os.getenv('ZIKRA_LLM_BASE_URL', ''),
                    help='OpenAI-compatible endpoint for the server-side distiller (e.g. LiteLLM)')
     p.add_argument('--llm-model', default=os.getenv('ZIKRA_LLM_MODEL', ''))
@@ -128,6 +133,13 @@ def gather_interactive(args) -> dict:
     if not cfg['openai_key']:
         print('  WARNING: Running in keyword-only mode. '
               'Add OPENAI_API_KEY to .env later to enable semantic search.')
+    cfg['embedding_base_url'] = args.embedding_base_url
+    cfg['embedding_model'] = args.embedding_model
+    cfg['embedding_dimensions'] = args.embedding_dimensions
+    if cfg['embedding_dimensions'] <= 0:
+        raise ValueError('embedding dimensions must be positive')
+    if cfg['embedding_base_url']:
+        print(f'  Embedding endpoint: {cfg["embedding_base_url"]}')
 
     print()
     print('Server-side distiller (turns session transcripts into typed memories).')
@@ -168,6 +180,9 @@ def gather_non_interactive(args) -> dict:
         'db_backend': args.db,
         'profile': args.profile,
         'openai_key': args.openai_key,
+        'embedding_base_url': args.embedding_base_url,
+        'embedding_model': args.embedding_model,
+        'embedding_dimensions': args.embedding_dimensions,
         'llm_base_url': args.llm_base_url,
         'llm_model': args.llm_model,
         'llm_api_key': args.llm_api_key,
@@ -187,6 +202,9 @@ def gather_non_interactive(args) -> dict:
     if err:
         print(f'ERROR: --project: {err}', file=sys.stderr)
         sys.exit(1)
+    if cfg['embedding_dimensions'] <= 0:
+        print('ERROR: --embedding-dimensions must be positive', file=sys.stderr)
+        sys.exit(1)
     if cfg['db_backend'] == 'postgres' and not (cfg['pg_name'] and cfg['pg_user']):
         print('ERROR: postgres mode needs --pg-name and --pg-user (or DB_NAME/DB_USER env)',
               file=sys.stderr)
@@ -197,15 +215,17 @@ def gather_non_interactive(args) -> dict:
 # ── Install steps ─────────────────────────────────────────────────────────────
 
 def write_env(cfg, token) -> None:
-    default_model = ('text-embedding-3-large' if cfg['db_backend'] == 'postgres'
-                     else 'text-embedding-3-small')
+    default_model = cfg.get('embedding_model') or 'text-embedding-3-small'
     lines = [
         f'ZIKRA_TOKEN={token}',
         'ZIKRA_SKIP_ONBOARDING=1',
         f'OPENAI_API_KEY={cfg["openai_key"]}',
         f'ZIKRA_EMBEDDING_MODEL={default_model}',
+        f'ZIKRA_EMBEDDING_DIMENSIONS={cfg.get("embedding_dimensions", 1536)}',
         f'DB_BACKEND={cfg["db_backend"]}',
     ]
+    if cfg.get('embedding_base_url'):
+        lines.append(f'OPENAI_API_BASE={cfg["embedding_base_url"]}')
     if cfg['db_backend'] == 'postgres':
         lines += [
             f'DB_HOST={cfg["pg_host"]}',
@@ -225,7 +245,9 @@ def write_env(cfg, token) -> None:
         f'ZIKRA_PORT={cfg["port"]}',
         f'ZIKRA_PROJECT={cfg["project"]}',
     ]
-    Path('.env').write_text('\n'.join(lines) + '\n')
+    env_path = Path('.env')
+    env_path.write_text('\n'.join(lines) + '\n')
+    env_path.chmod(0o600)
     print('✓ .env written')
     cfg['embedding_model'] = default_model
 

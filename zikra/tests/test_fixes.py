@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import httpx
+import pytest
 
 
 def _find_free_port() -> int:
@@ -85,6 +86,16 @@ class ServerContext:
         req_headers = {"Authorization": f"Bearer {token}"}
         req_headers.update(headers)
         return self.client.get(f"{self.base}{path}", headers=req_headers)
+
+
+@pytest.fixture
+def ctx():
+    server = ServerContext()
+    server.start()
+    try:
+        yield server
+    finally:
+        server.stop()
 
 
 def run_test(test_fn):
@@ -222,7 +233,7 @@ def test_search_limit_is_clamped_for_negative_and_huge_values(ctx: ServerContext
 
     huge = ctx.post(
         "search",
-        {"project": "limitproof", "query": "decision corpus", "limit": 9999999},
+        {"project": "limitproof", "query": "decision corpus", "limit": 9999999, "max_tokens": 100000},
     )
     assert huge.status_code == 200, huge.text
     huge_body = huge.json()
@@ -389,7 +400,7 @@ def run_all() -> bool:
     return passed == len(results)
 
 
-def test_suite():
+def run_integration_suite():
     assert run_all(), "One or more integration tests failed"
 
 

@@ -647,8 +647,8 @@ async def ui_memories(request: Request):
     limit   = min(int(request.query_params.get('limit', '50')), 1000)
 
     if q and q != '*':
-        from zikra.embed import embed
-        emb = await embed(q) or [0.0] * 1536
+        from zikra.embed import embed, zero_embedding
+        emb = await embed(q) or zero_embedding()
         rows, _, _ = await find_memories(q, emb, project, limit, memory_type=mtype)
     else:
         rows = await list_all_memories(project, limit)

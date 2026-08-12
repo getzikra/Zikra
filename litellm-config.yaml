@@ -1,0 +1,6 @@
+model_list:
+  - model_name: local-embedding
+    litellm_params:
+      model: lm_studio/os.environ/EMBEDDING_UPSTREAM_MODEL
+      api_base: os.environ/EMBEDDING_API_BASE
+      api_key: os.environ/EMBEDDING_API_KEY

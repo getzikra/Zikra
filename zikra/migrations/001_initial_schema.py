@@ -1,7 +1,10 @@
+from zikra.embed import embedding_dimensions
+
 VERSION = 1
 DESCRIPTION = "initial schema: memories, prompt_runs, error_log, access_tokens"
+EMBEDDING_DIMENSIONS = embedding_dimensions()
 
-SQL = """
+SQL = f"""
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     project TEXT NOT NULL DEFAULT 'global',
@@ -35,7 +38,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(
-    embedding float[1536]
+    embedding float[{EMBEDDING_DIMENSIONS}]
 );
 
 CREATE TABLE IF NOT EXISTS prompt_runs (
