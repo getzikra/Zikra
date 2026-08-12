@@ -1,0 +1,16 @@
+FROM python:3.12.12-slim@sha256:f3fa41d74a768c2fce8016b98c191ae8c1bacd8f1152870a3f9f87d350920b7c
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN groupadd --system zikra && useradd --system --gid zikra --create-home zikra
+
+WORKDIR /app
+COPY . /app
+RUN python -m pip install --no-cache-dir --require-hashes -r requirements.docker.lock \
+    && python -m pip install --no-cache-dir --no-deps . \
+    && chown -R zikra:zikra /app
+
+USER zikra
+EXPOSE 8377
+CMD ["python", "-m", "zikra", "--no-onboarding"]

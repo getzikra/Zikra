@@ -4,7 +4,16 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-_ZERO = [0.0] * 1536
+
+def embedding_dimensions() -> int:
+    dimensions = int(os.getenv('ZIKRA_EMBEDDING_DIMENSIONS', '1536'))
+    if dimensions <= 0:
+        raise ValueError('ZIKRA_EMBEDDING_DIMENSIONS must be positive')
+    return dimensions
+
+
+def zero_embedding() -> list:
+    return [0.0] * embedding_dimensions()
 
 
 async def embed(text: str) -> list:
@@ -14,7 +23,7 @@ async def embed(text: str) -> list:
     model = os.getenv('ZIKRA_EMBEDDING_MODEL', 'text-embedding-3-small')
 
     if not text or not text.strip():
-        return _ZERO
+        return zero_embedding()
 
     if not api_key:
         logger.warning('OPENAI_API_KEY not set — semantic search unavailable, falling back to keyword-only')
@@ -34,7 +43,13 @@ async def embed(text: str) -> list:
                 }
             )
             response.raise_for_status()
-            return response.json()['data'][0]['embedding']
+            embedding = response.json()['data'][0]['embedding']
+            expected = embedding_dimensions()
+            if len(embedding) != expected:
+                raise ValueError(
+                    f'embedding model returned {len(embedding)} dimensions; expected {expected}'
+                )
+            return embedding
     except Exception as e:
         logger.warning('Embedding failed (%s). Falling back to keyword-only search.', e)
         return None

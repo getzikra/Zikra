@@ -1,97 +1,70 @@
-# All credentials must be set as environment variables before running.
-# Copy .env.docker.example to .env and fill in values.
-# docker compose --env-file .env up
-
-version: "3.9"
-
 services:
-
-  # ── PostgreSQL with pgvector ───────────────────────────────────────────────
   postgres:
-    image: pgvector/pgvector:pg16
-    container_name: zikra_postgres
+    image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+    restart: unless-stopped
     environment:
-      POSTGRES_USER:     ${POSTGRES_USER:-zikra}
+      POSTGRES_USER: zikra
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-      POSTGRES_DB:       ${POSTGRES_DB:-zikra}
+      POSTGRES_DB: zikra
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
-    ports:
-      - "5432:5432"
     healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U ${POSTGRES_USER:-zikra} -d ${POSTGRES_DB:-zikra}
-      interval: 10s
-      timeout:  5s
-      retries:  5
-      start_period: 30s
-    restart: unless-stopped
+      test: ["CMD-SHELL", "pg_isready -U zikra -d zikra"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
-  # ── LiteLLM proxy — embeddings for n8n workflow ───────────────────────────
-  sys_litellm:
-    image: ghcr.io/berriai/litellm:main-latest
-    container_name: zikra_litellm
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest@sha256:1aa6227ab85b21b3959b0ce4fc21ddbe64170d12a85b33c726ca5b22dc41e87a
+    restart: unless-stopped
+    command: ["--config", "/app/config.yaml", "--host", "0.0.0.0", "--port", "4000"]
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set}
+      EMBEDDING_API_BASE: ${EMBEDDING_API_BASE:-http://host.docker.internal:1234/v1}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-local-development}
+      EMBEDDING_UPSTREAM_MODEL: ${EMBEDDING_UPSTREAM_MODEL:-google/embedding-gemma-300m}
     volumes:
       - ./litellm-config.yaml:/app/config.yaml:ro
-    command: ["--config", "/app/config.yaml", "--port", "4000"]
-    ports:
-      - "4000:4000"
-    restart: unless-stopped
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
 
-  # ── n8n workflow engine ────────────────────────────────────────────────────
-  n8n:
-    image: n8nio/n8n:latest
-    container_name: zikra_n8n
+  zikra:
+    build:
+      context: .
+      dockerfile: Dockerfile.zikra
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+      litellm:
+        condition: service_healthy
     environment:
-      # Database backend
-      DB_TYPE:                  postgresdb
-      DB_POSTGRESDB_HOST:       postgres
-      DB_POSTGRESDB_PORT:       5432
-      DB_POSTGRESDB_DATABASE:   ${POSTGRES_DB:-zikra}
-      DB_POSTGRESDB_USER:       ${POSTGRES_USER:-zikra}
-      DB_POSTGRESDB_PASSWORD:   ${POSTGRES_PASSWORD:-changeme}
-      DB_POSTGRESDB_SCHEMA:     public
-
-      # Basic auth
-      N8N_BASIC_AUTH_ACTIVE:    ${N8N_BASIC_AUTH_ACTIVE:-true}
-      N8N_BASIC_AUTH_USER:      ${N8N_BASIC_AUTH_USER:-admin}
-      N8N_BASIC_AUTH_PASSWORD:  ${N8N_BASIC_AUTH_PASSWORD:?N8N_BASIC_AUTH_PASSWORD must be set}
-
-      # Public URL and host
-      WEBHOOK_URL:     ${WEBHOOK_URL:-http://localhost:5678/}
-      N8N_HOST:        ${N8N_HOST:-localhost}
-      N8N_PROTOCOL:    ${N8N_PROTOCOL:-http}
-      N8N_PORT:        ${N8N_PORT:-5678}
-
-      # Security
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY must be set}
-
-      # Performance
-      EXECUTIONS_PROCESS: main
-      EXECUTIONS_DATA_PRUNE: "true"
-      EXECUTIONS_DATA_MAX_AGE: 168      # 7 days in hours
-
-      # Misc
-      GENERIC_TIMEZONE: UTC
-      N8N_LOG_LEVEL:    warn
-      N8N_METRICS:      "false"
-
-    volumes:
-      - n8n_data:/home/node/.n8n
+      ZIKRA_TOKEN: ${ZIKRA_TOKEN:?ZIKRA_TOKEN must be set}
+      ZIKRA_SKIP_ONBOARDING: "1"
+      ZIKRA_HOST: 0.0.0.0
+      ZIKRA_PORT: "8377"
+      ZIKRA_PROJECT: main
+      DB_BACKEND: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: zikra
+      DB_USER: zikra
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      OPENAI_API_BASE: http://litellm:4000/v1
+      OPENAI_API_KEY: ${EMBEDDING_API_KEY:-local-development}
+      ZIKRA_EMBEDDING_MODEL: ${ZIKRA_EMBEDDING_MODEL:-local-embedding}
+      ZIKRA_EMBEDDING_DIMENSIONS: ${ZIKRA_EMBEDDING_DIMENSIONS:-768}
     ports:
-      - "5678:5678"
-    restart: unless-stopped
+      - "127.0.0.1:8377:8377"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8377/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
 
 volumes:
   postgres_data:
-    driver: local
-  n8n_data:
-    driver: local

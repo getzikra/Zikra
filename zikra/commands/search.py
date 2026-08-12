@@ -1,6 +1,6 @@
 from zikra.db import find_memories, count_memories_by_project, log_retrievals
 from zikra.scoring import compute_score
-from zikra.embed import embed
+from zikra.embed import embed, zero_embedding
 from zikra.commands import _require_project, _parse_limit
 from zikra.config import SNIPPET_LENGTHS
 
@@ -54,7 +54,7 @@ async def cmd_search(body: dict) -> dict:
     query_embedding = await embed(query)
     embedding_warning = None
     if query_embedding is None:
-        query_embedding = [0.0] * 1536
+        query_embedding = zero_embedding()
         embedding_warning = 'semantic search unavailable, results are keyword-only'
 
     results_list, fts_degraded, fts_reason = await find_memories(

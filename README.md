@@ -163,8 +163,27 @@ cd ~/zikra && ./update.sh
 | `ZIKRA_PROJECT` | No | `main` | Default project |
 | `OPENAI_API_BASE` | No | `https://api.openai.com/v1` | Swap for local or compatible embedding endpoint |
 | `ZIKRA_EMBEDDING_MODEL` | No | `text-embedding-3-small` | Embedding model name |
+| `ZIKRA_EMBEDDING_DIMENSIONS` | No | `1536` | Vector width returned by the embedding model. Must match the existing database schema; changing it requires a new database or explicit embedding migration. |
 | `ZIKRA_DECAY_DAYS` | No | `30` | Memory half-life in days |
 | `ZIKRA_FREQUENCY_WEIGHT` | No | `0.1` | Access-frequency boost weight |
+
+---
+
+## Local Docker deployment
+
+The included Compose stack runs Zikra with PostgreSQL/pgvector and an optional
+LiteLLM bridge to an OpenAI-compatible local embedding endpoint:
+
+```bash
+cp container-secrets.local.example container-secrets.local
+# Fill the two required values without committing the file.
+docker compose --env-file container-secrets.local up -d --build
+curl http://127.0.0.1:8377/health
+```
+
+`container-secrets.local` is ignored by Git. Override `EMBEDDING_API_BASE`,
+`EMBEDDING_UPSTREAM_MODEL`, and `ZIKRA_EMBEDDING_DIMENSIONS` when using a model
+other than the 768-dimensional local default.
 
 ---
 

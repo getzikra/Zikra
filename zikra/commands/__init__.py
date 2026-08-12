@@ -2,7 +2,7 @@ import logging
 
 from zikra import config
 from zikra.db import find_recent_similar, nearest_projects, store_memory, update_memory_content
-from zikra.embed import embed
+from zikra.embed import embed, zero_embedding
 
 _EMBED_WARNING = 'semantic embedding unavailable; keyword search only for this entry'
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ async def _embed_and_store(data: dict, title: str) -> tuple:
     content = data.get('content_md') or data.get('content', '')
     raw = await embed(f'{title} {content}')
     degraded = raw is None
-    embedding = raw if raw is not None else [0.0] * 1536
+    embedding = raw if raw is not None else zero_embedding()
     memory_type = data.get('memory_type') or 'conversation'
 
     if not degraded and config.PROJECT_RECLASSIFY_ENABLED and memory_type in config.PROJECT_RECLASSIFY_TYPES:
