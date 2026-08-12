@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS memories (
     tags         TEXT NOT NULL DEFAULT '[]',
     resolution   TEXT,
     created_by   TEXT,
-    confidence_score REAL    DEFAULT 1.0,
+    confidence_score DOUBLE PRECISION DEFAULT 1.0,
     access_count     INTEGER DEFAULT 0,
     searchable       INTEGER DEFAULT 1,
     resolved         INTEGER DEFAULT 0,
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS memories (
     created_at   TIMESTAMPTZ DEFAULT NOW(),
     updated_at   TIMESTAMPTZ DEFAULT NOW(),
     last_accessed_at TIMESTAMPTZ,
-    embedding    halfvec(3072),
+    embedding    vector(1536),
     UNIQUE (title, memory_type, project)
 );
 
@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS prompt_runs (
     tokens_output          INTEGER,
     tokens_cache_read      INTEGER,
     tokens_cache_creation  INTEGER,
-    cost_usd               REAL,
+    cost_usd               DOUBLE PRECISION,
     session_id             TEXT,
     created_at             TIMESTAMPTZ DEFAULT NOW()
 );
@@ -114,6 +114,18 @@ CREATE TABLE IF NOT EXISTS retrievals (
     ts        TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS schema_versions (
+    version     INTEGER PRIMARY KEY,
+    description TEXT NOT NULL,
+    applied_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS deployment_state (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_retrievals_memory_ts ON retrievals (memory_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_retrievals_ts ON retrievals (ts DESC);
 """
@@ -121,7 +133,7 @@ CREATE INDEX IF NOT EXISTS idx_retrievals_ts ON retrievals (ts DESC);
 # Separate so a missing pgvector extension doesn't break table creation
 _PG_VEC_INDEX = """
 CREATE INDEX IF NOT EXISTS idx_memories_embedding
-ON memories USING hnsw (embedding halfvec_cosine_ops);
+ON memories USING hnsw (embedding vector_cosine_ops);
 """
 
 
@@ -301,7 +313,7 @@ async def save_memory_pg(pool: 'asyncpg.Pool', data: dict, embedding: list) -> s
                 INSERT INTO memories
                     (id, project, module, memory_type, title, content_md,
                      tags, resolution, created_by, searchable, pending_review, embedding)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10,$11::halfvec)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10,$11::vector)
                 ON CONFLICT (title, memory_type, project) DO UPDATE SET
                     content_md     = EXCLUDED.content_md,
                     tags           = EXCLUDED.tags,
@@ -371,10 +383,10 @@ async def nearest_projects_pg(pool: 'asyncpg.Pool', embedding: list, k: int) -> 
         return []
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
-            SELECT project, 1.0 - (embedding <=> $1::halfvec) AS sim
+            SELECT project, 1.0 - (embedding <=> $1::vector) AS sim
             FROM memories
             WHERE embedding IS NOT NULL AND searchable = 1
-            ORDER BY embedding <=> $1::halfvec
+            ORDER BY embedding <=> $1::vector
             LIMIT $2
         """, vec, k)
     return [{'project': row['project'], 'sim': float(row['sim'])} for row in rows]
@@ -390,7 +402,7 @@ async def find_recent_similar_pg(pool: 'asyncpg.Pool', created_by, project,
         return None
     async with pool.acquire() as conn:
         row = await conn.fetchrow("""
-            SELECT id, title, 1.0 - (embedding <=> $1::halfvec) AS sim
+            SELECT id, title, 1.0 - (embedding <=> $1::vector) AS sim
             FROM memories
             WHERE embedding IS NOT NULL
               AND searchable=1
@@ -398,7 +410,7 @@ async def find_recent_similar_pg(pool: 'asyncpg.Pool', created_by, project,
               AND project=$3
               AND memory_type = ANY($4)
               AND created_at >= NOW() - ($5 * interval '1 minute')
-            ORDER BY embedding <=> $1::halfvec
+            ORDER BY embedding <=> $1::vector
             LIMIT 1
         """, vec, created_by, project, memory_types, window_min)
     return {'id': row['id'], 'title': row['title'], 'sim': float(row['sim'])} if row else None
@@ -409,7 +421,7 @@ async def update_memory_content_pg(pool: 'asyncpg.Pool', memory_id: str,
     vec = _vec_str(embedding)
     async with pool.acquire() as conn:
         await conn.execute("""
-            UPDATE memories SET content_md=$1, embedding=$2::halfvec, updated_at=NOW() WHERE id=$3
+            UPDATE memories SET content_md=$1, embedding=$2::vector, updated_at=NOW() WHERE id=$3
         """, content_md, vec, memory_id)
 
 
@@ -553,24 +565,24 @@ async def search_memories_pg(pool: 'asyncpg.Pool', query_text: str,
             if memory_type:
                 vec_rows = await conn.fetch("""
                     SELECT id,
-                           1.0 - (embedding <=> $1::halfvec) AS cosine_sim
+                           1.0 - (embedding <=> $1::vector) AS cosine_sim
                     FROM memories
                     WHERE embedding IS NOT NULL
                       AND searchable = 1
                       AND ($2::text IS NULL OR project = $2)
                       AND memory_type = $4
-                    ORDER BY embedding <=> $1::halfvec
+                    ORDER BY embedding <=> $1::vector
                     LIMIT $3
                 """, vec, project_param, VECTOR_SEARCH_K, memory_type)
             else:
                 vec_rows = await conn.fetch("""
                     SELECT id,
-                           1.0 - (embedding <=> $1::halfvec) AS cosine_sim
+                           1.0 - (embedding <=> $1::vector) AS cosine_sim
                     FROM memories
                     WHERE embedding IS NOT NULL
                       AND searchable = 1
                       AND ($2::text IS NULL OR project = $2)
-                    ORDER BY embedding <=> $1::halfvec
+                    ORDER BY embedding <=> $1::vector
                     LIMIT $3
                 """, vec, project_param, VECTOR_SEARCH_K)
         except Exception as e:
@@ -759,7 +771,7 @@ async def finish_ingest_pg(pool, ingest_id: str, status: str, error: str = None,
             UPDATE session_ingests
             SET status = $1, error = $2, memories_created = $3,
                 distilled_at = NOW(),
-                transcript_tail = CASE WHEN $1 = 'distilled' THEN '' ELSE transcript_tail END
+                transcript_tail = CASE WHEN $1 IN ('distilled', 'failed', 'skipped') THEN '' ELSE transcript_tail END
             WHERE id = $4
         """, status, error, memories_created, ingest_id)
 

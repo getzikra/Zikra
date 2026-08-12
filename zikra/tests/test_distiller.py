@@ -121,6 +121,7 @@ async def _run(db_path):
         await distill.distill_ingest(r2['id'])
         row2 = await db.fetch_ingest(r2['id'])
         assert row2['status'] == 'failed' and 'llm exploded' in row2['error'], row2
+        assert row2['transcript_tail'] == '', row2
 
         ing_mod.llm_available = old_mod_avail
     finally:

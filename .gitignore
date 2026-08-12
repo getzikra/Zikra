@@ -24,5 +24,4 @@ env/
 Thumbs.db
 .memory/
 CLAUDE.md
-Dockerfile
-docker-compose.local.yml
+config/zikra-secrets.op

@@ -832,7 +832,7 @@ async def finish_ingest(ingest_id: str, status: str, error: str = None,
         """UPDATE session_ingests
            SET status = ?, error = ?, memories_created = ?,
                distilled_at = datetime('now'),
-               transcript_tail = CASE WHEN ? = 'distilled' THEN '' ELSE transcript_tail END
+               transcript_tail = CASE WHEN ? IN ('distilled', 'failed', 'skipped') THEN '' ELSE transcript_tail END
            WHERE id = ?""",
         [status, error, memories_created, status, ingest_id]
     )

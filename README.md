@@ -204,20 +204,18 @@ All commands are `POST /webhook/zikra` with `Authorization: Bearer <token>`.
 
 ---
 
-## PostgreSQL backend
+## Containerized PostgreSQL + LiteLLM stack
 
-```
-DB_BACKEND=postgres
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=ai_zikra
-DB_USER=postgres
-DB_PASSWORD=yourpassword
-```
+The supported local container stack runs Zikra, PostgreSQL/pgvector, and an internal-only LiteLLM gateway. Only `127.0.0.1:8377` is published. Credentials are resolved command-scoped from 1Password into Compose secrets; do not create a plaintext deployment environment file.
 
 ```bash
-pip install -e ".[postgres]"
+./scripts/stack.sh up -d --build
+./scripts/stack.sh ps
 ```
+
+See [`docs/container-migration-runbook.md`](docs/container-migration-runbook.md) for backup, SQLite migration, verification, rollback, and upgrade procedures. The architecture decision is recorded in [`docs/adr/0001-containerized-postgres-litellm.md`](docs/adr/0001-containerized-postgres-litellm.md).
+
+For a non-container PostgreSQL process, install the optional backend with `pip install -e ".[postgres]"` and set `DB_BACKEND`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` in the service process only.
 
 ---
 

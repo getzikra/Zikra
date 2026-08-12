@@ -1,0 +1,3 @@
+# Backward-compatible entry point. The canonical stack is docker-compose.yml.
+include:
+  - path: docker-compose.yml

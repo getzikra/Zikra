@@ -1,0 +1,10 @@
+.venv/
+.git/
+data/
+zikra.db*
+.env
+config/zikra-secrets.op
+docs/
+extras/
+daemon/
+hooks/

@@ -14,18 +14,18 @@ setup(
     packages=find_packages(),
     python_requires='>=3.10',
     install_requires=[
-        'fastapi>=0.111.0',
-        'uvicorn>=0.29.0',
-        'httpx>=0.27.0',
-        'sqlite-vec>=0.1.1',
-        'aiosqlite>=0.19.0',
-        'python-dotenv>=1.0.0',
-        'mcp[cli]>=1.0.0',
-        'starlette>=0.37.0',
+        'fastapi==0.140.7',
+        'uvicorn==0.51.0',
+        'httpx==0.28.1',
+        'sqlite-vec==0.1.9',
+        'aiosqlite==0.22.1',
+        'python-dotenv==1.2.2',
+        'mcp[cli]==1.28.1',
+        'starlette==1.3.1',
     ],
     extras_require={
-        'postgres': ['asyncpg>=0.29.0'],
-        'full':     ['asyncpg>=0.29.0'],
+        'postgres': ['asyncpg==0.31.0'],
+        'full':     ['asyncpg==0.31.0'],
     },
     entry_points={
         'console_scripts': [

@@ -1,97 +1,171 @@
-# All credentials must be set as environment variables before running.
-# Copy .env.docker.example to .env and fill in values.
-# docker compose --env-file .env up
+name: zikra
 
-version: "3.9"
+x-zikra-environment: &zikra-environment
+  DB_BACKEND: postgres
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: zikra
+  DB_USER: zikra
+  DB_PASSWORD_FILE: /run/secrets/postgres_password
+  ZIKRA_TOKEN_FILE: /run/secrets/zikra_owner_token
+  LITELLM_MASTER_KEY_FILE: /run/secrets/litellm_master_key
+  ZIKRA_SKIP_ONBOARDING: "1"
+  ZIKRA_HOST: 0.0.0.0
+  ZIKRA_PORT: "8377"
+  ZIKRA_PROJECT: ${ZIKRA_PROJECT:-main}
+  ZIKRA_REQUIRE_IMPORT_MARKER: "1"
+  OPENAI_API_BASE: http://litellm:4000/v1
+  ZIKRA_EMBEDDING_MODEL: ${ZIKRA_EMBEDDING_MODEL:-text-embedding-3-small}
+  ZIKRA_LLM_BASE_URL: http://litellm:4000/v1
+  ZIKRA_LLM_MODEL: ${ZIKRA_LLM_MODEL:-gpt-4o-mini}
+
+x-zikra-secrets: &zikra-secrets
+  - postgres_password
+  - zikra_owner_token
+  - litellm_master_key
 
 services:
-
-  # ── PostgreSQL with pgvector ───────────────────────────────────────────────
   postgres:
-    image: pgvector/pgvector:pg16
-    container_name: zikra_postgres
+    image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
     environment:
-      POSTGRES_USER:     ${POSTGRES_USER:-zikra}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-      POSTGRES_DB:       ${POSTGRES_DB:-zikra}
+      POSTGRES_DB: zikra
+      POSTGRES_USER: zikra
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
-    ports:
-      - "5432:5432"
+    networks:
+      - database
     healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U ${POSTGRES_USER:-zikra} -d ${POSTGRES_DB:-zikra}
-      interval: 10s
-      timeout:  5s
-      retries:  5
-      start_period: 30s
+      test: ["CMD-SHELL", "pg_isready -U zikra -d zikra"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
 
-  # ── LiteLLM proxy — embeddings for n8n workflow ───────────────────────────
-  sys_litellm:
-    image: ghcr.io/berriai/litellm:main-latest
-    container_name: zikra_litellm
+  litellm:
+    image: ghcr.io/berriai/litellm:v1.81.3-stable@sha256:3d80908e35230a0dfb58051ae4e2847371b2a327b44e105e79b8c4f67a65596c
+    entrypoint: ["/app/zikra-litellm-entrypoint.sh"]
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY must be set}
+      HOME: /tmp
+      STORE_MODEL_IN_DB: "False"
+    secrets:
+      - openai_api_key
+      - litellm_master_key
     volumes:
       - ./litellm-config.yaml:/app/config.yaml:ro
-    command: ["--config", "/app/config.yaml", "--port", "4000"]
-    ports:
-      - "4000:4000"
+      - ./scripts/litellm-entrypoint.sh:/app/zikra-litellm-entrypoint.sh:ro
+    networks:
+      - application
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
     restart: unless-stopped
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
-  # ── n8n workflow engine ────────────────────────────────────────────────────
-  n8n:
-    image: n8nio/n8n:latest
-    container_name: zikra_n8n
+  zikra:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zikra:1.0.14-postgres
+    environment: *zikra-environment
+    secrets: *zikra-secrets
     depends_on:
       postgres:
         condition: service_healthy
-    environment:
-      # Database backend
-      DB_TYPE:                  postgresdb
-      DB_POSTGRESDB_HOST:       postgres
-      DB_POSTGRESDB_PORT:       5432
-      DB_POSTGRESDB_DATABASE:   ${POSTGRES_DB:-zikra}
-      DB_POSTGRESDB_USER:       ${POSTGRES_USER:-zikra}
-      DB_POSTGRESDB_PASSWORD:   ${POSTGRES_PASSWORD:-changeme}
-      DB_POSTGRESDB_SCHEMA:     public
-
-      # Basic auth
-      N8N_BASIC_AUTH_ACTIVE:    ${N8N_BASIC_AUTH_ACTIVE:-true}
-      N8N_BASIC_AUTH_USER:      ${N8N_BASIC_AUTH_USER:-admin}
-      N8N_BASIC_AUTH_PASSWORD:  ${N8N_BASIC_AUTH_PASSWORD:?N8N_BASIC_AUTH_PASSWORD must be set}
-
-      # Public URL and host
-      WEBHOOK_URL:     ${WEBHOOK_URL:-http://localhost:5678/}
-      N8N_HOST:        ${N8N_HOST:-localhost}
-      N8N_PROTOCOL:    ${N8N_PROTOCOL:-http}
-      N8N_PORT:        ${N8N_PORT:-5678}
-
-      # Security
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY must be set}
-
-      # Performance
-      EXECUTIONS_PROCESS: main
-      EXECUTIONS_DATA_PRUNE: "true"
-      EXECUTIONS_DATA_MAX_AGE: 168      # 7 days in hours
-
-      # Misc
-      GENERIC_TIMEZONE: UTC
-      N8N_LOG_LEVEL:    warn
-      N8N_METRICS:      "false"
-
-    volumes:
-      - n8n_data:/home/node/.n8n
+        restart: true
+      litellm:
+        condition: service_healthy
+        restart: true
     ports:
-      - "5678:5678"
+      - "127.0.0.1:8377:8377"
+    networks:
+      - application
+      - database
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8377/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
     restart: unless-stopped
+    stop_grace_period: 30s
+    init: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zikra:1.0.14-postgres
+    environment:
+      <<: *zikra-environment
+      ZIKRA_REQUIRE_IMPORT_MARKER: "0"
+      TMPDIR: /migration-work
+    secrets: *zikra-secrets
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - python
+      - /app/scripts/migrate_sqlite_to_postgres.py
+      - --source
+      - /migration/zikra.db
+      - --source-sha256
+      - ${ZIKRA_SQLITE_SHA256:-0000000000000000000000000000000000000000000000000000000000000000}
+    volumes:
+      - ${ZIKRA_SQLITE_SNAPSHOT:-./data/MIGRATION_SNAPSHOT_REQUIRED.db}:/migration/zikra.db:ro
+      - migration_work:/migration-work
+    networks:
+      - database
+    restart: "no"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   postgres_data:
-    driver: local
-  n8n_data:
-    driver: local
+  migration_work:
+
+networks:
+  application:
+  database:
+    internal: true
+
+secrets:
+  postgres_password:
+    environment: ZIKRA_POSTGRES_PASSWORD
+  zikra_owner_token:
+    environment: ZIKRA_OWNER_TOKEN
+  openai_api_key:
+    environment: OPENAI_API_KEY
+  litellm_master_key:
+    environment: LITELLM_MASTER_KEY
