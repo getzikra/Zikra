@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zikra-context.sh v1
+# zikra-context.sh v2
 # Claude Code SessionStart hook — auto-recall.
 # Fetches a token-budgeted project briefing from Zikra (get_context) and
 # injects it as additionalContext, so every session starts already knowing
@@ -38,18 +38,18 @@ HOOK_CWD="$(printf '%s' "$PAYLOAD" | python3 -c \
   "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" \
   2>/dev/null || echo "")"
 
-# Project detection: shared helper if installed, else cwd fallback
-if [[ -f "$HOME/.claude/zikra-project.sh" ]]; then
-  # shellcheck disable=SC1091
-  source "$HOME/.claude/zikra-project.sh"
-  DEFAULT_PROJECT="$(zikra_detect_project "$HOOK_CWD" "$DEFAULT_PROJECT")"
-else
-  cwd_l="$(printf '%s' "$HOOK_CWD" | tr '[:upper:]' '[:lower:]')"
-  if   [[ "$cwd_l" == *"getzikra"* || "$cwd_l" == *"/zikra"* ]]; then DEFAULT_PROJECT="zikra"
-  elif [[ "$cwd_l" == *"forgenexus"* ]]; then DEFAULT_PROJECT="forgenexus"
-  elif [[ "$cwd_l" == *"veltis"* ]];     then DEFAULT_PROJECT="veltisai"
+# Project detection: A2K_PROJECT, nearest manifest, then legacy fallback.
+for _project_helper in \
+  "$HOME/.claude/zikra-project.sh" \
+  "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/zikra-project.sh"; do
+  if [[ -f "$_project_helper" ]]; then
+    # shellcheck disable=SC1090
+    source "$_project_helper"
+    DEFAULT_PROJECT="$(zikra_detect_project "$HOOK_CWD" "$DEFAULT_PROJECT")"
+    break
   fi
-fi
+done
+unset _project_helper
 
 BODY="$(python3 -c "
 import json, sys
