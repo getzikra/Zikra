@@ -19,6 +19,7 @@ import socket
 import urllib.request
 import sys
 import subprocess
+import re
 
 # ── Configuration (patched by install.sh) ────────────────────────────────────
 ZIKRA_URL        = "ZIKRA_URL_PLACEHOLDER"
@@ -57,16 +58,22 @@ POLL_INTERVAL    = 5           # seconds between polls
 TRANSCRIPT_GLOB  = os.path.expanduser("~/.claude/projects/**/*.jsonl")
 
 
-# Projects are intentionally closed-set. Unknown cwd/repo names are skipped with
-# an explicit warning instead of silently creating miscellaneous projects or
-# polluting global memory.
+# Inferred projects are intentionally closed-set. Explicit projects.map entries
+# are the extensibility point for future projects. Unknown cwd/repo names are
+# skipped instead of creating miscellaneous projects or polluting global memory.
 CANONICAL_PROJECTS = {"d2strategy", "forgenexus", "global", "veltisai", "zikra"}
 PROJECT_MAP = os.path.expanduser("~/.zikra/projects.map")
+PROJECT_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
 def _known_project(value: str):
     candidate = (value or "").strip().lower()
     return candidate if candidate in CANONICAL_PROJECTS else None
+
+
+def _configured_project(value: str):
+    candidate = (value or "").strip().lower()
+    return candidate if PROJECT_NAME.fullmatch(candidate) else None
 
 
 def _project_from_map(cwd: str):
@@ -85,7 +92,7 @@ def _project_from_map(cwd: str):
         return None
     if not matches:
         return None
-    return _known_project(max(matches)[1])
+    return _configured_project(max(matches)[1])
 
 
 def _git_output(cwd: str, *args: str):
