@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from dotenv import load_dotenv
 
+from zikra import config
 from zikra.db import (
     bump_access_count,
     debug_memory_count,
@@ -84,7 +85,12 @@ async def lifespan(app: FastAPI):
     import asyncio as _asyncio
     from zikra.distill import drain_pending
     from zikra.consolidate import scheduler_loop
-    from zikra.architecture import scheduler_loop as architecture_scheduler_loop
+    from zikra.architecture import (
+        scheduler_loop as architecture_scheduler_loop,
+        validate_architecture_config,
+    )
+    if config.ARCHITECTURE_ENABLED:
+        validate_architecture_config()
     _drain_task = _asyncio.create_task(drain_pending())
     _consolidate_task = _asyncio.create_task(scheduler_loop())
     _architecture_task = _asyncio.create_task(architecture_scheduler_loop())
@@ -615,6 +621,10 @@ async def ui_architecture_generate(request: Request):
     auth_info = await verify_auth(request)
     if auth_info.get('role') not in ('owner', 'admin'):
         return JSONResponse(status_code=403, content={'error': 'admin role required'})
+    if not config.ARCHITECTURE_ENABLED:
+        return JSONResponse(status_code=503, content={
+            'error': 'architecture generation is disabled by server configuration',
+        })
     try:
         body = await request.json()
     except Exception:
@@ -628,6 +638,11 @@ async def ui_architecture_generate(request: Request):
     if environment not in ('all', 'dev', 'prod'):
         return JSONResponse(status_code=400, content={'error': 'invalid environment'})
     job_key = f'{project}:{environment}'
+    force = body.get('force') is True
+    if force and auth_info.get('role') != 'owner':
+        return JSONResponse(status_code=403, content={
+            'error': 'owner role required for a forced architecture retry',
+        })
     running = _architecture_jobs.get(job_key)
     from zikra.architecture import generation_running
     if (running and not running.done()) or generation_running(project):
@@ -641,7 +656,8 @@ async def ui_architecture_generate(request: Request):
         try:
             await generate_architecture_snapshot(
                 project, environment,
-                created_by=auth_info.get('label') or 'dashboard')
+                created_by=auth_info.get('label') or 'dashboard',
+                force=force)
         except asyncio.CancelledError:
             raise
         except Exception:

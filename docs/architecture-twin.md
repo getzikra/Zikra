@@ -24,8 +24,9 @@ inspiration only; it is never imported as authoritative project state.
 2. Zikra reads only searchable memories in that project, prioritizing
    architecture, module, index, verified reference, audit, and investigation
    records before general decisions and conversations.
-3. Common credential forms are redacted before any source text is sent to the
-   architecture model.
+3. Credentials, authorization headers, private keys, provider tokens, and
+   credential-bearing URLs are redacted. An independent preflight then blocks
+   the entire outbound call if any secret-shaped value remains.
 4. Kimi reconciles duplicate, stale, contradictory, proposed, and observed
    claims into the structured schema. Each confident node must cite a real
    source memory ID.
@@ -49,6 +50,10 @@ ZIKRA_ARCHITECTURE_HOUR=2
 ZIKRA_ARCHITECTURE_TIMEZONE=America/New_York
 ZIKRA_ARCHITECTURE_SOURCE_LIMIT=300
 ZIKRA_ARCHITECTURE_MAX_SOURCE_CHARS=180000
+ZIKRA_ARCHITECTURE_MAX_COMPLETION_TOKENS=12000
+ZIKRA_ARCHITECTURE_TIMEOUT_S=600
+ZIKRA_ARCHITECTURE_DRAFT_RETENTION=30
+ZIKRA_ARCHITECTURE_LEASE_SECONDS=900
 ```
 
 The worker uses `ZIKRA_ARCHITECTURE_BASE_URL` and
@@ -58,12 +63,22 @@ distillation keep its existing model while architecture synthesis selects the
 direct `kimi-for-coding` LiteLLM route.
 
 Kimi's coding membership endpoint currently requires `temperature=1`; the
-worker sets that explicitly and requests a JSON object response.
+worker sets that explicitly and requests a JSON object response. The lease
+must exceed the request timeout by more than 60 seconds; startup rejects an
+unsafe combination.
+
+Generation has a database-backed project/environment lease and a one-run-per-
+local-day budget. Concurrent workers cannot duplicate a model call; unchanged
+source, model, and prompt inputs reuse the existing snapshot; and only the
+newest configured number of drafts is retained. An owner can deliberately
+bypass the daily budget with `force: true`; the normal dashboard does not do
+so.
 
 ## Dashboard API
 
 - `GET /api/ui/architecture?project=<project>&environment=all|dev|prod`
-- `POST /api/ui/architecture/generate` with `{project, environment}`
+- `POST /api/ui/architecture/generate` with `{project, environment}` (or an
+  explicit owner-only `{project, environment, force: true}` retry)
 - `POST /api/ui/architecture/<snapshot-id>/publish` with `{project}`
 
 Generation and publishing require owner/admin. Other authenticated roles see

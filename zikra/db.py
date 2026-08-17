@@ -1721,7 +1721,7 @@ async def list_architecture_sources(project: str, limit: int = 300) -> list[dict
             WHEN 'change_log' THEN 14 WHEN 'summary' THEN 15
             WHEN 'note' THEN 16 WHEN 'diary' THEN 17 ELSE 18
           END,
-          pinned DESC, COALESCE(updated_at, created_at) DESC
+          pinned DESC, COALESCE(updated_at, created_at) DESC, id ASC
         LIMIT ?
     """
     params = [project, *_ARCH_SOURCE_TYPES, limit]
@@ -1768,21 +1768,31 @@ async def save_architecture_snapshot(data: dict) -> dict:
 
 
 async def get_architecture_snapshot(project: str, environment: str = None,
-                                    snapshot_id: str = None) -> Optional[dict]:
+                                    snapshot_id: str = None,
+                                    status: str = None) -> Optional[dict]:
     if _is_pg:
         from zikra.db_postgres import get_architecture_snapshot_pg, get_pg_pool
         return await get_architecture_snapshot_pg(
-            get_pg_pool(), project, environment, snapshot_id)
+            get_pg_pool(), project, environment, snapshot_id, status)
     sql = "SELECT * FROM architecture_snapshots WHERE project = ?"
     params: list = [project]
+    order_params: list = []
+    order_sql = ''
     if snapshot_id:
         sql += " AND id = ?"
         params.append(snapshot_id)
-    elif environment and environment != 'all':
+    elif environment == 'all':
+        sql += " AND environment = 'all'"
+    elif environment:
         sql += " AND environment IN (?, 'all')"
         params.append(environment)
-    sql += " ORDER BY generated_at DESC LIMIT 1"
-    async with _aio_db.execute(sql, params) as cur:
+        order_sql = 'CASE WHEN environment = ? THEN 0 ELSE 1 END, '
+        order_params.append(environment)
+    if status:
+        sql += " AND status = ?"
+        params.append(status)
+    sql += f" ORDER BY {order_sql}generated_at DESC LIMIT 1"
+    async with _aio_db.execute(sql, [*params, *order_params]) as cur:
         return _decode_snapshot_row(await cur.fetchone())
 
 
@@ -1809,7 +1819,7 @@ async def publish_architecture_snapshot(project: str, snapshot_id: str) -> Optio
     try:
         async with _aio_db.execute("""
             SELECT environment FROM architecture_snapshots
-            WHERE id = ? AND project = ?
+            WHERE id = ? AND project = ? AND status = 'draft'
         """, [snapshot_id, project]) as cur:
             row = await cur.fetchone()
         if not row:
@@ -1829,6 +1839,113 @@ async def publish_architecture_snapshot(project: str, snapshot_id: str) -> Optio
         await _aio_db.rollback()
         raise
     return await get_architecture_snapshot(project, snapshot_id=snapshot_id)
+
+
+async def prune_architecture_snapshots(project: str, environment: str,
+                                       keep_drafts: int) -> int:
+    """Retain only the newest draft snapshots; published history is untouched."""
+    if _is_pg:
+        from zikra.db_postgres import prune_architecture_snapshots_pg, get_pg_pool
+        return await prune_architecture_snapshots_pg(
+            get_pg_pool(), project, environment, keep_drafts)
+    cur = await _aio_db.execute("""
+        DELETE FROM architecture_snapshots
+        WHERE project = ? AND environment = ? AND status = 'draft'
+          AND id NOT IN (
+              SELECT id FROM architecture_snapshots
+              WHERE project = ? AND environment = ? AND status = 'draft'
+              ORDER BY generated_at DESC LIMIT ?
+          )
+    """, [project, environment, project, environment, keep_drafts])
+    await _aio_db.commit()
+    return max(0, cur.rowcount or 0)
+
+
+async def claim_architecture_generation(project: str, environment: str,
+                                        local_run_date: str,
+                                        source_digest: str,
+                                        force: bool = False,
+                                        lease_seconds: int = 900) -> dict:
+    """Atomically claim one project/environment generation lease."""
+    if _is_pg:
+        from zikra.db_postgres import claim_architecture_generation_pg, get_pg_pool
+        return await claim_architecture_generation_pg(
+            get_pg_pool(), project, environment, local_run_date,
+            source_digest, force, lease_seconds)
+    attempt_id = new_id()
+    await _aio_db.execute('BEGIN IMMEDIATE')
+    try:
+        async with _aio_db.execute("""
+            SELECT local_run_date, status,
+                   CASE WHEN lease_expires_at > datetime('now') THEN 1 ELSE 0 END AS lease_active
+            FROM architecture_generation_state
+            WHERE project = ? AND environment = ?
+        """, [project, environment]) as cur:
+            row = await cur.fetchone()
+        if row and row['status'] == 'running' and row['lease_active']:
+            await _aio_db.rollback()
+            return {'claimed': False, 'reason': 'running'}
+        if row and row['local_run_date'] == local_run_date and not force:
+            await _aio_db.rollback()
+            return {'claimed': False, 'reason': 'daily_limit'}
+        modifier = f'+{int(lease_seconds)} seconds'
+        await _aio_db.execute("""
+            INSERT INTO architecture_generation_state
+                (project, environment, local_run_date, source_digest, status,
+                 attempt_id, started_at, finished_at, lease_expires_at,
+                 snapshot_id, last_error)
+            VALUES (?, ?, ?, ?, 'running', ?, datetime('now'), NULL,
+                    datetime('now', ?), NULL, NULL)
+            ON CONFLICT(project, environment) DO UPDATE SET
+                local_run_date = excluded.local_run_date,
+                source_digest = excluded.source_digest,
+                status = 'running', attempt_id = excluded.attempt_id,
+                started_at = datetime('now'), finished_at = NULL,
+                lease_expires_at = excluded.lease_expires_at,
+                snapshot_id = NULL, last_error = NULL
+        """, [project, environment, local_run_date, source_digest,
+              attempt_id, modifier])
+        await _aio_db.commit()
+        return {'claimed': True, 'attempt_id': attempt_id}
+    except Exception:
+        await _aio_db.rollback()
+        raise
+
+
+async def finish_architecture_generation(project: str, environment: str,
+                                         attempt_id: str, status: str,
+                                         snapshot_id: str = None,
+                                         error: str = None) -> bool:
+    if _is_pg:
+        from zikra.db_postgres import finish_architecture_generation_pg, get_pg_pool
+        return await finish_architecture_generation_pg(
+            get_pg_pool(), project, environment, attempt_id,
+            status, snapshot_id, error)
+    cur = await _aio_db.execute("""
+        UPDATE architecture_generation_state
+        SET status = ?, finished_at = datetime('now'), lease_expires_at = NULL,
+            snapshot_id = COALESCE(?, snapshot_id), last_error = ?
+        WHERE project = ? AND environment = ? AND attempt_id = ?
+    """, [status, snapshot_id, error, project, environment, attempt_id])
+    await _aio_db.commit()
+    return bool(cur.rowcount)
+
+
+async def get_architecture_generation_state(project: str,
+                                            environment: str) -> Optional[dict]:
+    if _is_pg:
+        from zikra.db_postgres import get_architecture_generation_state_pg, get_pg_pool
+        return await get_architecture_generation_state_pg(
+            get_pg_pool(), project, environment)
+    async with _aio_db.execute("""
+        SELECT project, environment, local_run_date, source_digest, status,
+               attempt_id, started_at, finished_at, lease_expires_at,
+               snapshot_id, last_error
+        FROM architecture_generation_state
+        WHERE project = ? AND environment = ?
+    """, [project, environment]) as cur:
+        row = await cur.fetchone()
+    return dict(row) if row else None
 
 
 async def set_architecture_run_state(project: str, status: str,

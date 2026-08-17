@@ -20,12 +20,32 @@ from zikra.db import publish_architecture_snapshot
 
 
 def test_architecture_source_redaction():
-    text = ('api_key: sk-live-secretvalue123456 password=hunter2 service=postgres '
-            'Authorization: Bearer abcdefghijklmnopqrstuvwxyz')
+    text = (
+        'api_key: sk-live-secretvalue123456 password=hunter2 service=postgres '
+        'DB_PASSWORD=correct-horse KIMI_TOKEN=moon-secret '
+        'AWS_SECRET_ACCESS_KEY=aws-secret '
+        'Authorization: Bearer abcdefghijklmnopqrstuvwxyz '
+        'Proxy-Authorization: Basic dXNlcjpwYXNzd29yZA== '
+        'DATABASE_URL=postgres://dbuser:dbpass@db.internal/zikra '
+        'direct=postgres://user:pass@host/db '
+        '-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----'
+    )
     redacted = architecture_mod._redact_secrets(text)
-    assert 'secretvalue' not in redacted and 'hunter2' not in redacted
+    for secret in (
+        'secretvalue', 'hunter2', 'correct-horse', 'moon-secret',
+        'aws-secret', 'dXNlcjpwYXNzd29yZA', 'dbpass', 'user:pass',
+        'private-material',
+    ):
+        assert secret not in redacted
     assert 'abcdefghijklmnopqrstuvwxyz' not in redacted
     assert 'service=postgres' in redacted
+    assert architecture_mod._secret_categories(redacted) == []
+
+    try:
+        architecture_mod._assert_no_secrets('DB_PASSWORD=must-never-leave')
+        assert False, 'raw sensitive assignments must fail closed'
+    except ValueError as exc:
+        assert 'must-never-leave' not in str(exc)
 
 
 def test_postgres_snapshot_json_is_decoded():
@@ -262,7 +282,11 @@ async def _run_snapshot_tests(db_path):
         """, [source_id])
         await aio.commit()
 
+        model_calls = 0
+
         async def fake_call(_content):
+            nonlocal model_calls
+            model_calls += 1
             return 'kimi-for-coding', '''{
               "summary":"Memory-derived current state.",
               "nodes":[
@@ -305,6 +329,73 @@ async def _run_snapshot_tests(db_path):
         assert published['published_at']
         visible = await architecture_payload('multi-project', include_drafts=False)
         assert visible['snapshot']['id'] == snapshot['id']
+
+        # On a later local day, unchanged redacted sources reuse the existing
+        # snapshot without spending another model call.
+        await aio.execute("""
+            UPDATE architecture_generation_state
+            SET local_run_date = '2000-01-01'
+            WHERE project = 'multi-project' AND environment = 'all'
+        """)
+        await aio.commit()
+        unchanged = await generate_architecture_snapshot('multi-project')
+        assert unchanged['id'] == snapshot['id'] and model_calls == 1
+        unchanged_state = await db.get_architecture_run_state('multi-project')
+        assert unchanged_state['last_status'] == 'skipped'
+
+        # Environment is part of generation identity. A dev request may read
+        # all as its prior baseline, but must still create a dev-specific draft.
+        dev_specific = await generate_architecture_snapshot(
+            'multi-project', environment='dev')
+        assert dev_specific['environment'] == 'dev'
+        assert dev_specific['id'] != snapshot['id'] and model_calls == 2
+
+        # A published snapshot remains visible after more than the UI history
+        # window of newer drafts.
+        for index in range(31):
+            await aio.execute("""
+                INSERT INTO architecture_snapshots
+                    (id, project, environment, status, document_json, generated_at)
+                VALUES (?, 'multi-project', 'all', 'draft', '{}',
+                        datetime('now', ?))
+            """, [f'newer-draft-{index}', f'+{index + 1} seconds'])
+        await aio.execute("""
+            INSERT INTO architecture_snapshots
+                (id, project, environment, status, document_json, generated_at)
+            VALUES ('newer-dev', 'multi-project', 'dev', 'draft', '{}',
+                    datetime('now', '+1 day'))
+        """)
+        await aio.commit()
+        still_visible = await architecture_payload(
+            'multi-project', environment='all', include_drafts=False)
+        assert still_visible['snapshot']['id'] == snapshot['id']
+        exact_all = await db.get_architecture_snapshot(
+            'multi-project', environment='all')
+        assert exact_all['environment'] == 'all'
+        dev = await db.get_architecture_snapshot('multi-project', environment='dev')
+        assert dev['id'] == 'newer-dev'
+        prod_fallback = await db.get_architecture_snapshot(
+            'multi-project', environment='prod', status='published')
+        assert prod_fallback['id'] == snapshot['id']
+
+        # The DB-backed daily lease prevents duplicate model calls across
+        # workers while still allowing an explicit owner force request.
+        first_claim = await db.claim_architecture_generation(
+            'lease-project', 'all', '2026-08-16', 'digest-a')
+        assert first_claim['claimed']
+        second_claim = await db.claim_architecture_generation(
+            'lease-project', 'all', '2026-08-16', 'digest-a')
+        assert not second_claim['claimed'] and second_claim['reason'] == 'running'
+        assert await db.finish_architecture_generation(
+            'lease-project', 'all', first_claim['attempt_id'], 'success')
+        daily_claim = await db.claim_architecture_generation(
+            'lease-project', 'all', '2026-08-16', 'digest-b')
+        assert not daily_claim['claimed'] and daily_claim['reason'] == 'daily_limit'
+        forced_claim = await db.claim_architecture_generation(
+            'lease-project', 'all', '2026-08-16', 'digest-b', force=True)
+        assert forced_claim['claimed']
+        assert await db.finish_architecture_generation(
+            'lease-project', 'all', forced_claim['attempt_id'], 'success')
 
         changes = architecture_mod._document_changes(
             {'nodes': [{'id': 'api', 'name': 'Old API'}]},

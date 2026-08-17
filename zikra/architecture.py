@@ -19,11 +19,15 @@ import httpx
 from zikra import config
 from zikra.architecture_utils import canonical_project
 from zikra.db import (
+    claim_architecture_generation,
+    finish_architecture_generation,
     get_architecture_snapshot,
+    get_architecture_generation_state,
     get_architecture_run_state,
     list_architecture_sources,
     list_architecture_snapshots,
     list_decisions,
+    prune_architecture_snapshots,
     save_architecture_snapshot,
     set_architecture_run_state,
 )
@@ -36,13 +40,44 @@ _KINDS = {
     'deployment_node', 'external', 'queue', 'workflow',
 }
 _STATUSES = {'current', 'deprecated', 'proposed', 'unknown'}
-_SECRET_ASSIGNMENT_RE = re.compile(
-    r'(?i)(\b(?:api[ _-]?key|access[ _-]?token|authorization|bearer|password|secret)'
-    r'\b\s*[:=]\s*)([^\s,;]+)'
+_SENSITIVE_KEY = (
+    r'(?:authorization|proxy[_ -]?authorization|api[_ -]?key|access[_ -]?key'
+    r'|access[_ -]?token|refresh[_ -]?token|client[_ -]?secret|database[_ -]?url'
+    r'|db[_ -]?url|connection[_ -]?string|credentials?'
+    r'|[a-z0-9_]*(?:password|passwd|pwd|token|secret|private[_-]?key|api[_-]?key)'
+    r'[a-z0-9_]*)'
 )
-_BEARER_RE = re.compile(r'(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}')
+_SECRET_ASSIGNMENT_RE = re.compile(
+    rf'(?i)(?P<prefix>["\']?{_SENSITIVE_KEY}["\']?\s*[:=]\s*)'
+    r'(?P<value>"[^"\r\n]*"|\'[^\'\r\n]*\'|[^\s,;}\r\n]+)'
+)
+_AUTH_HEADER_RE = re.compile(
+    r'(?i)\b(authorization|proxy-authorization)\s*([:=])\s*'
+    r'(bearer|basic)\s+[^\s,;]+'
+)
+_AUTH_SCHEME_RE = re.compile(
+    r'(?i)\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}'
+)
+_CREDENTIAL_URI_RE = re.compile(
+    r'(?i)\b([a-z][a-z0-9+.-]{1,31}://)([^/\s:@]+):([^@\s/]+)@'
+)
+_SECRET_QUERY_RE = re.compile(
+    rf'(?i)([?&]{_SENSITIVE_KEY}=)([^&#\s]+)'
+)
+_PRIVATE_KEY_RE = re.compile(
+    r'-----BEGIN(?: [A-Z0-9]+)? PRIVATE KEY-----.*?'
+    r'-----END(?: [A-Z0-9]+)? PRIVATE KEY-----',
+    re.DOTALL,
+)
 _JWT_RE = re.compile(r'\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b')
-_LIKELY_TOKEN_RE = re.compile(r'\b(?:sk|pk|key)-[A-Za-z0-9_-]{16,}\b')
+_PROVIDER_TOKEN_RE = re.compile(
+    r'(?i)\b(?:'
+    r'(?:sk|pk|rk|key)-(?:live-|test-|proj-)?[A-Za-z0-9_-]{16,}'
+    r'|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}'
+    r'|xox[a-z]-[A-Za-z0-9-]{16,}|AIza[A-Za-z0-9_-]{20,}'
+    r'|(?:AKIA|ASIA)[A-Z0-9]{16}'
+    r')\b'
+)
 
 _SYSTEM_PROMPT = """You are the architecture-reconciliation engine for Zikra.
 Build a clear, evidence-aware architecture model for one software project from
@@ -106,7 +141,7 @@ def _llm_config() -> dict:
                     or os.getenv('OPENAI_API_KEY')
                     or config.LLM_API_KEY),
         'model': os.getenv('ZIKRA_ARCHITECTURE_MODEL') or config.ARCHITECTURE_MODEL,
-        'timeout': int(os.getenv('ZIKRA_ARCHITECTURE_TIMEOUT_S', '600')),
+        'timeout': config.ARCHITECTURE_TIMEOUT_S,
     }
 
 
@@ -131,11 +166,54 @@ def _parse_json(text: str) -> dict:
 
 
 def _redact_secrets(text: str) -> str:
-    """Remove common credential forms before source text leaves Zikra."""
-    text = _BEARER_RE.sub('Bearer <redacted>', text or '')
+    """Remove credential forms before source text leaves Zikra."""
+    text = _PRIVATE_KEY_RE.sub('<redacted-private-key>', text or '')
+    text = _CREDENTIAL_URI_RE.sub(r'\1<redacted>@', text)
+    text = _AUTH_HEADER_RE.sub(r'\1\2 \3 <redacted>', text)
+    text = _AUTH_SCHEME_RE.sub(r'\1 <redacted>', text)
+    text = _SECRET_QUERY_RE.sub(r'\1<redacted>', text)
     text = _JWT_RE.sub('<redacted-jwt>', text)
-    text = _SECRET_ASSIGNMENT_RE.sub(r'\1<redacted>', text)
-    return _LIKELY_TOKEN_RE.sub('<redacted-token>', text)
+    text = _SECRET_ASSIGNMENT_RE.sub(r'\g<prefix><redacted>', text)
+    return _PROVIDER_TOKEN_RE.sub('<redacted-token>', text)
+
+
+def _secret_categories(text: str) -> list[str]:
+    """Return only category names; never return or log matched material."""
+    text = text or ''
+    categories = set()
+    for match in _SECRET_ASSIGNMENT_RE.finditer(text):
+        if '<redacted' not in match.group('value').lower():
+            categories.add('sensitive-assignment')
+            break
+    for match in _SECRET_QUERY_RE.finditer(text):
+        if '<redacted' not in match.group(2).lower():
+            categories.add('sensitive-query')
+            break
+    for match in _AUTH_HEADER_RE.finditer(text):
+        if '<redacted' not in match.group(0).lower():
+            categories.add('authorization')
+            break
+    checks = (
+        ('authorization', _AUTH_SCHEME_RE),
+        ('credential-url', _CREDENTIAL_URI_RE),
+        ('private-key', _PRIVATE_KEY_RE),
+        ('jwt', _JWT_RE),
+        ('provider-token', _PROVIDER_TOKEN_RE),
+    )
+    for category, pattern in checks:
+        if pattern.search(text):
+            categories.add(category)
+    return sorted(categories)
+
+
+def _assert_no_secrets(text: str) -> None:
+    """Fail closed before outbound model calls without exposing a match."""
+    categories = _secret_categories(text)
+    if categories:
+        raise ValueError(
+            'outbound architecture payload blocked by credential preflight '
+            f"(categories: {', '.join(categories)})"
+        )
 
 
 def _safe_text(value, max_length: int) -> str:
@@ -332,6 +410,7 @@ def _document_changes(previous: dict, current: dict) -> list[dict]:
 
 
 async def _call_model(user_content: str) -> tuple[str, str]:
+    _assert_no_secrets(user_content)
     conf = _llm_config()
     if not conf['api_key']:
         raise RuntimeError('no architecture LLM API key configured')
@@ -348,6 +427,7 @@ async def _call_model(user_content: str) -> tuple[str, str]:
                 # Kimi Code's membership endpoint currently requires the
                 # provider default sampling value (temperature=1).
                 'temperature': 1,
+                'max_tokens': config.ARCHITECTURE_MAX_COMPLETION_TOKENS,
                 'response_format': {'type': 'json_object'},
             },
         )
@@ -356,17 +436,55 @@ async def _call_model(user_content: str) -> tuple[str, str]:
 
 
 async def generate_architecture_snapshot(project: str, environment: str = 'all',
-                                         created_by: str = 'zikra-architecture-worker') -> dict:
+                                         created_by: str = 'zikra-architecture-worker',
+                                         force: bool = False) -> dict:
     project = canonical_project(project)
+    if environment not in ('all', 'dev', 'prod'):
+        raise ValueError('invalid architecture environment')
     lock = _locks.setdefault(project, asyncio.Lock())
     async with lock:
-        await set_architecture_run_state(project, 'running')
+        attempt_id = None
+        claim_reason = None
         try:
             sources = await list_architecture_sources(project, config.ARCHITECTURE_SOURCE_LIMIT)
             packed, selected = _pack_sources(sources, config.ARCHITECTURE_MAX_SOURCE_CHARS)
             if not selected:
                 raise ValueError(f'project {project!r} has no architecture source memories')
+            _assert_no_secrets(packed)
+            digest_basis = json.dumps({
+                'environment': environment,
+                'model': config.ARCHITECTURE_MODEL,
+                'prompt_version': config.ARCHITECTURE_PROMPT_VERSION,
+            }, sort_keys=True) + '\n' + packed
+            source_digest = hashlib.sha256(digest_basis.encode('utf-8')).hexdigest()
+            run_date = datetime.now(ZoneInfo(config.ARCHITECTURE_TIMEZONE)).date().isoformat()
+            claim = await claim_architecture_generation(
+                project, environment, run_date, source_digest,
+                force=force, lease_seconds=config.ARCHITECTURE_LEASE_SECONDS,
+            )
+            if not claim.get('claimed'):
+                claim_reason = claim.get('reason') or 'budget unavailable'
+                if claim_reason == 'running':
+                    raise RuntimeError('architecture generation is already running')
+                await set_architecture_run_state(
+                    project, 'rate_limited',
+                    error='daily architecture generation budget already used; retry tomorrow or use an explicit owner force request',
+                )
+                raise RuntimeError('daily architecture generation budget already used')
+            attempt_id = claim.get('attempt_id')
+            await set_architecture_run_state(project, 'running')
+
             previous = await get_architecture_snapshot(project, environment=environment)
+            if (previous and previous.get('source_digest') == source_digest
+                    and not force):
+                await finish_architecture_generation(
+                    project, environment, attempt_id, 'skipped',
+                    snapshot_id=previous.get('id'))
+                await set_architecture_run_state(
+                    project, 'skipped', previous.get('id'),
+                    error='source memories are unchanged; the existing snapshot was retained',
+                )
+                return previous
             previous_summary = {}
             if previous:
                 doc = previous.get('document') or {}
@@ -385,19 +503,17 @@ async def generate_architecture_snapshot(project: str, environment: str = 'all',
                 'previous_snapshot': previous_summary,
                 'sources_jsonl': packed,
             }, ensure_ascii=False)
+            _assert_no_secrets(user_content)
             model, reply = await _call_model(user_content)
             raw = _parse_json(reply)
             source_lookup = {str(row.get('id')): row for row in selected}
             document = _normalise_document(raw, project, source_lookup)
+            _assert_no_secrets(json.dumps(document, ensure_ascii=False))
             document['changes'] = _document_changes(
                 (previous or {}).get('document') or {}, document)
             nodes = document.get('nodes') or []
             evidenced = sum(1 for node in nodes if node.get('evidence'))
             coverage = round(evidenced / len(nodes), 4) if nodes else 0.0
-            digest_basis = '|'.join(
-                f"{row.get('id')}:{row.get('updated_at') or row.get('created_at')}"
-                for row in selected)
-            source_digest = hashlib.sha256(digest_basis.encode()).hexdigest()
             snapshot = await save_architecture_snapshot({
                 'project': project,
                 'environment': environment,
@@ -411,14 +527,30 @@ async def generate_architecture_snapshot(project: str, environment: str = 'all',
                 'evidence_coverage': coverage,
                 'created_by': created_by,
             })
+            await prune_architecture_snapshots(
+                project, environment, config.ARCHITECTURE_DRAFT_RETENTION)
+            await finish_architecture_generation(
+                project, environment, attempt_id, 'success',
+                snapshot_id=snapshot.get('id'))
             await set_architecture_run_state(project, 'success', snapshot.get('id'))
             return snapshot
         except asyncio.CancelledError:
+            if attempt_id:
+                await finish_architecture_generation(
+                    project, environment, attempt_id, 'cancelled',
+                    error='generation interrupted by shutdown')
             await set_architecture_run_state(
                 project, 'cancelled', error='generation interrupted by shutdown')
             raise
         except Exception as exc:
-            await set_architecture_run_state(project, 'failed', error=str(exc)[:4000])
+            safe_error = _safe_text(exc, 1000)
+            if attempt_id:
+                await finish_architecture_generation(
+                    project, environment, attempt_id, 'failed', error=safe_error)
+            state = await get_architecture_run_state(project)
+            if (claim_reason != 'running'
+                    and (state or {}).get('last_status') != 'rate_limited'):
+                await set_architecture_run_state(project, 'failed', error=safe_error)
             raise
 
 
@@ -439,13 +571,8 @@ async def architecture_payload(project: str, environment: str = 'all',
     if include_drafts:
         snapshot = await get_architecture_snapshot(project, environment=environment)
     else:
-        published = next(
-            (item for item in history if item.get('status') == 'published'
-             and (environment == 'all' or item.get('environment') in (environment, 'all'))),
-            None,
-        )
-        snapshot = (await get_architecture_snapshot(project, snapshot_id=published['id'])
-                    if published else None)
+        snapshot = await get_architecture_snapshot(
+            project, environment=environment, status='published')
     typed_decisions = await list_decisions(
         project, environment=None if environment == 'all' else environment,
         current_only=True)
@@ -473,28 +600,38 @@ async def architecture_payload(project: str, environment: str = 'all',
     }
 
 
+def validate_architecture_config() -> ZoneInfo:
+    """Validate scheduler inputs synchronously so startup can fail clearly."""
+    try:
+        timezone = ZoneInfo(config.ARCHITECTURE_TIMEZONE)
+    except Exception as exc:
+        raise ValueError(
+            f'invalid ZIKRA_ARCHITECTURE_TIMEZONE: {config.ARCHITECTURE_TIMEZONE!r}'
+        ) from exc
+    for project in config.ARCHITECTURE_PROJECTS:
+        canonical_project(project)
+    if config.ARCHITECTURE_LEASE_SECONDS <= config.ARCHITECTURE_TIMEOUT_S + 60:
+        raise ValueError(
+            'ZIKRA_ARCHITECTURE_LEASE_SECONDS must exceed '
+            'ZIKRA_ARCHITECTURE_TIMEOUT_S by more than 60 seconds')
+    return timezone
+
+
 async def scheduler_loop() -> None:
     """Check every fifteen minutes and create at most one draft per local day."""
     if not config.ARCHITECTURE_ENABLED or not config.ARCHITECTURE_PROJECTS:
         return
-    timezone = ZoneInfo(config.ARCHITECTURE_TIMEZONE)
+    timezone = validate_architecture_config()
     while True:
         try:
             now = datetime.now(timezone)
-            if now.hour == config.ARCHITECTURE_HOUR:
+            # Run any time after the configured hour. This catches service
+            # downtime and daylight-saving transitions that skip the hour.
+            if now.hour >= config.ARCHITECTURE_HOUR:
                 for configured_project in config.ARCHITECTURE_PROJECTS:
                     project = canonical_project(configured_project)
-                    state = await get_architecture_run_state(project)
-                    attempted_at = str((state or {}).get('last_run_at') or '')
-                    last_status = (state or {}).get('last_status')
-                    active_here = bool(_locks.get(project) and _locks[project].locked())
-                    if (attempted_at[:10] == now.date().isoformat()
-                            and (last_status in ('success', 'failed')
-                                 or (last_status == 'running' and active_here))):
-                        continue
-                    latest = await get_architecture_snapshot(project)
-                    latest_at = str((latest or {}).get('generated_at') or '')
-                    if latest_at[:10] == now.date().isoformat():
+                    state = await get_architecture_generation_state(project, 'all')
+                    if str((state or {}).get('local_run_date') or '') == now.date().isoformat():
                         continue
                     try:
                         await generate_architecture_snapshot(project)

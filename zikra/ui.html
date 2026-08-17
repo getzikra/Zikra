@@ -3021,6 +3021,10 @@ async function generateArchitectureDraft() {
   await loadArchitecture(true);
   if (outcome.status === 'success') {
     showArchitectureFeedback(`Architecture draft generated for ${project}.`, 'success');
+  } else if (outcome.status === 'skipped') {
+    showArchitectureFeedback(
+      outcome.detail || 'Source memories are unchanged; the existing architecture snapshot was retained.',
+      'success');
   } else if (outcome.status === 'failed') {
     showArchitectureFeedback(outcome.error || `Architecture generation failed for ${project}.`, 'error');
   } else {
@@ -3035,11 +3039,11 @@ function architectureRunStatus(payload) {
 }
 
 function architectureRunSucceeded(status) {
-  return ['success', 'succeeded', 'complete', 'completed'].includes(status);
+  return ['success', 'succeeded', 'complete', 'completed', 'skipped'].includes(status);
 }
 
 function architectureRunFailed(status) {
-  return ['failed', 'failure', 'error', 'cancelled', 'canceled'].includes(status);
+  return ['failed', 'failure', 'error', 'cancelled', 'canceled', 'rate_limited'].includes(status);
 }
 
 function architectureRunError(payload) {
@@ -3057,7 +3061,11 @@ async function pollArchitectureGeneration(project, environment, pollToken) {
     const current = await apiGet('/api/ui/architecture', { project, environment });
     if (!current || current.error) continue;
     const status = architectureRunStatus(current);
-    if (architectureRunSucceeded(status)) return { status: 'success' };
+    if (architectureRunSucceeded(status)) {
+      return status === 'skipped'
+        ? { status: 'skipped', detail: architectureRunError(current) }
+        : { status: 'success' };
+    }
     if (architectureRunFailed(status)) {
       return { status: 'failed', error: architectureRunError(current) };
     }
