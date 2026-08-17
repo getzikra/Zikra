@@ -93,14 +93,20 @@ SESSION_ID="$(printf '%s' "$PAYLOAD" | python3 -c \
 SID8="${SESSION_ID:0:8}"
 
 # ── Dynamic project detection — CWD overrides install-time DEFAULT_PROJECT ───
-# Shared helper: ~/.zikra/projects.map prefix mappings, then git remote name,
-# then directory basename. Falls back to DEFAULT_PROJECT when unavailable.
+# Explicit projects.map entries support future projects; built-in names may be
+# inferred. Unknown or missing cwd is skipped instead of becoming global.
 for _pd in "$HOME/.claude/zikra-project.sh" "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/zikra-project.sh"; do
   [[ -f "$_pd" ]] && { source "$_pd"; break; }
 done
-if [[ -n "$HOOK_CWD" ]] && declare -f zikra_detect_project >/dev/null; then
-    DEFAULT_PROJECT="$(zikra_detect_project "$HOOK_CWD" "$DEFAULT_PROJECT")"
+if ! declare -f zikra_detect_project >/dev/null; then
+  echo "[zikra_autolog] project detector unavailable; skipping" >&2
+  exit 0
 fi
+if ! DETECTED_PROJECT="$(zikra_detect_project "$HOOK_CWD")" || [[ -z "$DETECTED_PROJECT" ]]; then
+  echo "[zikra_autolog] unmapped or missing cwd; skipping: ${HOOK_CWD:-[missing]}" >&2
+  exit 0
+fi
+DEFAULT_PROJECT="$DETECTED_PROJECT"
 
 # ── POST helper — logs failures to ~/.zikra/autolog_errors.log ───────────────
 LOG_FILE="${HOME}/.zikra/autolog_errors.log"

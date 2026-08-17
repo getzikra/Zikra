@@ -38,19 +38,19 @@ HOOK_CWD="$(printf '%s' "$PAYLOAD" | python3 -c \
   "import sys,json; d=json.load(sys.stdin); print(d.get('cwd',''))" \
   2>/dev/null || echo "")"
 
-# Project detection: shared helper if installed, else cwd fallback
-if [[ -f "$HOME/.claude/zikra-project.sh" ]]; then
-  # shellcheck disable=SC1091
-  source "$HOME/.claude/zikra-project.sh"
-  DEFAULT_PROJECT="$(zikra_detect_project "$HOOK_CWD" "$DEFAULT_PROJECT")"
-else
-  cwd_l="$(printf '%s' "$HOOK_CWD" | tr '[:upper:]' '[:lower:]')"
-  if   [[ "$cwd_l" == *"getzikra"* || "$cwd_l" == *"/zikra"* ]]; then DEFAULT_PROJECT="zikra"
-  elif [[ "$cwd_l" == *"forgenexus"* ]]; then DEFAULT_PROJECT="forgenexus"
-  elif [[ "$cwd_l" == *"veltis"* ]];     then DEFAULT_PROJECT="veltisai"
-  fi
+# Project detection: explicit map or built-in inference only.
+for _pd in "$HOME/.claude/zikra-project.sh" "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/zikra-project.sh"; do
+  [[ -f "$_pd" ]] && { source "$_pd"; break; }
+done
+if ! declare -f zikra_detect_project >/dev/null; then
+  echo "[zikra-context] project detector unavailable; skipping" >&2
+  exit 0
 fi
-
+if ! DETECTED_PROJECT="$(zikra_detect_project "$HOOK_CWD")" || [[ -z "$DETECTED_PROJECT" ]]; then
+  echo "[zikra-context] unmapped or missing cwd; skipping: ${HOOK_CWD:-[missing]}" >&2
+  exit 0
+fi
+DEFAULT_PROJECT="$DETECTED_PROJECT"
 BODY="$(python3 -c "
 import json, sys
 print(json.dumps({
