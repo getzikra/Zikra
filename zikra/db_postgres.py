@@ -251,7 +251,7 @@ async def init_pg() -> 'asyncpg.Pool':
             "ALTER TABLE memories ADD COLUMN IF NOT EXISTS environment TEXT NULL",
             "ALTER TABLE memories ADD COLUMN IF NOT EXISTS evidence TEXT NULL",
             "ALTER TABLE memories ADD COLUMN IF NOT EXISTS decision_kind TEXT NULL",
-            "CREATE INDEX IF NOT EXISTS idx_memories_arch ON memories (project, module, status, memory_type, decision_kind)",
+            "CREATE INDEX IF NOT EXISTS idx_memories_arch_kind ON memories (project, module, status, memory_type, decision_kind)",
             """CREATE TABLE IF NOT EXISTS repo_sync_state (
                 project            TEXT NOT NULL,
                 repo_path          TEXT NOT NULL,

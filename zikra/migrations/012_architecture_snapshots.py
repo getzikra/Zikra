@@ -41,7 +41,7 @@ def run(conn):
 
     conn.executescript(SQL)
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_memories_arch
+        CREATE INDEX IF NOT EXISTS idx_memories_arch_kind
         ON memories (project, module, status, memory_type, decision_kind)
     """)
     conn.commit()
