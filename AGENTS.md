@@ -41,6 +41,13 @@ log_run:     {"command":"log_run","project":"<p>","runner":"<hostname>","prompt_
 ```
 save_prompt:          {"command":"save_prompt","title":"<n>","content_md":"...","project":"<p>"}
 list_prompts:         {"command":"list_prompts","project":"<p>","limit":50}
+save_decision:        {"command":"save_decision","project":"<p>","module":"<m>","title":"<t>","content_md":"...","environment":"dev|prod|null","evidence":"<file:line|commit|quote>","supersedes_id":"<uuid>"}
+get_architecture:     {"command":"get_architecture","project":"<p>","module":"<m>","environment":"dev|prod"}
+                      Omit module for all modules grouped. Only status=current decisions. Strictly project-scoped.
+module_history:       {"command":"module_history","project":"<p>","module":"<m>"}
+                      Full chain including superseded rows, supersedes links adjacent.
+get_sync_state:       {"command":"get_sync_state","project":"<p>","repo_path":"<abs path>"}
+set_sync_state:       {"command":"set_sync_state","project":"<p>","repo_path":"<abs path>","last_synced_commit":"<sha>"}
 list_requirements:    {"command":"list_requirements","project":"<p>","limit":20}
                       Optional: "status":"pending"|"resolved"  — filter by requirement status.
                       pending  = pending_review=1 (awaiting action)

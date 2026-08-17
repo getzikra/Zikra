@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -50,10 +51,15 @@ from zikra.commands.version import cmd_version
 from zikra.commands.ingest_session import cmd_ingest_session
 from zikra.commands.get_context import cmd_get_context
 from zikra.commands.run_consolidation import cmd_run_consolidation
+from zikra.commands.save_decision import cmd_save_decision
+from zikra.commands.get_architecture import cmd_get_architecture
+from zikra.commands.module_history import cmd_module_history
+from zikra.commands.sync_state import cmd_get_sync_state, cmd_set_sync_state
 from zikra.mcp_server import build_mcp_app, handle_streamable_http
 from zikra.version import __version__
 
 logger = logging.getLogger(__name__)
+_architecture_jobs: dict[str, asyncio.Task] = {}
 
 load_dotenv()
 
@@ -74,15 +80,24 @@ async def lifespan(app: FastAPI):
     port = os.getenv('ZIKRA_PORT', '8000')
     logger.info(f'Zikra running at http://{host}:{port}/webhook/zikra (backend: {backend})')
     # Distill any ingests left pending by a previous crash/restart,
-    # and start the weekly consolidation scheduler
+    # and start the recurring maintenance/architecture schedulers
     import asyncio as _asyncio
     from zikra.distill import drain_pending
     from zikra.consolidate import scheduler_loop
+    from zikra.architecture import scheduler_loop as architecture_scheduler_loop
     _drain_task = _asyncio.create_task(drain_pending())
     _consolidate_task = _asyncio.create_task(scheduler_loop())
+    _architecture_task = _asyncio.create_task(architecture_scheduler_loop())
     yield
     _drain_task.cancel()
     _consolidate_task.cancel()
+    _architecture_task.cancel()
+    for task in list(_architecture_jobs.values()):
+        task.cancel()
+    await _asyncio.gather(
+        _drain_task, _consolidate_task, _architecture_task,
+        *_architecture_jobs.values(), return_exceptions=True,
+    )
     if backend == 'sqlite' and hasattr(app.state, 'sqlite_db'):
         await app.state.sqlite_db.close()
 
@@ -138,6 +153,11 @@ COMMAND_MIN_ROLE = {
     'version':              'viewer',
     'hygiene_report':       'viewer',
     'get_context':          'viewer',
+    'get_architecture':     'viewer',
+    'module_history':       'viewer',
+    'get_sync_state':       'viewer',
+    'save_decision':        'developer',
+    'set_sync_state':       'developer',
     'save_memory':          'developer',
     'save_prompt':          'developer',
     'save_requirement':     'developer',
@@ -191,6 +211,11 @@ DISPATCH: dict = {
     'ingest_session':       cmd_ingest_session,
     'get_context':          cmd_get_context,
     'run_consolidation':    cmd_run_consolidation,
+    'save_decision':        cmd_save_decision,
+    'get_architecture':     cmd_get_architecture,
+    'module_history':       cmd_module_history,
+    'get_sync_state':       cmd_get_sync_state,
+    'set_sync_state':       cmd_set_sync_state,
     # search aliases
     'find':                 cmd_search,
     'query':                cmd_search,
@@ -256,6 +281,14 @@ DISPATCH: dict = {
     'session_context':      cmd_get_context,
     # run_consolidation aliases
     'consolidate':          cmd_run_consolidation,
+    # save_decision aliases
+    'record_decision':      cmd_save_decision,
+    'save_architecture_decision': cmd_save_decision,
+    # get_architecture aliases
+    'architecture':         cmd_get_architecture,
+    'get_arch':             cmd_get_architecture,
+    # module_history aliases
+    'decision_history':     cmd_module_history,
     # zikra_help aliases
     'help':                 cmd_zikra_help,
     # version aliases
@@ -552,6 +585,98 @@ async def ui_backlinks(memory_id: str, request: Request):
     node-detail panel when a node is clicked."""
     await verify_auth(request)
     return await fetch_memory_links(memory_id)
+
+
+@app.get('/api/ui/architecture')
+async def ui_architecture(request: Request):
+    """Return the latest structured architecture snapshot for one project."""
+    from zikra.architecture import architecture_payload
+    from zikra.architecture_utils import canonical_project
+    auth_info = await verify_auth(request)
+    try:
+        project = canonical_project(request.query_params.get('project'))
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={'error': str(exc)})
+    assert_scope(auth_info, project)
+    environment = request.query_params.get('environment') or 'all'
+    if environment not in ('all', 'dev', 'prod'):
+        return JSONResponse(status_code=400, content={'error': 'invalid environment'})
+    return await architecture_payload(
+        project,
+        environment,
+        include_drafts=auth_info.get('role') in ('owner', 'admin'),
+    )
+
+
+@app.post('/api/ui/architecture/generate')
+async def ui_architecture_generate(request: Request):
+    """Start a memory-derived draft job. Publishing is always separate."""
+    from zikra.architecture_utils import canonical_project
+    auth_info = await verify_auth(request)
+    if auth_info.get('role') not in ('owner', 'admin'):
+        return JSONResponse(status_code=403, content={'error': 'admin role required'})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        project = canonical_project(body.get('project'))
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={'error': str(exc)})
+    assert_scope(auth_info, project)
+    environment = body.get('environment') or 'all'
+    if environment not in ('all', 'dev', 'prod'):
+        return JSONResponse(status_code=400, content={'error': 'invalid environment'})
+    job_key = f'{project}:{environment}'
+    running = _architecture_jobs.get(job_key)
+    from zikra.architecture import generation_running
+    if (running and not running.done()) or generation_running(project):
+        return JSONResponse(status_code=202, content={
+            'status': 'generation_running', 'project': project,
+            'environment': environment,
+        })
+
+    async def run_generation():
+        from zikra.architecture import generate_architecture_snapshot
+        try:
+            await generate_architecture_snapshot(
+                project, environment,
+                created_by=auth_info.get('label') or 'dashboard')
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception('manual architecture generation failed for %s', project)
+        finally:
+            _architecture_jobs.pop(job_key, None)
+
+    _architecture_jobs[job_key] = asyncio.create_task(run_generation())
+    return JSONResponse(status_code=202, content={
+        'status': 'generation_started', 'project': project,
+        'environment': environment,
+    })
+
+
+@app.post('/api/ui/architecture/{snapshot_id}/publish')
+async def ui_architecture_publish(snapshot_id: str, request: Request):
+    """Promote one reviewed draft; previous published snapshot is archived."""
+    from zikra.architecture_utils import canonical_project
+    from zikra.db import publish_architecture_snapshot
+    auth_info = await verify_auth(request)
+    if auth_info.get('role') not in ('owner', 'admin'):
+        return JSONResponse(status_code=403, content={'error': 'admin role required'})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        project = canonical_project(body.get('project'))
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={'error': str(exc)})
+    assert_scope(auth_info, project)
+    snapshot = await publish_architecture_snapshot(project, snapshot_id)
+    if not snapshot:
+        return JSONResponse(status_code=404, content={'error': 'snapshot not found'})
+    return {'status': 'published', 'snapshot': snapshot}
 
 
 # ── Dedicated UI read endpoints (bypass webhook dispatch) ──────────────────────

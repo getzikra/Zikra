@@ -52,3 +52,18 @@ CONSOLIDATE_INTERVAL_HOURS = int(os.getenv('ZIKRA_CONSOLIDATE_INTERVAL_HOURS', '
 CONSOLIDATE_MIN_AGE_DAYS = int(os.getenv('ZIKRA_CONSOLIDATE_MIN_AGE_DAYS', '14'))
 CONSOLIDATE_BATCH = int(os.getenv('ZIKRA_CONSOLIDATE_BATCH', '200'))
 CONSOLIDATE_MAX_CLUSTER_CHARS = int(os.getenv('ZIKRA_CONSOLIDATE_MAX_CLUSTER_CHARS', '60000'))
+
+# Nightly, project-scoped architecture snapshots. This intentionally has a
+# separate model knob so memory distillation can stay on a small inexpensive
+# model while architecture synthesis uses a long-context reviewer such as Kimi.
+ARCHITECTURE_ENABLED = _flag('ZIKRA_ARCHITECTURE_ENABLED', '0')
+ARCHITECTURE_MODEL = os.getenv('ZIKRA_ARCHITECTURE_MODEL', 'kimi-for-coding')
+ARCHITECTURE_PROJECTS = tuple(
+    p.strip().lower() for p in os.getenv('ZIKRA_ARCHITECTURE_PROJECTS', '').split(',')
+    if p.strip()
+)
+ARCHITECTURE_HOUR = int(os.getenv('ZIKRA_ARCHITECTURE_HOUR', '2'))
+ARCHITECTURE_TIMEZONE = os.getenv('ZIKRA_ARCHITECTURE_TIMEZONE', 'America/New_York')
+ARCHITECTURE_SOURCE_LIMIT = int(os.getenv('ZIKRA_ARCHITECTURE_SOURCE_LIMIT', '300'))
+ARCHITECTURE_MAX_SOURCE_CHARS = int(os.getenv('ZIKRA_ARCHITECTURE_MAX_SOURCE_CHARS', '180000'))
+ARCHITECTURE_PROMPT_VERSION = 'architecture-twin-v1'

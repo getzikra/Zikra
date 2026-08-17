@@ -16,6 +16,7 @@ ROLE_PERMISSIONS = {
     'developer': ['create_token', 'get_schema', 'debug_protocol', 'delete_memory'],
     'viewer':    ['save_memory', 'save_prompt', 'save_requirement',
                   'promote_requirement', 'log_run', 'log_error',
+                  'save_decision', 'set_sync_state',
                   'create_token', 'get_schema', 'debug_protocol',
                   'delete_memory'],
 }

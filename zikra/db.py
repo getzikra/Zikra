@@ -1506,3 +1506,357 @@ async def debug_memory_count() -> int:
     async with _aio_db.execute('SELECT COUNT(*) FROM memories') as cur:
         row = await cur.fetchone()
     return row[0] if row else 0
+
+
+# ── Architecture decisions (v1.2.0) ───────────────────────────────────────────
+# Decisions live in memories (memory_type='decision') with status/supersedes_id/
+# environment/evidence columns. Reuses the existing table so search, wikilinks,
+# and the web UI see decisions without any parallel plumbing.
+
+
+async def save_decision(data: dict, embedding: list) -> str:
+    """Upsert a decision; atomically mark supersedes_id as superseded."""
+    if _is_pg:
+        from zikra.db_postgres import save_decision_pg, get_pg_pool
+        return await save_decision_pg(get_pg_pool(), data, embedding)
+    return await _sqlite_save_decision(_aio_db, data, embedding)
+
+
+async def _sqlite_save_decision(db: 'aiosqlite.Connection', data: dict, embedding: list) -> str:
+    memory_id = new_id()
+    vec_bytes = struct.pack(f'{len(embedding)}f', *embedding)
+    project = data['project']
+    module = data['module']
+    title = data['title']
+    content = data.get('content_md') or data.get('content', '')
+    supersedes_id = data.get('supersedes_id')
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        async with db.execute("""
+            SELECT id, module, status, decision_kind
+            FROM memories
+            WHERE title = ? AND memory_type = 'decision' AND project = ?
+        """, [title, project]) as cur:
+            existing = await cur.fetchone()
+
+        if existing:
+            if existing['decision_kind'] != 'architecture':
+                raise ValueError('a non-architecture decision already uses this title')
+            if existing['module'] != module:
+                raise ValueError('an architecture decision title cannot move between modules')
+            if existing['status'] != 'current':
+                raise ValueError('a superseded decision is immutable; save a new titled revision')
+            if supersedes_id:
+                raise ValueError('supersedes_id is only valid when creating a new titled revision')
+
+        if supersedes_id:
+            async with db.execute("""
+                SELECT id FROM memories
+                WHERE id = ? AND project = ? AND module = ?
+                  AND memory_type = 'decision'
+                  AND decision_kind = 'architecture'
+                  AND status = 'current'
+            """, [supersedes_id, project, module]) as cur:
+                target = await cur.fetchone()
+            if not target:
+                raise ValueError('supersedes_id must reference a current architecture decision in the same project and module')
+            async with db.execute("""
+                SELECT id FROM memories
+                WHERE supersedes_id = ? AND decision_kind = 'architecture'
+                LIMIT 1
+            """, [supersedes_id]) as cur:
+                child = await cur.fetchone()
+            if child:
+                raise ValueError('supersedes_id already has a successor')
+
+        await db.execute("""
+            INSERT INTO memories
+                (id, project, module, memory_type, title, content_md,
+                 tags, created_by, searchable, status, supersedes_id,
+                 environment, evidence, decision_kind)
+            VALUES (?, ?, ?, 'decision', ?, ?, ?, ?, 1, 'current', ?, ?, ?, 'architecture')
+            ON CONFLICT(title, memory_type, project) DO UPDATE SET
+                content_md    = excluded.content_md,
+                tags          = excluded.tags,
+                environment   = excluded.environment,
+                evidence      = excluded.evidence,
+                decision_kind = 'architecture',
+                updated_at    = CURRENT_TIMESTAMP
+        """, [
+            memory_id, project, module, title, content,
+            json.dumps(data.get('tags') or []), data.get('created_by'),
+            supersedes_id, data.get('environment'), data.get('evidence'),
+        ])
+
+        async with db.execute("""
+            SELECT rowid, id FROM memories
+            WHERE title = ? AND memory_type = 'decision' AND project = ?
+        """, [title, project]) as cur:
+            row = await cur.fetchone()
+        resolved_id = row['id'] if row else memory_id
+
+        await db.execute("DELETE FROM memories_vec WHERE rowid = ?", [row['rowid']])
+        await db.execute(
+            "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
+            [row['rowid'], vec_bytes]
+        )
+        await db.execute(
+            "INSERT OR REPLACE INTO memories_fts(rowid, title, content_md) VALUES (?, ?, ?)",
+            [row['rowid'], title, content]
+        )
+
+        if supersedes_id:
+            cursor = await db.execute("""
+                UPDATE memories SET status = 'superseded', updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND project = ? AND module = ?
+                  AND memory_type = 'decision'
+                  AND decision_kind = 'architecture'
+                  AND status = 'current'
+            """, [supersedes_id, project, module])
+            if cursor.rowcount != 1:
+                raise ValueError('supersedes_id could not be superseded safely')
+
+        await _store_wikilinks_sqlite(db, resolved_id, content, project)
+        await db.commit()
+        return resolved_id
+    except Exception:
+        await db.rollback()
+        raise
+
+
+async def list_decisions(project: str, module: str = None, environment: str = None,
+                         current_only: bool = True) -> list[dict]:
+    """Decisions for one project (strict scope — never cross-project),
+    newest first. environment filter matches that env plus env-agnostic
+    (NULL) rows, since those apply everywhere."""
+    if _is_pg:
+        from zikra.db_postgres import list_decisions_pg, get_pg_pool
+        return await list_decisions_pg(get_pg_pool(), project, module, environment, current_only)
+
+    cols = """id, title, content_md, project, module, memory_type, decision_kind,
+              status, supersedes_id, environment, evidence,
+              tags, created_by, created_at, updated_at"""
+    sql = f"""SELECT {cols} FROM memories
+              WHERE memory_type = 'decision'
+                AND decision_kind = 'architecture'
+                AND project = ?"""
+    params: list = [project]
+    if current_only:
+        sql += " AND status = 'current'"
+    if module:
+        sql += " AND module = ?"
+        params.append(module)
+    if environment:
+        sql += " AND (environment = ? OR environment IS NULL)"
+        params.append(environment)
+    sql += " ORDER BY created_at DESC"
+    async with _aio_db.execute(sql, params) as cur:
+        rows = await cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+async def get_sync_state(project: str, repo_path: str) -> Optional[dict]:
+    if _is_pg:
+        from zikra.db_postgres import get_sync_state_pg, get_pg_pool
+        return await get_sync_state_pg(get_pg_pool(), project, repo_path)
+
+    async with _aio_db.execute("""
+        SELECT project, repo_path, last_synced_commit, synced_at
+        FROM repo_sync_state WHERE project = ? AND repo_path = ?
+    """, [project, repo_path]) as cur:
+        row = await cur.fetchone()
+    return dict(row) if row else None
+
+
+async def set_sync_state(project: str, repo_path: str, last_synced_commit: str) -> dict:
+    if _is_pg:
+        from zikra.db_postgres import set_sync_state_pg, get_pg_pool
+        return await set_sync_state_pg(get_pg_pool(), project, repo_path, last_synced_commit)
+
+    await _aio_db.execute("""
+        INSERT INTO repo_sync_state (project, repo_path, last_synced_commit, synced_at)
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT (project, repo_path) DO UPDATE SET
+            last_synced_commit = excluded.last_synced_commit,
+            synced_at          = datetime('now')
+    """, [project, repo_path, last_synced_commit])
+    await _aio_db.commit()
+    return await get_sync_state(project, repo_path)
+
+
+# -- Generated architecture snapshots (v1.2.0) -------------------------------
+
+_ARCH_SOURCE_TYPES = (
+    'architecture', 'module', 'stack', 'design_doc', 'index', 'reference',
+    'audit', 'investigation', 'implementation', 'requirement', 'bug',
+    'mockup', 'feedback', 'decision', 'change_log', 'summary', 'note',
+    'diary', 'conversation',
+)
+
+
+async def list_architecture_sources(project: str, limit: int = 300) -> list[dict]:
+    """Return project-scoped source memories in architecture-first order."""
+    if _is_pg:
+        from zikra.db_postgres import list_architecture_sources_pg, get_pg_pool
+        return await list_architecture_sources_pg(get_pg_pool(), project, limit)
+
+    placeholders = ','.join('?' for _ in _ARCH_SOURCE_TYPES)
+    sql = f"""
+        SELECT id, title, content_md, memory_type, project, module, tags,
+               confidence_score, pinned, status, decision_kind, environment,
+               evidence, created_at, updated_at
+        FROM memories
+        WHERE project = ? AND searchable = 1
+          AND memory_type IN ({placeholders})
+          AND (memory_type <> 'decision' OR status = 'current')
+        ORDER BY
+          CASE memory_type
+            WHEN 'architecture' THEN 0 WHEN 'module' THEN 1
+            WHEN 'stack' THEN 2 WHEN 'design_doc' THEN 3
+            WHEN 'index' THEN 4 WHEN 'reference' THEN 5
+            WHEN 'audit' THEN 6 WHEN 'investigation' THEN 7
+            WHEN 'implementation' THEN 8 WHEN 'requirement' THEN 9
+            WHEN 'bug' THEN 10 WHEN 'mockup' THEN 11
+            WHEN 'feedback' THEN 12 WHEN 'decision' THEN 13
+            WHEN 'change_log' THEN 14 WHEN 'summary' THEN 15
+            WHEN 'note' THEN 16 WHEN 'diary' THEN 17 ELSE 18
+          END,
+          pinned DESC, COALESCE(updated_at, created_at) DESC
+        LIMIT ?
+    """
+    params = [project, *_ARCH_SOURCE_TYPES, limit]
+    async with _aio_db.execute(sql, params) as cur:
+        rows = await cur.fetchall()
+    return [dict(row) for row in rows]
+
+
+def _decode_snapshot_row(row) -> Optional[dict]:
+    if not row:
+        return None
+    item = dict(row)
+    raw = item.pop('document_json', '{}')
+    if isinstance(raw, str):
+        try:
+            item['document'] = json.loads(raw)
+        except json.JSONDecodeError:
+            item['document'] = {}
+    else:
+        item['document'] = raw or {}
+    return item
+
+
+async def save_architecture_snapshot(data: dict) -> dict:
+    if _is_pg:
+        from zikra.db_postgres import save_architecture_snapshot_pg, get_pg_pool
+        return await save_architecture_snapshot_pg(get_pg_pool(), data)
+    snapshot_id = data.get('id') or new_id()
+    await _aio_db.execute("""
+        INSERT INTO architecture_snapshots
+            (id, project, environment, status, model, prompt_version, summary,
+             document_json, source_digest, source_count, evidence_coverage,
+             created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, [
+        snapshot_id, data['project'], data.get('environment', 'all'),
+        data.get('status', 'draft'), data.get('model'), data.get('prompt_version'),
+        data.get('summary'), json.dumps(data.get('document') or {}),
+        data.get('source_digest'), int(data.get('source_count') or 0),
+        float(data.get('evidence_coverage') or 0), data.get('created_by'),
+    ])
+    await _aio_db.commit()
+    return await get_architecture_snapshot(data['project'], snapshot_id=snapshot_id)
+
+
+async def get_architecture_snapshot(project: str, environment: str = None,
+                                    snapshot_id: str = None) -> Optional[dict]:
+    if _is_pg:
+        from zikra.db_postgres import get_architecture_snapshot_pg, get_pg_pool
+        return await get_architecture_snapshot_pg(
+            get_pg_pool(), project, environment, snapshot_id)
+    sql = "SELECT * FROM architecture_snapshots WHERE project = ?"
+    params: list = [project]
+    if snapshot_id:
+        sql += " AND id = ?"
+        params.append(snapshot_id)
+    elif environment and environment != 'all':
+        sql += " AND environment IN (?, 'all')"
+        params.append(environment)
+    sql += " ORDER BY generated_at DESC LIMIT 1"
+    async with _aio_db.execute(sql, params) as cur:
+        return _decode_snapshot_row(await cur.fetchone())
+
+
+async def list_architecture_snapshots(project: str, limit: int = 30) -> list[dict]:
+    if _is_pg:
+        from zikra.db_postgres import list_architecture_snapshots_pg, get_pg_pool
+        return await list_architecture_snapshots_pg(get_pg_pool(), project, limit)
+    async with _aio_db.execute("""
+        SELECT id, project, environment, status, model, prompt_version,
+               summary, source_count, evidence_coverage, generated_at,
+               published_at, created_by
+        FROM architecture_snapshots
+        WHERE project = ?
+        ORDER BY generated_at DESC LIMIT ?
+    """, [project, limit]) as cur:
+        return [dict(row) for row in await cur.fetchall()]
+
+
+async def publish_architecture_snapshot(project: str, snapshot_id: str) -> Optional[dict]:
+    if _is_pg:
+        from zikra.db_postgres import publish_architecture_snapshot_pg, get_pg_pool
+        return await publish_architecture_snapshot_pg(get_pg_pool(), project, snapshot_id)
+    await _aio_db.execute("BEGIN IMMEDIATE")
+    try:
+        async with _aio_db.execute("""
+            SELECT environment FROM architecture_snapshots
+            WHERE id = ? AND project = ?
+        """, [snapshot_id, project]) as cur:
+            row = await cur.fetchone()
+        if not row:
+            await _aio_db.rollback()
+            return None
+        await _aio_db.execute("""
+            UPDATE architecture_snapshots SET status = 'archived'
+            WHERE project = ? AND environment = ? AND status = 'published'
+        """, [project, row['environment']])
+        await _aio_db.execute("""
+            UPDATE architecture_snapshots
+            SET status = 'published', published_at = datetime('now')
+            WHERE id = ? AND project = ?
+        """, [snapshot_id, project])
+        await _aio_db.commit()
+    except Exception:
+        await _aio_db.rollback()
+        raise
+    return await get_architecture_snapshot(project, snapshot_id=snapshot_id)
+
+
+async def set_architecture_run_state(project: str, status: str,
+                                     snapshot_id: str = None,
+                                     error: str = None) -> None:
+    if _is_pg:
+        from zikra.db_postgres import set_architecture_run_state_pg, get_pg_pool
+        await set_architecture_run_state_pg(get_pg_pool(), project, status, snapshot_id, error)
+        return
+    await _aio_db.execute("""
+        INSERT INTO architecture_project_state
+            (project, last_run_at, last_status, last_error, last_snapshot_id)
+        VALUES (?, datetime('now'), ?, ?, ?)
+        ON CONFLICT(project) DO UPDATE SET
+            last_run_at = datetime('now'), last_status = excluded.last_status,
+            last_error = excluded.last_error,
+            last_snapshot_id = COALESCE(excluded.last_snapshot_id, last_snapshot_id)
+    """, [project, status, error, snapshot_id])
+    await _aio_db.commit()
+
+
+async def get_architecture_run_state(project: str) -> Optional[dict]:
+    if _is_pg:
+        from zikra.db_postgres import get_architecture_run_state_pg, get_pg_pool
+        return await get_architecture_run_state_pg(get_pg_pool(), project)
+    async with _aio_db.execute("""
+        SELECT project, last_run_at, last_status, last_error, last_snapshot_id
+        FROM architecture_project_state WHERE project = ?
+    """, [project]) as cur:
+        row = await cur.fetchone()
+    return dict(row) if row else None

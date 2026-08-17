@@ -156,6 +156,7 @@ button { cursor: pointer; border: none; background: none; }
   padding: 0 14px;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
 }
 .tab-btn {
   padding: 0 14px; height: 100%;
@@ -696,6 +697,302 @@ body.resizing { cursor: col-resize; user-select: none; }
 }
 .act-table tr:last-child td { border-bottom: none; }
 
+/* ── Architecture Twin ─────────────────────────────────────────── */
+#view-architecture { background: #090a10; }
+#view-architecture.active { display: block; }
+.arch-shell {
+  height: 100%; display: grid; grid-template-rows: auto 39px minmax(0,1fr);
+  overflow: hidden; background:
+    radial-gradient(circle at 76% -20%, rgba(83,74,183,0.12), transparent 34%),
+    var(--bg2);
+}
+.arch-head {
+  min-height: 58px; display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; padding: 9px 14px; background: rgba(12,13,20,0.94);
+  border-bottom: 1px solid var(--border); position: relative;
+}
+.arch-head-main { min-width: 0; display: flex; align-items: center; gap: 11px; }
+.arch-mark {
+  width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
+  color: #b8afff; background: linear-gradient(145deg,rgba(83,74,183,.28),rgba(29,158,117,.1));
+  border: 1px solid rgba(127,119,221,.32); box-shadow: inset 0 1px rgba(255,255,255,.05);
+  flex: 0 0 auto;
+}
+.arch-title { font-size: 14px; font-weight: 650; color: var(--text); line-height: 1.2; }
+.arch-subtitle {
+  margin-top: 3px; color: var(--tmuted); font-size: 10.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 54vw;
+}
+.arch-head-controls { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
+.arch-status-pill, .arch-trust-pill {
+  height: 27px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px;
+  border-radius: 999px; font-size: 10.5px; white-space: nowrap;
+  background: rgba(255,255,255,.035); border: 1px solid var(--border); color: var(--text2);
+}
+.arch-status-pill[data-tone="draft"] { color: #e2b866; border-color: rgba(186,117,23,.38); background: rgba(186,117,23,.1); }
+.arch-status-pill[data-tone="published"] { color: #63c6a7; border-color: rgba(29,158,117,.38); background: rgba(29,158,117,.1); }
+.arch-trust-dot { width: 7px; height: 7px; border-radius: 50%; background: #888780; }
+.arch-trust-pill.good .arch-trust-dot { background: #35b98d; box-shadow: 0 0 8px rgba(53,185,141,.45); }
+.arch-trust-pill.warn .arch-trust-dot { background: #d39a3a; }
+.arch-trust-pill.bad .arch-trust-dot { background: #e15b5b; }
+.arch-select {
+  height: 28px; min-width: 76px; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text2); background: var(--bgsec); padding: 0 24px 0 8px; font-size: 11px;
+  outline: none;
+}
+.arch-icon-btn {
+  min-height: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 0 9px; border: 1px solid var(--border); border-radius: 6px;
+  color: var(--tmuted); background: var(--bgsec); font-size: 11px; transition: .15s ease;
+}
+.arch-icon-btn:hover { color: var(--text); border-color: rgba(127,119,221,.48); background: var(--bgsec2); }
+.arch-icon-btn:disabled { cursor: default; opacity: .42; }
+.arch-icon-btn.arch-generate { color: #b8afff; border-color: rgba(127,119,221,.38); background: rgba(83,74,183,.11); }
+.arch-icon-btn.arch-publish { color: #73d1b4; border-color: rgba(29,158,117,.42); background: rgba(29,158,117,.1); }
+.arch-feedback {
+  display: none; position: absolute; right: 14px; top: calc(100% + 7px); z-index: 20;
+  max-width: min(440px,calc(100vw - 28px)); padding: 8px 11px; border-radius: 7px;
+  color: var(--text2); background: rgba(20,21,42,.97); border: 1px solid var(--border);
+  box-shadow: 0 12px 30px rgba(0,0,0,.38); font-size: 11px; line-height: 1.45;
+}
+.arch-feedback.visible { display: block; }
+.arch-feedback.success { color: #89dec4; border-color: rgba(29,158,117,.45); }
+.arch-feedback.error { color: #ff9a9a; border-color: rgba(225,91,91,.45); }
+.arch-subnav {
+  display: flex; align-items: stretch; gap: 2px; overflow-x: auto; padding: 0 12px;
+  background: rgba(12,13,20,.84); border-bottom: 1px solid var(--border);
+}
+.arch-subtab {
+  position: relative; padding: 0 11px; color: var(--tmuted); font-size: 11.5px; white-space: nowrap;
+}
+.arch-subtab::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; background: transparent; }
+.arch-subtab:hover { color: var(--text2); }
+.arch-subtab.active { color: var(--text); }
+.arch-subtab.active::after { background: #7f77dd; }
+.arch-stage { min-height: 0; overflow: hidden; position: relative; }
+.arch-scroll { height: 100%; overflow-y: auto; padding: 16px; }
+.arch-page { width: min(1420px,100%); margin: 0 auto; }
+.arch-state {
+  height: 100%; min-height: 260px; display: grid; place-items: center; padding: 32px;
+}
+.arch-state-card {
+  width: min(520px,100%); text-align: center; background: rgba(20,21,42,.72);
+  border: 1px solid var(--border); border-radius: 14px; padding: 28px 30px;
+  box-shadow: 0 20px 48px rgba(0,0,0,.22);
+}
+.arch-state-orbit { width: 42px; height: 42px; margin: 0 auto 14px; position: relative; }
+.arch-state-orbit::before, .arch-state-orbit::after {
+  content: ''; position: absolute; inset: 3px; border: 1px solid rgba(127,119,221,.5); border-radius: 50%;
+}
+.arch-state-orbit::after { inset: 13px; background: #7f77dd; border: 0; box-shadow: 0 0 16px rgba(127,119,221,.7); }
+.arch-state.loading .arch-state-orbit::before { border-top-color: transparent; animation: arch-spin 1s linear infinite; }
+.arch-state.error .arch-state-orbit::before { border-color: rgba(225,91,91,.55); }
+.arch-state.error .arch-state-orbit::after { background: #d95b5b; box-shadow: 0 0 16px rgba(217,91,91,.55); }
+@keyframes arch-spin { to { transform: rotate(360deg); } }
+.arch-state-title { color: var(--text); font-size: 15px; font-weight: 650; margin-bottom: 7px; }
+.arch-state-copy { color: var(--tmuted); line-height: 1.6; font-size: 12px; max-width: 50ch; margin: 0 auto; }
+.arch-state-actions { display: flex; justify-content: center; gap: 7px; margin-top: 16px; }
+
+.arch-kicker { color: #9189e8; font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.arch-section-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 11px;
+}
+.arch-section-title { color: var(--text); font-size: 14px; font-weight: 620; margin-top: 3px; }
+.arch-section-note { color: var(--tfaint); font-size: 10.5px; }
+.arch-hero {
+  display: grid; grid-template-columns: minmax(0,1.55fr) minmax(260px,.75fr); gap: 12px; margin-bottom: 12px;
+}
+.arch-hero-main, .arch-truth-card, .arch-card {
+  border: 1px solid var(--border); border-radius: 12px; background: rgba(20,21,42,.7);
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+}
+.arch-hero-main { padding: 20px; overflow: hidden; position: relative; }
+.arch-hero-main::after {
+  content: ''; position: absolute; width: 220px; height: 220px; right: -110px; top: -125px;
+  border: 1px solid rgba(127,119,221,.2); border-radius: 50%; box-shadow: 0 0 0 28px rgba(127,119,221,.025),0 0 0 56px rgba(127,119,221,.018);
+}
+.arch-hero-title { color: var(--text); font-size: 21px; font-weight: 650; letter-spacing: -.02em; margin: 5px 0 7px; }
+.arch-hero-copy { color: var(--text2); font-size: 12px; line-height: 1.65; max-width: 76ch; position: relative; z-index: 1; }
+.arch-hero-meta { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; position: relative; z-index: 1; }
+.arch-chip {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 23px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: 999px; color: var(--tmuted); background: rgba(9,10,16,.45); font-size: 10px;
+}
+.arch-truth-card { padding: 17px; display: flex; flex-direction: column; justify-content: space-between; }
+.arch-truth-score { display: flex; align-items: baseline; gap: 5px; margin: 6px 0; }
+.arch-truth-score b { color: var(--text); font-size: 31px; line-height: 1; font-weight: 650; font-variant-numeric: tabular-nums; }
+.arch-truth-score span { color: var(--tmuted); font-size: 11px; }
+.arch-progress { height: 5px; border-radius: 999px; background: rgba(255,255,255,.06); overflow: hidden; }
+.arch-progress > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#534AB7,#35b98d); }
+.arch-truth-meta { color: var(--tfaint); font-size: 10.5px; line-height: 1.5; margin-top: 9px; }
+.arch-metrics { display: grid; grid-template-columns: repeat(5,minmax(118px,1fr)); gap: 8px; margin-bottom: 14px; }
+.arch-metric { border: 1px solid var(--border); border-radius: 10px; padding: 12px 13px; background: rgba(12,13,20,.65); }
+.arch-metric-label { color: var(--tfaint); font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; }
+.arch-metric-value { color: var(--text); font-size: 19px; font-weight: 620; margin-top: 5px; font-variant-numeric: tabular-nums; }
+.arch-metric-foot { color: var(--tmuted); font-size: 10px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arch-overview-grid { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(280px,.75fr); gap: 12px; }
+.arch-card { overflow: hidden; }
+.arch-card-head { display: flex; align-items: center; justify-content: space-between; padding: 11px 13px; border-bottom: 1px solid var(--border); }
+.arch-card-title { color: var(--text2); font-size: 11.5px; font-weight: 600; }
+.arch-card-body { padding: 12px 13px; }
+.arch-mini-map { height: 315px; padding: 0; background: linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px); background-size: 24px 24px; }
+.arch-list { display: flex; flex-direction: column; }
+.arch-list-row { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 9px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.arch-list-row:first-child { padding-top: 0; }
+.arch-list-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.arch-list-icon { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: #9f98e8; background: rgba(83,74,183,.14); border: 1px solid rgba(83,74,183,.22); font-size: 10px; }
+.arch-list-title { color: var(--text2); font-size: 11px; line-height: 1.35; }
+.arch-list-copy { color: var(--tfaint); font-size: 10px; line-height: 1.45; margin-top: 2px; }
+.arch-tone { align-self: center; font-size: 9px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; border-radius: 999px; padding: 3px 6px; color: var(--tmuted); border: 1px solid var(--border); }
+.arch-tone.critical, .arch-tone.removed { color: #ff8585; border-color: rgba(225,91,91,.35); background: rgba(225,91,91,.08); }
+.arch-tone.warning, .arch-tone.changed, .arch-tone.drift { color: #e2b866; border-color: rgba(186,117,23,.35); background: rgba(186,117,23,.08); }
+.arch-tone.added, .arch-tone.good, .arch-tone.resolved { color: #63c6a7; border-color: rgba(29,158,117,.35); background: rgba(29,158,117,.08); }
+
+.arch-model-layout { height: 100%; min-height: 0; display: grid; grid-template-columns: 220px minmax(340px,1fr) 318px; }
+.arch-rail, .arch-inspector { background: rgba(12,13,20,.82); overflow-y: auto; min-width: 0; }
+.arch-rail { border-right: 1px solid var(--border); padding: 12px 9px; }
+.arch-inspector { border-left: 1px solid var(--border); }
+.arch-rail-label { color: var(--tfaint); font-size: 9px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; padding: 3px 7px 7px; }
+.arch-view-btn {
+  width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 7px 8px;
+  color: var(--tmuted); border-radius: 6px; font-size: 11px; margin-bottom: 2px;
+}
+.arch-view-btn:hover, .arch-view-btn.active { color: var(--text); background: var(--bgsec); }
+.arch-view-btn-dot { width: 7px; height: 7px; border-radius: 2px; background: #7f77dd; flex: 0 0 auto; }
+.arch-tree-row {
+  width: 100%; display: flex; align-items: center; gap: 6px; text-align: left; padding: 5px 7px;
+  color: var(--tmuted); border-radius: 5px; font-size: 10.5px; overflow: hidden;
+}
+.arch-tree-row:hover, .arch-tree-row.active { background: rgba(83,74,183,.12); color: var(--text); }
+.arch-tree-kind { width: 16px; color: var(--tfaint); text-transform: uppercase; font-size: 8px; flex: 0 0 auto; }
+.arch-tree-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arch-canvas-col { min-width: 0; min-height: 0; display: grid; grid-template-rows: 39px minmax(0,1fr) 29px; }
+.arch-canvas-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; border-bottom: 1px solid var(--border); background: rgba(9,10,16,.72); }
+.arch-breadcrumb { display: flex; align-items: center; min-width: 0; overflow: hidden; }
+.arch-crumb { color: var(--tmuted); font-size: 10.5px; white-space: nowrap; padding: 3px 5px; border-radius: 4px; }
+button.arch-crumb:hover { color: var(--text); background: var(--bgsec); }
+.arch-crumb-sep { color: var(--tfaint); font-size: 9px; }
+.arch-canvas-tools { display: flex; align-items: center; gap: 5px; }
+.arch-canvas {
+  min-width: 0; min-height: 0; overflow: auto; position: relative;
+  background-color: #090a10;
+  background-image: radial-gradient(rgba(126,125,160,.17) .65px,transparent .65px);
+  background-size: 18px 18px;
+}
+.arch-canvas > svg { display: block; min-width: 100%; min-height: 100%; }
+.arch-canvas-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 10px; border-top: 1px solid var(--border); color: var(--tfaint); font-size: 9.5px; background: rgba(12,13,20,.72); }
+.arch-legend { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+.arch-legend > span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.arch-legend i { width: 8px; height: 6px; display: inline-block; border-radius: 2px; border: 1px solid currentColor; }
+.arch-svg .arch-edge { fill: none; stroke: #50536d; stroke-width: 1.25; opacity: .72; marker-end: url(#arch-arrow); }
+.arch-svg .arch-edge.is-dim { opacity: .1; }
+.arch-svg .arch-edge-label { fill: #777992; font-size: 9px; paint-order: stroke; stroke: #090a10; stroke-width: 4px; stroke-linejoin: round; }
+.arch-svg .arch-node { cursor: pointer; outline: none; }
+.arch-svg .arch-node-card { fill: #15162a; stroke: #343650; stroke-width: 1; rx: 9; }
+.arch-svg .arch-node:hover .arch-node-card, .arch-svg .arch-node:focus .arch-node-card { stroke: #7f77dd; filter: url(#arch-glow); }
+.arch-svg .arch-node.is-selected .arch-node-card { stroke: #a89ff7; stroke-width: 1.8; filter: url(#arch-glow); }
+.arch-svg .arch-node.is-dim { opacity: .22; }
+.arch-svg .arch-node.is-active .arch-node-card { stroke: #35b98d; stroke-width: 2; filter: url(#arch-flow-glow); }
+.arch-svg .arch-node.external .arch-node-card { fill: #11121c; stroke-dasharray: 5 3; }
+.arch-svg .arch-node.deployment_node .arch-node-card, .arch-svg .arch-node.host .arch-node-card { fill: #111827; stroke: #355071; }
+.arch-svg .arch-node.store .arch-node-card, .arch-svg .arch-node.database .arch-node-card { fill: #201a13; stroke: #715729; }
+.arch-svg .arch-node-top { fill: #7f77dd; opacity: .9; }
+.arch-svg .arch-node.external .arch-node-top { fill: #777992; }
+.arch-svg .arch-node.store .arch-node-top, .arch-svg .arch-node.database .arch-node-top { fill: #c68a2d; }
+.arch-svg .arch-node.deployment_node .arch-node-top, .arch-svg .arch-node.host .arch-node-top { fill: #3c82b9; }
+.arch-svg .arch-node-kind { fill: #9293ad; font-size: 8px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+.arch-svg .arch-node-title { fill: #efedff; font-size: 12px; font-weight: 650; }
+.arch-svg .arch-node-desc { fill: #8d8fa8; font-size: 9px; }
+.arch-svg .arch-node-tech { fill: #aaa7c6; font-size: 8px; }
+.arch-svg .arch-node-confidence { fill: #090a10; stroke-width: 2; }
+.arch-svg .arch-node-expand { fill: #8d87d9; font-size: 9px; font-weight: 700; }
+.arch-inspector-empty { min-height: 100%; display: grid; place-items: center; padding: 26px; color: var(--tmuted); text-align: center; font-size: 11px; line-height: 1.55; }
+.arch-inspector-head { padding: 15px 15px 12px; border-bottom: 1px solid var(--border); }
+.arch-inspector-kind { display: flex; align-items: center; justify-content: space-between; gap: 7px; }
+.arch-inspector-title { color: var(--text); font-size: 16px; font-weight: 650; line-height: 1.3; margin: 8px 0 4px; }
+.arch-inspector-copy { color: var(--tmuted); font-size: 11px; line-height: 1.55; }
+.arch-inspector-body { padding: 13px 15px 20px; }
+.arch-field { margin-bottom: 14px; }
+.arch-field-label { color: var(--tfaint); font-size: 8.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 5px; }
+.arch-field-value { color: var(--text2); font-size: 10.5px; line-height: 1.5; }
+.arch-dep-row { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 7px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.arch-dep-dir { color: #8d87d9; font-size: 10px; }
+.arch-dep-name { color: var(--text2); font-size: 10.5px; }
+.arch-dep-meta { color: var(--tfaint); font-size: 9px; margin-top: 2px; }
+.arch-evidence-row { border-left: 2px solid #534AB7; padding: 5px 0 5px 8px; margin-bottom: 7px; }
+.arch-evidence-title { color: var(--text2); font-size: 10px; word-break: break-word; }
+.arch-evidence-meta { color: var(--tfaint); font-size: 9px; margin-top: 2px; }
+
+.arch-flow-layout { height: 100%; display: grid; grid-template-columns: 260px minmax(0,1fr); min-height: 0; }
+.arch-flow-list { border-right: 1px solid var(--border); background: rgba(12,13,20,.82); padding: 10px; overflow-y: auto; }
+.arch-flow-card { width: 100%; text-align: left; border: 1px solid transparent; border-radius: 7px; padding: 9px 10px; margin-bottom: 5px; color: var(--text2); background: rgba(20,21,42,.45); }
+.arch-flow-card:hover, .arch-flow-card.active { background: var(--bgsec); border-color: var(--border); }
+.arch-flow-name { font-size: 11px; font-weight: 600; }
+.arch-flow-meta { color: var(--tfaint); font-size: 9.5px; margin-top: 3px; }
+.arch-flow-main { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0,1fr) auto; }
+.arch-flow-head { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.arch-flow-head h2 { font-size: 14px; color: var(--text); margin: 0; }
+.arch-flow-head p { font-size: 10.5px; color: var(--tmuted); margin-top: 4px; }
+.arch-flow-controls { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px; border-top: 1px solid var(--border); background: rgba(12,13,20,.82); }
+.arch-step-copy { min-width: 260px; max-width: 660px; color: var(--text2); font-size: 10.5px; text-align: center; line-height: 1.4; }
+.arch-step-no { color: #9f98e8; font-weight: 700; }
+
+.arch-document { width: min(1060px,100%); margin: 0 auto; }
+.arch-doc-hero { border-bottom: 1px solid var(--border); padding: 8px 0 19px; margin-bottom: 22px; }
+.arch-doc-title { font-size: 25px; color: var(--text); letter-spacing: -.025em; margin: 4px 0 7px; }
+.arch-doc-meta { color: var(--tmuted); font-size: 10.5px; display: flex; flex-wrap: wrap; gap: 12px; }
+.arch-doc-section { margin: 0 0 28px; }
+.arch-doc-section > h2 { color: var(--text); font-size: 16px; margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.arch-doc-section > p { color: var(--text2); font-size: 11.5px; line-height: 1.7; margin-bottom: 10px; }
+.arch-table-wrap { border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+.arch-table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+.arch-table th { color: var(--tfaint); background: var(--bgsec); font-size: 8.5px; text-transform: uppercase; letter-spacing: .08em; text-align: left; padding: 8px 10px; }
+.arch-table td { color: var(--text2); padding: 8px 10px; border-top: 1px solid var(--border); vertical-align: top; line-height: 1.45; }
+.arch-decision-card, .arch-change-card {
+  border: 1px solid var(--border); border-radius: 9px; background: rgba(20,21,42,.6); padding: 13px 14px; margin-bottom: 8px;
+}
+.arch-decision-top, .arch-change-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.arch-decision-title, .arch-change-title { color: var(--text); font-size: 12px; font-weight: 620; }
+.arch-decision-meta, .arch-change-meta { color: var(--tfaint); font-size: 9.5px; margin-top: 4px; }
+.arch-decision-body, .arch-change-body { color: var(--text2); font-size: 10.5px; line-height: 1.6; margin-top: 9px; }
+.arch-snapshot-line { position: relative; padding-left: 20px; margin-left: 5px; border-left: 1px solid #343650; padding-bottom: 14px; }
+.arch-snapshot-line::before { content: ''; position: absolute; left: -4px; top: 4px; width: 7px; height: 7px; border-radius: 50%; background: #7f77dd; box-shadow: 0 0 0 3px #111224; }
+.arch-snapshot-line:last-child { padding-bottom: 0; }
+.arch-snapshot-name { color: var(--text2); font-size: 11px; }
+.arch-snapshot-meta { color: var(--tfaint); font-size: 9.5px; margin-top: 2px; }
+.arch-two-col { display: grid; grid-template-columns: minmax(0,1.5fr) minmax(260px,.7fr); gap: 12px; }
+.arch-empty-inline { color: var(--tmuted); text-align: center; padding: 34px 18px; font-size: 11px; line-height: 1.55; }
+
+@media (max-width: 1050px) {
+  .arch-model-layout { grid-template-columns: 190px minmax(330px,1fr); }
+  .arch-inspector { position: absolute; z-index: 8; right: 0; top: 0; bottom: 0; width: min(340px,88vw); box-shadow: -12px 0 28px rgba(0,0,0,.35); }
+  .arch-inspector:has(.arch-inspector-empty) { display: none; }
+  .arch-metrics { grid-template-columns: repeat(3,1fr); }
+}
+@media (max-width: 760px) {
+  .arch-shell { grid-template-rows: auto 39px minmax(0,1fr); }
+  .arch-head { align-items: flex-start; flex-direction: column; }
+  .arch-head-controls { justify-content: flex-start; }
+  .arch-subtitle { max-width: 88vw; }
+  .arch-hero, .arch-overview-grid, .arch-two-col { grid-template-columns: 1fr; }
+  .arch-metrics { grid-template-columns: repeat(2,1fr); }
+  .arch-model-layout { grid-template-columns: 1fr; }
+  .arch-rail { display: none; }
+  .arch-flow-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr); }
+  .arch-flow-list { border-right: 0; border-bottom: 1px solid var(--border); display: flex; gap: 5px; overflow-x: auto; }
+  .arch-flow-card { min-width: 190px; }
+}
+@media print {
+  body.arch-printing { overflow: visible; background: white; color: #111; }
+  body.arch-printing .app-shell > .topbar,
+  body.arch-printing .app-shell > .tabbar,
+  body.arch-printing .arch-head,
+  body.arch-printing .arch-subnav { display: none !important; }
+  body.arch-printing .app-shell, body.arch-printing .main-area, body.arch-printing .body,
+  body.arch-printing #view-architecture, body.arch-printing .arch-shell,
+  body.arch-printing .arch-stage, body.arch-printing .arch-scroll { position: static; display: block; height: auto; overflow: visible; background: white; }
+}
+
 /* scrollbar styling */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -765,6 +1062,7 @@ body.resizing { cursor: col-resize; user-select: none; }
   <nav class="tabbar">
     <button class="tab-btn active" data-tab="search">Search</button>
     <button class="tab-btn" data-tab="graph">Graph</button>
+    <button class="tab-btn" data-tab="architecture">Architecture</button>
     <button class="tab-btn" data-tab="activity">Activity</button>
     <button class="tab-btn" data-tab="prompts">Prompts</button>
     <button class="tab-btn" data-tab="requirements">Requirements</button>
@@ -819,6 +1117,59 @@ body.resizing { cursor: col-resize; user-select: none; }
         <div class="gndp" id="graph-node-detail"></div>
         <div class="graph-legend" id="graph-legend"></div>
         <div class="graph-stats" id="graph-stats"></div>
+      </div>
+
+      <!-- ARCHITECTURE TAB -->
+      <div class="tab-view" id="view-architecture">
+        <div class="arch-shell">
+          <header class="arch-head">
+            <div class="arch-head-main">
+              <div class="arch-mark" aria-hidden="true">
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="3" width="7" height="6" rx="1.5"/><rect x="8.5" y="15" width="7" height="6" rx="1.5"/><path d="M6.5 9v3h11V9M12 12v3"/>
+                </svg>
+              </div>
+              <div>
+                <div class="arch-title">Architecture Twin</div>
+                <div class="arch-subtitle" id="arch-subtitle">A current, evidence-backed map of this project</div>
+              </div>
+            </div>
+            <div class="arch-head-controls">
+              <div class="arch-status-pill" id="arch-snapshot-pill" data-tone="none">No snapshot</div>
+              <div class="arch-trust-pill" id="arch-trust-pill" title="Evidence coverage and freshness">
+                <span class="arch-trust-dot"></span><span id="arch-trust-text">Unverified</span>
+              </div>
+              <select class="arch-select" id="arch-environment" aria-label="Architecture environment">
+                <option value="all">All environments</option>
+                <option value="prod">Production</option>
+                <option value="dev">Development</option>
+              </select>
+              <button class="arch-icon-btn arch-generate" id="arch-generate" style="display:none">Generate draft</button>
+              <button class="arch-icon-btn arch-publish" id="arch-publish" style="display:none">Publish</button>
+              <button class="arch-icon-btn" id="arch-refresh" title="Refresh architecture">Refresh</button>
+              <button class="arch-icon-btn" id="arch-export-json" title="Download structured architecture JSON">Export JSON</button>
+            </div>
+            <div class="arch-feedback" id="arch-feedback" role="status" aria-live="polite"></div>
+          </header>
+          <nav class="arch-subnav" aria-label="Architecture views">
+            <button class="arch-subtab active" data-arch-view="overview">Overview</button>
+            <button class="arch-subtab" data-arch-view="model">Model</button>
+            <button class="arch-subtab" data-arch-view="runtime">Runtime</button>
+            <button class="arch-subtab" data-arch-view="flows">Flows</button>
+            <button class="arch-subtab" data-arch-view="decisions">Decisions</button>
+            <button class="arch-subtab" data-arch-view="changes">Changes</button>
+            <button class="arch-subtab" data-arch-view="report">Report</button>
+          </nav>
+          <main class="arch-stage" id="arch-stage" aria-live="polite">
+            <div class="arch-state">
+              <div class="arch-state-card">
+                <div class="arch-state-orbit"></div>
+                <div class="arch-state-title">Connect to view architecture</div>
+                <div class="arch-state-copy">Choose a project and connect to load its current architecture model, evidence, decisions, and nightly changes.</div>
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
 
       <!-- ACTIVITY TAB -->
@@ -1017,6 +1368,14 @@ const S = {
   // Caches avoid rebuilding nodeMap/activeSet every frame.
   gAlpha: 0, gNeedsDraw: false,
   gActive: [], gActiveSet: new Set(), gNodeMap: {},
+
+  // architecture twin
+  architecture: null, archProject: null,
+  archEnvironment: 'all', archView: 'overview',
+  archLoading: false, archError: '', archRequestKey: '',
+  archAction: null, archFeedbackTimer: null, archPollToken: 0,
+  archSelectedNodeId: null, archScopeId: null,
+  archSelectedFlowId: null, archFlowStep: 0,
 
   // activity
   activity: null, tokenUsage: [],
@@ -1501,6 +1860,7 @@ function switchTab(name) {
     startGraphTab();
   } else {
     stopGraphSim();
+    if (name === 'architecture') renderArchitecture();
   }
 }
 
@@ -1509,6 +1869,7 @@ function reloadActiveTab() {
   switch (S.activeTab) {
     case 'search':      loadSearch(document.getElementById('search-query').value || '*'); break;
     case 'graph':       loadGraph(); break;
+    case 'architecture': loadArchitecture(); break;
     case 'activity':    loadActivity(); break;
     case 'prompts':     loadPrompts(); break;
     case 'requirements': loadRequirements(); break;
@@ -2353,6 +2714,820 @@ function closeNodeDetail() {
   });
 })();
 
+// ── Architecture Twin ─────────────────────────────────────────────
+// Every architecture view is derived from one structured response. The UI
+// never accepts generated HTML or model-provided coordinates.
+function archArray(v) { return Array.isArray(v) ? v : []; }
+
+function archPercent(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n <= 1 ? n * 100 : n));
+}
+
+function archShort(v, max = 80) {
+  const s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
+
+function archKind(n) {
+  return String((n && (n.kind || n.type)) || 'component').toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function archKindLabel(kind) {
+  const labels = {
+    person: 'Person', actor: 'Person', system: 'Software system', software_system: 'Software system',
+    container: 'Container', component: 'Component', store: 'Data store', database: 'Data store',
+    external: 'External system', deployment_node: 'Deployment node', host: 'Host',
+    infrastructure: 'Infrastructure', service: 'Service'
+  };
+  return labels[kind] || kind.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+}
+
+function archTone(v) {
+  const s = String(v || '').toLowerCase();
+  if (/(critical|error|failed|removed|rejected|contradiction)/.test(s)) return 'critical';
+  if (/(warning|warn|changed|draft|drift|gap|stale|unknown|unverified)/.test(s)) return 'warning';
+  if (/(added|good|published|current|active|accepted|resolved|verified)/.test(s)) return 'good';
+  return '';
+}
+
+function archFreshness(raw) {
+  if (!raw) return { label: 'Never verified', days: Infinity, tone: 'bad' };
+  const d = parseUTCDate(raw);
+  if (!d || Number.isNaN(d.getTime())) return { label: 'Unknown freshness', days: Infinity, tone: 'bad' };
+  const days = Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+  if (days === 0) return { label: 'Verified today', days, tone: 'good' };
+  if (days === 1) return { label: 'Verified yesterday', days, tone: 'good' };
+  if (days <= 7) return { label: `Verified ${days} days ago`, days, tone: 'good' };
+  if (days <= 30) return { label: `Verified ${days} days ago`, days, tone: 'warn' };
+  return { label: `Stale · ${days} days`, days, tone: 'bad' };
+}
+
+function archDataHasContent(data) {
+  return !!(data && (data.snapshot || archArray(data.nodes).length || archArray(data.edges).length ||
+    archArray(data.flows).length || archArray(data.decisions).length || archArray(data.changes).length ||
+    archArray(data.findings).length || archArray(data.snapshots).length));
+}
+
+function archNodeMap() {
+  return Object.fromEntries(archArray(S.architecture && S.architecture.nodes).map(n => [String(n.id), n]));
+}
+
+function archChildren(id) {
+  const sid = String(id);
+  return archArray(S.architecture && S.architecture.nodes).filter(n => n.parent != null && String(n.parent) === sid);
+}
+
+function archSnapshot() { return (S.architecture && S.architecture.snapshot) || null; }
+
+function archCanAuthor() { return S.role === 'owner' || S.role === 'admin'; }
+
+function showArchitectureFeedback(message, tone = '') {
+  const el = document.getElementById('arch-feedback');
+  if (!el) return;
+  if (S.archFeedbackTimer) { clearTimeout(S.archFeedbackTimer); S.archFeedbackTimer = null; }
+  el.textContent = archShort(message, 260);
+  el.className = `arch-feedback visible${tone ? ' ' + tone : ''}`;
+  S.archFeedbackTimer = setTimeout(() => {
+    el.className = 'arch-feedback';
+    el.textContent = '';
+    S.archFeedbackTimer = null;
+  }, tone === 'error' ? 9000 : 6000);
+}
+
+async function architectureApiPost(path, body) {
+  try {
+    const res = await fetch(baseUrl() + path, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (res.status === 401) { handle401(); return { ok: false, error: 'Your session has expired. Sign in and try again.' }; }
+    let payload = null;
+    try { payload = await res.json(); } catch (_) {}
+    if (res.status === 403) return { ok: false, error: 'This account cannot generate or publish architecture snapshots.' };
+    const payloadText = payload ? JSON.stringify(payload).toLowerCase() : '';
+    if (res.status === 409 && path.endsWith('/generate') && payloadText.includes('running')) {
+      return { ok: true, data: payload || { status: 'already_running' } };
+    }
+    if (!res.ok) {
+      const detail = payload && (payload.detail || payload.error || payload.message);
+      return { ok: false, error: typeof detail === 'string' ? archShort(detail, 220) : `Architecture request failed (${res.status}).` };
+    }
+    return { ok: true, data: payload || {} };
+  } catch (_) {
+    return { ok: false, error: 'Cannot reach the architecture service. Check the connection and try again.' };
+  }
+}
+
+function updateArchitectureHeader() {
+  const subtitle = document.getElementById('arch-subtitle');
+  const pill = document.getElementById('arch-snapshot-pill');
+  const trust = document.getElementById('arch-trust-pill');
+  const trustText = document.getElementById('arch-trust-text');
+  const exportBtn = document.getElementById('arch-export-json');
+  const generateBtn = document.getElementById('arch-generate');
+  const publishBtn = document.getElementById('arch-publish');
+  const refreshBtn = document.getElementById('arch-refresh');
+  const environment = document.getElementById('arch-environment');
+  if (!subtitle || !pill || !trust || !trustText) return;
+  subtitle.textContent = S.project === 'global'
+    ? 'Global architecture scope · select a project to view its architecture'
+    : `Current architecture for ${S.project} · ${S.archEnvironment === 'all' ? 'all environments' : S.archEnvironment}`;
+  const snap = archSnapshot();
+  const canAuthor = archCanAuthor();
+  const busy = !!S.archAction;
+  const isDraft = !!(snap && snap.id != null && String(snap.status || '').toLowerCase() === 'draft');
+  if (generateBtn) {
+    generateBtn.style.display = canAuthor ? 'inline-flex' : 'none';
+    generateBtn.disabled = busy || S.archLoading || !S.connected;
+    generateBtn.textContent = S.archAction === 'generating' ? 'Generating…' : 'Generate draft';
+  }
+  if (publishBtn) {
+    publishBtn.style.display = canAuthor && isDraft ? 'inline-flex' : 'none';
+    publishBtn.disabled = busy || S.archLoading || !S.connected;
+    publishBtn.textContent = S.archAction === 'publishing' ? 'Publishing…' : 'Publish';
+  }
+  if (refreshBtn) refreshBtn.disabled = busy || S.archLoading;
+  if (environment) environment.disabled = busy || S.archLoading;
+  pill.className = 'arch-status-pill';
+  trust.className = 'arch-trust-pill';
+  if (S.archLoading) {
+    pill.textContent = 'Loading snapshot…';
+    pill.dataset.tone = 'none';
+    trustText.textContent = 'Checking evidence';
+    if (exportBtn) exportBtn.disabled = true;
+    return;
+  }
+  if (!snap) {
+    pill.textContent = 'No snapshot';
+    pill.dataset.tone = 'none';
+    trustText.textContent = 'Unverified';
+    if (exportBtn) exportBtn.disabled = busy || !archDataHasContent(S.architecture);
+    return;
+  }
+  const status = String(snap.status || 'draft');
+  pill.textContent = `${status.replace(/^./, c => c.toUpperCase())} · ${fmtDate(snap.generated_at)}`;
+  pill.dataset.tone = status.toLowerCase() === 'published' ? 'published' : 'draft';
+  const coverage = archPercent(snap.evidence_coverage);
+  const fresh = archFreshness(snap.generated_at);
+  const trustTone = coverage >= 75 && fresh.days <= 7 ? 'good' : coverage >= 40 && fresh.days <= 30 ? 'warn' : 'bad';
+  trust.classList.add(trustTone);
+  trustText.textContent = `${Math.round(coverage)}% evidence · ${fresh.label}`;
+  if (exportBtn) exportBtn.disabled = busy;
+}
+
+function archStateMarkup(kind, title, copy, action) {
+  return `<div class="arch-state ${esc(kind || '')}"><div class="arch-state-card">
+    <div class="arch-state-orbit"></div><div class="arch-state-title">${esc(title)}</div>
+    <div class="arch-state-copy">${esc(copy)}</div>
+    ${action ? `<div class="arch-state-actions"><button class="arch-icon-btn" id="arch-state-action">${esc(action)}</button></div>` : ''}
+  </div></div>`;
+}
+
+function renderArchitecture() {
+  updateArchitectureHeader();
+  const stage = document.getElementById('arch-stage');
+  if (!stage) return;
+  if (!S.connected) {
+    stage.innerHTML = archStateMarkup('', 'Connect to view architecture',
+      'Choose a project and connect to load its current architecture model, evidence, decisions, and nightly changes.');
+    return;
+  }
+  if (S.archLoading) {
+    stage.innerHTML = archStateMarkup('loading', `Mapping ${S.project}`,
+      'Loading the current snapshot, model, flows, evidence, decisions, and detected changes.');
+    return;
+  }
+  if (S.archError) {
+    stage.innerHTML = archStateMarkup('error', 'Architecture could not be loaded', S.archError, 'Try again');
+    document.getElementById('arch-state-action')?.addEventListener('click', () => loadArchitecture(true));
+    return;
+  }
+  if (!archDataHasContent(S.architecture)) {
+    const isGlobal = S.project === 'global';
+    const canDraft = S.role === 'owner' || S.role === 'admin';
+    const projectCopy = canDraft
+      ? 'No draft exists yet. As an owner, you can generate the first evidence-backed draft with the architecture worker, review it here, and publish it when it is ready.'
+      : 'Only published snapshots are visible to your account. Ask an owner to generate, review, and publish the first evidence-backed architecture draft.';
+    stage.innerHTML = archStateMarkup('',
+      isGlobal ? 'No global architecture snapshot' : `No architecture snapshot for ${S.project}`,
+      isGlobal
+        ? (canDraft
+          ? 'Select a project to view its architecture, or generate an explicit global landscape draft for this scope and publish it after review.'
+          : 'Select a project to view its published architecture, or ask an owner to generate and publish an explicit global landscape.')
+        : projectCopy,
+      'Refresh');
+    document.getElementById('arch-state-action')?.addEventListener('click', () => loadArchitecture(true));
+    return;
+  }
+  switch (S.archView) {
+    case 'model':     renderArchitectureDiagramView('model'); break;
+    case 'runtime':   renderArchitectureDiagramView('runtime'); break;
+    case 'flows':     renderArchitectureFlows(); break;
+    case 'decisions': renderArchitectureDecisions(); break;
+    case 'changes':   renderArchitectureChanges(); break;
+    case 'report':    renderArchitectureReport(); break;
+    default:          renderArchitectureOverview();
+  }
+}
+
+async function loadArchitecture(force = false) {
+  if (!S.connected) { renderArchitecture(); return; }
+  const requestKey = `${S.project}|${S.archEnvironment}|${Date.now()}`;
+  S.archRequestKey = requestKey;
+  S.archLoading = true;
+  S.archError = '';
+  if (force || S.archProject !== S.project) {
+    S.archSelectedNodeId = null;
+    S.archScopeId = null;
+    S.archSelectedFlowId = null;
+    S.archFlowStep = 0;
+  }
+  renderArchitecture();
+  const res = await apiGet('/api/ui/architecture', { environment: S.archEnvironment });
+  if (S.archRequestKey !== requestKey) return;
+  S.archLoading = false;
+  if (!res || res.error) {
+    S.architecture = null;
+    S.archProject = S.project;
+    S.archError = res && res.error ? String(res.error)
+      : 'The architecture endpoint did not return a snapshot. Confirm the architecture API is enabled, then try again.';
+    renderArchitecture();
+    return;
+  }
+  S.architecture = {
+    ...res, project: res.project || S.project,
+    nodes: archArray(res.nodes), edges: archArray(res.edges), flows: archArray(res.flows),
+    decisions: archArray(res.decisions), changes: archArray(res.changes), findings: archArray(res.findings),
+    snapshots: archArray(res.snapshots)
+  };
+  S.archProject = S.project;
+  S.archError = '';
+  const nodeIds = new Set(S.architecture.nodes.map(n => String(n.id)));
+  if (S.archSelectedNodeId && !nodeIds.has(String(S.archSelectedNodeId))) S.archSelectedNodeId = null;
+  if (S.archScopeId && !nodeIds.has(String(S.archScopeId))) S.archScopeId = null;
+  const flowIds = new Set(S.architecture.flows.map((f, i) => String(f.id != null ? f.id : i)));
+  if (!S.archSelectedFlowId || !flowIds.has(String(S.archSelectedFlowId))) {
+    const f = S.architecture.flows[0];
+    S.archSelectedFlowId = f ? String(f.id != null ? f.id : 0) : null;
+    S.archFlowStep = 0;
+  }
+  renderArchitecture();
+}
+
+async function generateArchitectureDraft() {
+  if (!archCanAuthor() || !S.connected || S.archAction) return;
+  const project = S.project;
+  const environment = S.archEnvironment;
+  const pollToken = ++S.archPollToken;
+  S.archAction = 'generating';
+  updateArchitectureHeader();
+  const result = await architectureApiPost('/api/ui/architecture/generate', { project, environment });
+  if (!result.ok) {
+    S.archAction = null;
+    updateArchitectureHeader();
+    showArchitectureFeedback(result.error, 'error');
+    return;
+  }
+  const initialStatus = architectureRunStatus(result.data);
+  if (architectureRunFailed(initialStatus)) {
+    S.archAction = null;
+    updateArchitectureHeader();
+    showArchitectureFeedback(architectureRunError(result.data) || 'Architecture generation failed to start.', 'error');
+    await loadArchitecture(true);
+    return;
+  }
+  if (architectureRunSucceeded(initialStatus)) {
+    S.archAction = null;
+    updateArchitectureHeader();
+    await loadArchitecture(true);
+    showArchitectureFeedback(`Architecture draft generated for ${project}.`, 'success');
+    return;
+  }
+  const alreadyRunning = initialStatus.includes('running');
+  showArchitectureFeedback(alreadyRunning
+    ? `Architecture generation is already running for ${project}. Waiting for it to finish…`
+    : `Architecture generation started for ${project}. Waiting for the draft…`);
+  const outcome = await pollArchitectureGeneration(project, environment, pollToken);
+  if (outcome.status === 'cancelled') {
+    S.archAction = null;
+    updateArchitectureHeader();
+    return;
+  }
+  S.archAction = null;
+  updateArchitectureHeader();
+  await loadArchitecture(true);
+  if (outcome.status === 'success') {
+    showArchitectureFeedback(`Architecture draft generated for ${project}.`, 'success');
+  } else if (outcome.status === 'failed') {
+    showArchitectureFeedback(outcome.error || `Architecture generation failed for ${project}.`, 'error');
+  } else {
+    showArchitectureFeedback('Architecture generation is still running. Use Refresh to check its status.');
+  }
+}
+
+function architectureRunStatus(payload) {
+  const runState = payload && payload.run_state && typeof payload.run_state === 'object'
+    ? payload.run_state : payload || {};
+  return String(runState.last_status || runState.status || '').trim().toLowerCase();
+}
+
+function architectureRunSucceeded(status) {
+  return ['success', 'succeeded', 'complete', 'completed'].includes(status);
+}
+
+function architectureRunFailed(status) {
+  return ['failed', 'failure', 'error', 'cancelled', 'canceled'].includes(status);
+}
+
+function architectureRunError(payload) {
+  const runState = payload && payload.run_state && typeof payload.run_state === 'object'
+    ? payload.run_state : payload || {};
+  const detail = runState.last_error || runState.error || runState.detail || runState.message;
+  return typeof detail === 'string' ? archShort(detail, 220) : '';
+}
+
+async function pollArchitectureGeneration(project, environment, pollToken) {
+  const deadline = Date.now() + 10 * 60 * 1000;
+  while (Date.now() < deadline && S.archPollToken === pollToken) {
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    if (S.archPollToken !== pollToken || !S.connected) return { status: 'cancelled' };
+    const current = await apiGet('/api/ui/architecture', { project, environment });
+    if (!current || current.error) continue;
+    const status = architectureRunStatus(current);
+    if (architectureRunSucceeded(status)) return { status: 'success' };
+    if (architectureRunFailed(status)) {
+      return { status: 'failed', error: architectureRunError(current) };
+    }
+  }
+  return S.archPollToken === pollToken ? { status: 'timeout' } : { status: 'cancelled' };
+}
+
+async function publishArchitectureSnapshot() {
+  if (!archCanAuthor() || !S.connected || S.archAction) return;
+  const snapshot = archSnapshot();
+  if (!snapshot || snapshot.id == null || String(snapshot.status || '').toLowerCase() !== 'draft') {
+    showArchitectureFeedback('Load a draft snapshot before publishing.', 'error');
+    return;
+  }
+  const snapshotId = String(snapshot.id);
+  const project = S.project;
+  const environment = S.archEnvironment;
+  const confirmed = window.confirm(
+    `Publish the current architecture draft for "${project}"?\n\n` +
+    'This makes the snapshot visible to viewer and developer accounts. It will not generate a new draft.'
+  );
+  if (!confirmed) return;
+  S.archAction = 'publishing';
+  updateArchitectureHeader();
+  const result = await architectureApiPost(
+    `/api/ui/architecture/${encodeURIComponent(snapshotId)}/publish`,
+    { project, environment }
+  );
+  S.archAction = null;
+  updateArchitectureHeader();
+  if (!result.ok) {
+    showArchitectureFeedback(result.error, 'error');
+    return;
+  }
+  showArchitectureFeedback('Architecture snapshot published.', 'success');
+  await loadArchitecture(true);
+}
+
+function switchArchitectureView(name) {
+  const allowed = ['overview','model','runtime','flows','decisions','changes','report'];
+  S.archView = allowed.includes(name) ? name : 'overview';
+  saveUIPref('archView', S.archView);
+  document.querySelectorAll('.arch-subtab').forEach(b => b.classList.toggle('active', b.dataset.archView === S.archView));
+  renderArchitecture();
+}
+
+function archMetric(label, value, foot) {
+  return `<div class="arch-metric"><div class="arch-metric-label">${esc(label)}</div>
+    <div class="arch-metric-value">${esc(value)}</div><div class="arch-metric-foot">${esc(foot || '')}</div></div>`;
+}
+
+function archListRow(title, copy, tone, icon) {
+  const cls = archTone(tone) || String(tone || '').toLowerCase();
+  return `<div class="arch-list-row"><span class="arch-list-icon">${esc(icon || '·')}</span>
+    <div><div class="arch-list-title">${esc(archShort(title, 90))}</div>${copy ? `<div class="arch-list-copy">${esc(archShort(copy, 150))}</div>` : ''}</div>
+    <span class="arch-tone ${esc(cls)}">${esc(archShort(tone || 'open', 18))}</span></div>`;
+}
+
+function renderArchitectureOverview() {
+  const stage = document.getElementById('arch-stage');
+  const data = S.architecture;
+  const snap = archSnapshot() || {};
+  const nodes = archArray(data.nodes), edges = archArray(data.edges);
+  const findings = archArray(data.findings), changes = archArray(data.changes);
+  const coverage = archPercent(snap.evidence_coverage);
+  const fresh = archFreshness(snap.generated_at);
+  const evidenceCount = nodes.reduce((n, node) => n + archArray(node.evidence).length, 0);
+  const sourceCount = Number(snap.source_count) || evidenceCount;
+  const roots = nodes.filter(n => n.parent == null || !nodes.some(p => String(p.id) === String(n.parent)));
+  const previewNodes = (roots.length ? roots : nodes).slice(0, 12);
+  const previewIds = new Set(previewNodes.map(n => String(n.id)));
+  const previewEdges = edges.filter(e => previewIds.has(String(e.source)) && previewIds.has(String(e.target)));
+  const summary = snap.summary || data.summary || (S.project === 'global'
+    ? 'An explicitly generated global map of the systems, dependencies, and shared infrastructure recorded in this scope.'
+    : 'A living system map generated from Zikra memories and corroborated by project evidence.');
+  const latestChanges = changes.slice(0, 5);
+  const topFindings = findings.slice().sort((a, b) => {
+    const rank = { critical: 0, high: 1, warning: 2, medium: 3, low: 4 };
+    return (rank[String(a.severity || '').toLowerCase()] ?? 9) - (rank[String(b.severity || '').toLowerCase()] ?? 9);
+  }).slice(0, 5);
+  stage.innerHTML = `<div class="arch-scroll"><div class="arch-page">
+    <section class="arch-hero"><div class="arch-hero-main">
+      <div class="arch-kicker">${S.project === 'global' ? 'System landscape' : 'Current system'}</div>
+      <div class="arch-hero-title">${esc(S.project === 'global' ? 'Global architecture' : S.project)}</div>
+      <div class="arch-hero-copy">${esc(summary)}</div><div class="arch-hero-meta">
+        <span class="arch-chip">${esc(String(snap.status || 'unpublished'))}</span>
+        <span class="arch-chip">${esc(S.archEnvironment === 'all' ? 'All environments' : S.archEnvironment)}</span>
+        <span class="arch-chip">${esc(snap.model || 'Model not recorded')}</span><span class="arch-chip">${esc(fresh.label)}</span>
+      </div></div><div class="arch-truth-card"><div><div class="arch-kicker">Architecture confidence</div>
+        <div class="arch-truth-score"><b>${Math.round(coverage)}</b><span>% evidence coverage</span></div>
+        <div class="arch-progress"><i style="width:${coverage.toFixed(1)}%"></i></div></div>
+        <div class="arch-truth-meta">${sourceCount} source${sourceCount === 1 ? '' : 's'} · ${evidenceCount} linked evidence item${evidenceCount === 1 ? '' : 's'}<br>${esc(fresh.label)}</div>
+      </div></section>
+    <section class="arch-metrics">${archMetric('Elements', nodes.length, `${roots.length} top-level`)}${archMetric('Relationships', edges.length, 'typed, directed links')}${archMetric('Flows', archArray(data.flows).length, 'recorded journeys')}${archMetric('Decisions', archArray(data.decisions).length, 'current and historic')}${archMetric('Open findings', findings.length, `${findings.filter(f => archTone(f.severity || f.kind) === 'critical').length} critical`)}</section>
+    <section class="arch-overview-grid"><div class="arch-card"><div class="arch-card-head"><div class="arch-card-title">${S.project === 'global' ? 'Global landscape' : 'System context'}</div><button class="arch-icon-btn" id="arch-open-model">Open model</button></div>
+      <div class="arch-mini-map" id="arch-overview-map">${archRenderDiagram(previewNodes, previewEdges, { compact: true })}</div></div>
+      <div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div class="arch-card"><div class="arch-card-head"><div class="arch-card-title">Since the previous snapshot</div><button class="arch-icon-btn" id="arch-open-changes">View all</button></div>
+        <div class="arch-card-body">${latestChanges.length ? `<div class="arch-list">${latestChanges.map(c => archListRow(c.title || c.name || c.node_name || 'Architecture changed', c.description || c.summary || c.detail || '', c.type || c.kind || 'changed', 'Δ')).join('')}</div>` : '<div class="arch-empty-inline">No changes are recorded for this snapshot.</div>'}</div></div>
+        <div class="arch-card"><div class="arch-card-head"><div class="arch-card-title">Gaps and contradictions</div><span class="arch-section-note">evidence lens</span></div>
+        <div class="arch-card-body">${topFindings.length ? `<div class="arch-list">${topFindings.map(f => archListRow(f.title || f.name || f.kind || 'Finding', f.description || f.summary || f.detail || '', f.severity || f.kind || 'warning', '!')).join('')}</div>` : '<div class="arch-empty-inline">No unresolved architecture findings.</div>'}</div></div></div>
+    </section></div></div>`;
+  document.getElementById('arch-open-model').addEventListener('click', () => switchArchitectureView('model'));
+  document.getElementById('arch-open-changes').addEventListener('click', () => switchArchitectureView('changes'));
+  bindArchitectureDiagram(document.getElementById('arch-overview-map'), { openView: 'model' });
+}
+
+function archVisibleModelNodes(mode) {
+  const all = archArray(S.architecture && S.architecture.nodes);
+  if (mode === 'runtime') {
+    const kinds = new Set(['deployment_node','host','infrastructure','container','service','store','database']);
+    return all.filter(n => kinds.has(archKind(n)) || n.environment != null || n.runtime === true);
+  }
+  if (!S.archScopeId) {
+    const ids = new Set(all.map(n => String(n.id)));
+    const roots = all.filter(n => n.parent == null || !ids.has(String(n.parent)));
+    return roots.length ? roots : all;
+  }
+  const children = archChildren(S.archScopeId);
+  if (!children.length) {
+    const neighborIds = new Set([String(S.archScopeId)]);
+    archArray(S.architecture.edges).forEach(e => {
+      if (String(e.source) === String(S.archScopeId)) neighborIds.add(String(e.target));
+      if (String(e.target) === String(S.archScopeId)) neighborIds.add(String(e.source));
+    });
+    return all.filter(n => neighborIds.has(String(n.id)));
+  }
+  const childIds = new Set(children.map(n => String(n.id)));
+  const contextIds = new Set(childIds);
+  archArray(S.architecture.edges).forEach(e => {
+    if (childIds.has(String(e.source))) contextIds.add(String(e.target));
+    if (childIds.has(String(e.target))) contextIds.add(String(e.source));
+  });
+  return all.filter(n => contextIds.has(String(n.id)) &&
+    (childIds.has(String(n.id)) || n.parent == null || archKind(n) === 'external'));
+}
+
+function archScopeTrail() {
+  const map = archNodeMap(), out = [], seen = new Set();
+  let current = S.archScopeId ? map[String(S.archScopeId)] : null;
+  while (current && !seen.has(String(current.id))) {
+    seen.add(String(current.id)); out.unshift(current);
+    current = current.parent != null ? map[String(current.parent)] : null;
+  }
+  return out;
+}
+
+function archBreadcrumbMarkup(mode) {
+  const rootLabel = mode === 'runtime' ? 'Deployment' : S.project === 'global' ? 'Landscape' : 'Context';
+  return `<button class="arch-crumb" data-arch-scope="">${esc(rootLabel)}</button>${archScopeTrail().map(n =>
+    `<span class="arch-crumb-sep">/</span><button class="arch-crumb" data-arch-scope="${esc(n.id)}">${esc(archShort(n.name || n.title || 'Untitled', 28))}</button>`).join('')}`;
+}
+
+function archTreeMarkup() {
+  const nodes = archArray(S.architecture && S.architecture.nodes), byParent = {}, seen = new Set();
+  nodes.forEach(n => {
+    const key = n.parent == null ? '__root__' : String(n.parent);
+    (byParent[key] ||= []).push(n);
+  });
+  Object.values(byParent).forEach(arr => arr.sort((a,b) => String(a.name || '').localeCompare(String(b.name || ''))));
+  function rows(parent, depth) {
+    if (depth > 5) return '';
+    return archArray(byParent[parent]).map(n => {
+      if (seen.has(String(n.id))) return '';
+      seen.add(String(n.id));
+      const kids = archArray(byParent[String(n.id)]);
+      return `<button class="arch-tree-row${String(S.archScopeId) === String(n.id) ? ' active' : ''}" data-arch-tree="${esc(n.id)}" style="padding-left:${7 + depth * 12}px">
+        <span class="arch-tree-kind">${esc(archKindLabel(archKind(n)).slice(0,2))}</span><span class="arch-tree-name">${esc(n.name || n.title || 'Untitled')}</span></button>${kids.length ? rows(String(n.id), depth + 1) : ''}`;
+    }).join('');
+  }
+  return rows('__root__', 0) || '<div class="arch-empty-inline">No hierarchy recorded.</div>';
+}
+
+function renderArchitectureDiagramView(mode) {
+  const stage = document.getElementById('arch-stage');
+  const visible = archVisibleModelNodes(mode);
+  const ids = new Set(visible.map(n => String(n.id)));
+  const edges = archArray(S.architecture.edges).filter(e => ids.has(String(e.source)) && ids.has(String(e.target)));
+  const selected = archArray(S.architecture.nodes).find(n => String(n.id) === String(S.archSelectedNodeId));
+  const empty = mode === 'runtime'
+    ? 'No deployment nodes, hosts, containers, services, or data stores are recorded for this environment.'
+    : 'No elements are available at this level.';
+  stage.innerHTML = `<div class="arch-model-layout">
+    <aside class="arch-rail"><div class="arch-rail-label">Views</div>
+      <button class="arch-view-btn${mode === 'model' ? ' active' : ''}" data-open-arch-view="model"><span class="arch-view-btn-dot"></span>Logical model</button>
+      <button class="arch-view-btn${mode === 'runtime' ? ' active' : ''}" data-open-arch-view="runtime"><span class="arch-view-btn-dot" style="background:#3c82b9"></span>Runtime topology</button>
+      <button class="arch-view-btn" data-open-arch-view="flows"><span class="arch-view-btn-dot" style="background:#35b98d"></span>Dynamic flows</button>
+      <div class="arch-rail-label" style="margin-top:12px">Hierarchy</div><div>${archTreeMarkup()}</div>
+    </aside>
+    <section class="arch-canvas-col"><div class="arch-canvas-bar"><div class="arch-breadcrumb">${archBreadcrumbMarkup(mode)}</div>
+      <div class="arch-canvas-tools"><button class="arch-icon-btn" id="arch-fit">Fit</button><button class="arch-icon-btn" id="arch-clear-selection" ${selected ? '' : 'disabled'}>Clear focus</button></div></div>
+      <div class="arch-canvas" id="arch-diagram-canvas">${visible.length ? archRenderDiagram(visible, edges, { selectedId: S.archSelectedNodeId }) : `<div class="arch-empty-inline">${esc(empty)}</div>`}</div>
+      <div class="arch-canvas-footer"><div class="arch-legend"><span style="color:#7f77dd"><i></i>system / component</span><span style="color:#c68a2d"><i></i>data store</span><span style="color:#777992"><i style="border-style:dashed"></i>external</span></div><span>${visible.length} elements · ${edges.length} relationships</span></div>
+    </section><aside class="arch-inspector" id="arch-inspector">${archInspectorMarkup(selected)}</aside>
+  </div>`;
+  bindArchitectureDiagram(document.getElementById('arch-diagram-canvas'));
+  document.querySelectorAll('[data-open-arch-view]').forEach(b => b.addEventListener('click', () => switchArchitectureView(b.dataset.openArchView)));
+  document.querySelectorAll('[data-arch-scope]').forEach(b => b.addEventListener('click', () => {
+    S.archScopeId = b.dataset.archScope || null; S.archSelectedNodeId = null; renderArchitecture();
+  }));
+  document.querySelectorAll('[data-arch-tree]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.archTree; S.archSelectedNodeId = id;
+    if (archChildren(id).length) S.archScopeId = id;
+    renderArchitecture();
+  }));
+  document.querySelectorAll('[data-arch-select-node]').forEach(b => b.addEventListener('click', () => {
+    S.archSelectedNodeId = b.dataset.archSelectNode || null; renderArchitecture();
+  }));
+  document.getElementById('arch-clear-selection').addEventListener('click', () => { S.archSelectedNodeId = null; renderArchitecture(); });
+  document.getElementById('arch-fit').addEventListener('click', () => {
+    const canvas = document.getElementById('arch-diagram-canvas');
+    if (canvas) { canvas.scrollTop = 0; canvas.scrollLeft = 0; }
+  });
+}
+
+function archLayout(nodes, edges) {
+  const sorted = nodes.slice().sort((a,b) => {
+    const order = { person:0, actor:0, external:1, system:2, software_system:2, container:3, service:3, component:4, store:5, database:5, deployment_node:1, host:1, infrastructure:2 };
+    return (order[archKind(a)] ?? 3) - (order[archKind(b)] ?? 3) || String(a.name || '').localeCompare(String(b.name || ''));
+  });
+  const ids = new Set(sorted.map(n => String(n.id)));
+  const ranks = Object.fromEntries(sorted.map(n => [String(n.id), 0]));
+  for (let pass = 0; pass < Math.min(6, sorted.length); pass++) {
+    let changed = false;
+    edges.forEach(e => {
+      const source = String(e.source), target = String(e.target);
+      if (!ids.has(source) || !ids.has(target) || source === target) return;
+      const next = Math.min(4, (ranks[source] || 0) + 1);
+      if (next > ranks[target] && ranks[target] <= ranks[source]) { ranks[target] = next; changed = true; }
+    });
+    if (!changed) break;
+  }
+  const maxRank = Math.max(0, ...Object.values(ranks));
+  const CARD_W = 210, CARD_H = 88, X_GAP = 82, Y_GAP = 36, PAD_X = 58, PAD_Y = 54;
+  const pos = {};
+  if (maxRank === 0 && sorted.length > 3) {
+    const cols = Math.min(4, Math.ceil(Math.sqrt(sorted.length)));
+    sorted.forEach((n,i) => { pos[String(n.id)] = { x: PAD_X + (i % cols) * (CARD_W + X_GAP), y: PAD_Y + Math.floor(i / cols) * (CARD_H + Y_GAP) }; });
+  } else {
+    const groups = {};
+    sorted.forEach(n => (groups[ranks[String(n.id)]] ||= []).push(n));
+    Object.keys(groups).forEach(rank => groups[rank].forEach((n,i) => {
+      pos[String(n.id)] = { x: PAD_X + Number(rank) * (CARD_W + X_GAP), y: PAD_Y + i * (CARD_H + Y_GAP) };
+    }));
+  }
+  const xs = Object.values(pos).map(p => p.x), ys = Object.values(pos).map(p => p.y);
+  return { pos, width: Math.max(680, (xs.length ? Math.max(...xs) : 0) + CARD_W + PAD_X), height: Math.max(410, (ys.length ? Math.max(...ys) : 0) + CARD_H + PAD_Y), CARD_W, CARD_H };
+}
+
+function archSvgTextLines(text, maxChars, maxLines) {
+  const source = String(text || '').replace(/\s+/g, ' ').trim();
+  const words = source.split(' ').filter(Boolean), lines = [];
+  let line = '';
+  for (const word of words) {
+    const candidate = line ? line + ' ' + word : word;
+    if (candidate.length > maxChars && line) { lines.push(line); line = word; }
+    else line = candidate;
+    if (lines.length === maxLines) break;
+  }
+  if (lines.length < maxLines && line) lines.push(line);
+  if (lines.length && lines.join(' ').length < source.length) lines[lines.length - 1] = archShort(lines[lines.length - 1], maxChars - 1);
+  return lines.slice(0, maxLines);
+}
+
+function archRenderDiagram(nodes, edges, options = {}) {
+  if (!nodes.length) return '';
+  const layout = archLayout(nodes, edges);
+  const selectedId = options.selectedId != null ? String(options.selectedId) : null;
+  const activeId = options.activeId != null ? String(options.activeId) : null;
+  const connected = new Set();
+  if (selectedId) {
+    connected.add(selectedId);
+    edges.forEach(e => {
+      if (String(e.source) === selectedId) connected.add(String(e.target));
+      if (String(e.target) === selectedId) connected.add(String(e.source));
+    });
+  }
+  const edgeSvg = edges.map((e,i) => {
+    const a = layout.pos[String(e.source)], b = layout.pos[String(e.target)];
+    if (!a || !b) return '';
+    const sx = a.x + layout.CARD_W, sy = a.y + layout.CARD_H / 2;
+    const tx = b.x, ty = b.y + layout.CARD_H / 2;
+    const mid = tx <= sx ? Math.max(sx, tx) + 32 + (i % 3) * 12 : (sx + tx) / 2;
+    const label = e.protocol || e.description || e.kind || '';
+    const dim = selectedId && !(String(e.source) === selectedId || String(e.target) === selectedId);
+    return `<g><path class="arch-edge${dim ? ' is-dim' : ''}" d="M ${sx} ${sy} H ${mid} V ${ty} H ${tx}"/><text class="arch-edge-label" x="${mid + 4}" y="${Math.min(sy,ty) + Math.abs(ty-sy)/2 - 4}">${esc(archShort(label, 28))}</text></g>`;
+  }).join('');
+  const nodeSvg = nodes.map(n => {
+    const id = String(n.id), p = layout.pos[id], kind = archKind(n), title = n.name || n.title || 'Untitled';
+    const titleLines = archSvgTextLines(title, 27, 2);
+    const desc = archShort(n.description || '', 34), tech = archShort(n.technology || n.owner || '', 28);
+    const confidence = archPercent(n.confidence), childCount = archChildren(id).length;
+    const classes = ['arch-node', kind];
+    if (selectedId === id) classes.push('is-selected');
+    if (selectedId && !connected.has(id)) classes.push('is-dim');
+    if (activeId === id) classes.push('is-active');
+    const confColor = confidence >= 75 ? '#35b98d' : confidence >= 40 ? '#c68a2d' : '#d95b5b';
+    return `<g class="${classes.join(' ')}" data-arch-node="${esc(id)}" transform="translate(${p.x},${p.y})" role="button" tabindex="0" aria-label="${esc(title)}, ${esc(archKindLabel(kind))}">
+      <rect class="arch-node-card" width="${layout.CARD_W}" height="${layout.CARD_H}" rx="9"/>
+      <path class="arch-node-top" d="M9 0 H201 A9 9 0 0 1 210 9 V11 H0 V9 A9 9 0 0 1 9 0Z"/>
+      <text class="arch-node-kind" x="13" y="25">${esc(archKindLabel(kind).toUpperCase())}</text>
+      ${titleLines.map((line,i) => `<text class="arch-node-title" x="13" y="${43 + i * 14}">${esc(line)}</text>`).join('')}
+      ${desc && titleLines.length < 2 ? `<text class="arch-node-desc" x="13" y="60">${esc(desc)}</text>` : ''}
+      ${tech ? `<text class="arch-node-tech" x="13" y="78">${esc(tech)}</text>` : ''}
+      <circle cx="194" cy="72" r="7" class="arch-node-confidence" stroke="${confColor}"/><text x="194" y="75" text-anchor="middle" fill="${confColor}" font-size="6.5" font-weight="700">${Math.round(confidence)}</text>
+      ${childCount ? `<text class="arch-node-expand" x="194" y="26" text-anchor="end">+${childCount}</text>` : ''}</g>`;
+  }).join('');
+  return `<svg class="arch-svg" viewBox="0 0 ${layout.width} ${layout.height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Architecture diagram with ${nodes.length} elements and ${edges.length} relationships"><defs>
+    <marker id="arch-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#666981"/></marker>
+    <filter id="arch-glow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#6f67cf" flood-opacity=".35"/></filter>
+    <filter id="arch-flow-glow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#35b98d" flood-opacity=".45"/></filter>
+    </defs>${edgeSvg}${nodeSvg}</svg>`;
+}
+
+function bindArchitectureDiagram(root, options = {}) {
+  if (!root) return;
+  root.querySelectorAll('[data-arch-node]').forEach(el => {
+    const choose = () => {
+      S.archSelectedNodeId = el.dataset.archNode;
+      if (options.openView) switchArchitectureView(options.openView); else renderArchitecture();
+    };
+    el.addEventListener('click', choose);
+    el.addEventListener('dblclick', e => {
+      e.preventDefault();
+      const id = el.dataset.archNode;
+      if (archChildren(id).length) S.archScopeId = id;
+      S.archSelectedNodeId = id;
+      if (options.openView) switchArchitectureView(options.openView); else renderArchitecture();
+    });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
+  });
+}
+
+function archInspectorMarkup(node) {
+  if (!node) return '<div class="arch-inspector-empty">Select an element to inspect its responsibility, technology, dependencies, decisions, and exact supporting evidence.<br><br>Double-click an element with children to zoom in.</div>';
+  const id = String(node.id), map = archNodeMap();
+  const edges = archArray(S.architecture.edges).filter(e => String(e.source) === id || String(e.target) === id);
+  const evidence = archArray(node.evidence);
+  const decisions = archArray(S.architecture.decisions).filter(d => String(d.node_id || d.component_id || '') === id ||
+    (d.module && node.name && String(d.module).toLowerCase() === String(node.name).toLowerCase()));
+  const confidence = archPercent(node.confidence), fresh = archFreshness(node.last_verified);
+  return `<div class="arch-inspector-head"><div class="arch-inspector-kind"><span class="arch-tone ${esc(archTone(node.status))}">${esc(archKindLabel(archKind(node)))}</span><button class="arch-icon-btn" data-arch-select-node="">Close</button></div>
+    <div class="arch-inspector-title">${esc(node.name || node.title || 'Untitled')}</div><div class="arch-inspector-copy">${esc(node.description || 'No responsibility has been documented yet.')}</div></div>
+    <div class="arch-inspector-body"><div class="arch-field"><div class="arch-field-label">Trust</div><div class="arch-field-value"><div class="arch-progress"><i style="width:${confidence}%"></i></div><div style="margin-top:5px">${Math.round(confidence)}% confidence · ${esc(fresh.label)}</div></div></div>
+    <div class="arch-field"><div class="arch-field-label">Details</div><div class="arch-field-value">${node.technology ? `<b>Technology:</b> ${esc(node.technology)}<br>` : ''}${node.owner ? `<b>Owner:</b> ${esc(node.owner)}<br>` : ''}${node.status ? `<b>Status:</b> ${esc(node.status)}` : ''}</div></div>
+    <div class="arch-field"><div class="arch-field-label">Dependencies · ${edges.length}</div>${edges.length ? edges.map(e => {
+      const outgoing = String(e.source) === id, other = map[outgoing ? String(e.target) : String(e.source)];
+      return `<button class="arch-dep-row" data-arch-select-node="${esc(other && other.id || '')}" style="width:100%;text-align:left"><span class="arch-dep-dir">${outgoing ? '→' : '←'}</span><span><span class="arch-dep-name">${esc(other ? other.name || other.title : 'Unknown element')}</span><span class="arch-dep-meta">${esc(e.protocol || e.kind || e.description || 'related')}</span></span></button>`;
+    }).join('') : '<div class="arch-field-value">No relationships recorded at this level.</div>'}</div>
+    <div class="arch-field"><div class="arch-field-label">Evidence · ${evidence.length}</div>${evidence.length ? evidence.map((ev,i) => {
+      const obj = typeof ev === 'object' && ev ? ev : { locator: ev };
+      return `<div class="arch-evidence-row"><div class="arch-evidence-title">${esc(obj.title || obj.locator || obj.url || obj.source || `Evidence ${i + 1}`)}</div><div class="arch-evidence-meta">${esc(obj.source_type || obj.type || 'source')}${obj.captured_at ? ' · ' + esc(fmtDate(obj.captured_at)) : ''}</div></div>`;
+    }).join('') : '<div class="arch-field-value">No direct evidence linked. Treat this element as unverified.</div>'}</div>
+    ${decisions.length ? `<div class="arch-field"><div class="arch-field-label">Linked decisions · ${decisions.length}</div>${decisions.slice(0,5).map(d => `<div class="arch-evidence-row"><div class="arch-evidence-title">${esc(d.title || 'Untitled decision')}</div><div class="arch-evidence-meta">${esc(d.status || 'current')}</div></div>`).join('')}</div>` : ''}</div>`;
+}
+
+function archFlowSteps(flow) { return archArray(flow && (flow.steps || flow.sequence || flow.nodes)); }
+function archFlowId(flow, i) { return String(flow && flow.id != null ? flow.id : i); }
+function archFlowNodeId(step) {
+  if (step == null) return null;
+  if (typeof step === 'string' || typeof step === 'number') return String(step);
+  const id = step.node_id ?? step.nodeId ?? step.component_id ?? step.element_id ?? step.node;
+  return id != null && typeof id !== 'object' ? String(id) : null;
+}
+
+function renderArchitectureFlows() {
+  const stage = document.getElementById('arch-stage'), flows = archArray(S.architecture.flows);
+  if (!flows.length) {
+    stage.innerHTML = archStateMarkup('', `No flows recorded for ${S.project}`,
+      'Flows will show important request paths, data journeys, and scheduled jobs step by step.');
+    return;
+  }
+  let index = flows.findIndex((f,i) => archFlowId(f,i) === String(S.archSelectedFlowId));
+  if (index < 0) index = 0;
+  const flow = flows[index], steps = archFlowSteps(flow), map = archNodeMap();
+  S.archSelectedFlowId = archFlowId(flow,index);
+  S.archFlowStep = Math.max(0, Math.min(S.archFlowStep, Math.max(0,steps.length - 1)));
+  const nodeIds = new Set(steps.map(archFlowNodeId).filter(Boolean));
+  const nodes = nodeIds.size ? archArray(S.architecture.nodes).filter(n => nodeIds.has(String(n.id))) : archArray(S.architecture.nodes);
+  const ids = new Set(nodes.map(n => String(n.id)));
+  const edges = archArray(S.architecture.edges).filter(e => ids.has(String(e.source)) && ids.has(String(e.target)));
+  const current = steps[S.archFlowStep], currentId = archFlowNodeId(current);
+  const currentObj = typeof current === 'object' && current ? current : {}, currentNode = currentId ? map[currentId] : null;
+  const stepCopy = currentObj.description || currentObj.title || currentObj.action ||
+    (currentNode && (currentNode.name || currentNode.title)) || String(current || 'No step description');
+  stage.innerHTML = `<div class="arch-flow-layout"><aside class="arch-flow-list"><div class="arch-rail-label">Recorded flows</div>
+    ${flows.map((f,i) => `<button class="arch-flow-card${archFlowId(f,i) === S.archSelectedFlowId ? ' active' : ''}" data-arch-flow="${esc(archFlowId(f,i))}"><div class="arch-flow-name">${esc(f.name || f.title || `Flow ${i + 1}`)}</div><div class="arch-flow-meta">${archFlowSteps(f).length} steps · ${esc(f.kind || f.type || 'dynamic')}</div></button>`).join('')}</aside>
+    <section class="arch-flow-main"><header class="arch-flow-head"><h2>${esc(flow.name || flow.title || `Flow ${index + 1}`)}</h2><p>${esc(flow.description || 'Step through this flow to see how the architecture collaborates at runtime.')}</p></header>
+    <div class="arch-canvas" id="arch-flow-canvas">${nodes.length ? archRenderDiagram(nodes, edges, { activeId: currentId }) : '<div class="arch-empty-inline">This flow does not reference any known model elements.</div>'}</div>
+    <div class="arch-flow-controls"><button class="arch-icon-btn" id="arch-flow-prev" ${S.archFlowStep <= 0 ? 'disabled' : ''}>Previous</button><div class="arch-step-copy"><span class="arch-step-no">Step ${steps.length ? S.archFlowStep + 1 : 0} of ${steps.length}</span> · ${esc(stepCopy)}</div><button class="arch-icon-btn" id="arch-flow-next" ${S.archFlowStep >= steps.length - 1 ? 'disabled' : ''}>Next</button></div></section></div>`;
+  document.querySelectorAll('[data-arch-flow]').forEach(b => b.addEventListener('click', () => {
+    S.archSelectedFlowId = b.dataset.archFlow; S.archFlowStep = 0; renderArchitecture();
+  }));
+  document.getElementById('arch-flow-prev').addEventListener('click', () => { S.archFlowStep = Math.max(0,S.archFlowStep - 1); renderArchitecture(); });
+  document.getElementById('arch-flow-next').addEventListener('click', () => { S.archFlowStep = Math.min(steps.length - 1,S.archFlowStep + 1); renderArchitecture(); });
+  bindArchitectureDiagram(document.getElementById('arch-flow-canvas'));
+}
+
+function renderArchitectureDecisions() {
+  const stage = document.getElementById('arch-stage'), decisions = archArray(S.architecture.decisions);
+  stage.innerHTML = `<div class="arch-scroll"><div class="arch-page"><div class="arch-section-head"><div><div class="arch-kicker">Decision log</div><div class="arch-section-title">Why the architecture is shaped this way</div></div><div class="arch-section-note">${decisions.length} records · current and superseded</div></div>
+    ${decisions.length ? decisions.map(d => `<article class="arch-decision-card"><div class="arch-decision-top"><div><div class="arch-decision-title">${esc(d.title || 'Untitled decision')}</div><div class="arch-decision-meta">${esc(d.module || 'global')} · ${esc(d.environment || 'all environments')}${d.created_at ? ' · ' + esc(fmtDate(d.created_at)) : ''}</div></div><span class="arch-tone ${esc(archTone(d.status))}">${esc(d.status || 'current')}</span></div><div class="arch-decision-body">${esc(d.content_md || d.content || d.summary || 'No rationale recorded.')}</div>${d.evidence ? `<div class="arch-evidence-row" style="margin-top:10px"><div class="arch-evidence-title">${esc(typeof d.evidence === 'string' ? d.evidence : JSON.stringify(d.evidence))}</div><div class="arch-evidence-meta">supporting evidence</div></div>` : ''}</article>`).join('') : '<div class="arch-card"><div class="arch-empty-inline">No architectural decisions are available for this project.</div></div>'}</div></div>`;
+}
+
+function renderArchitectureChanges() {
+  const stage = document.getElementById('arch-stage');
+  const changes = archArray(S.architecture.changes), snapshots = archArray(S.architecture.snapshots);
+  stage.innerHTML = `<div class="arch-scroll"><div class="arch-page"><div class="arch-section-head"><div><div class="arch-kicker">Drift and history</div><div class="arch-section-title">What changed since the previous snapshot</div></div><div class="arch-section-note">Nightly drafts remain reviewable before publishing</div></div>
+    <div class="arch-two-col"><section>${changes.length ? changes.map(c => `<article class="arch-change-card"><div class="arch-change-top"><div><div class="arch-change-title">${esc(c.title || c.name || c.node_name || 'Architecture changed')}</div><div class="arch-change-meta">${esc(c.component || c.module || c.node_kind || 'model')} ${c.detected_at || c.created_at ? '· ' + esc(fmtDate(c.detected_at || c.created_at)) : ''}</div></div><span class="arch-tone ${esc(archTone(c.type || c.kind || c.severity))}">${esc(c.type || c.kind || c.severity || 'changed')}</span></div><div class="arch-change-body">${esc(c.description || c.summary || c.detail || 'No change detail recorded.')}</div>${c.before != null || c.after != null ? `<div class="arch-decision-meta" style="margin-top:8px">${c.before != null ? 'Before: ' + esc(typeof c.before === 'string' ? c.before : JSON.stringify(c.before)) : ''}${c.before != null && c.after != null ? '<br>' : ''}${c.after != null ? 'After: ' + esc(typeof c.after === 'string' ? c.after : JSON.stringify(c.after)) : ''}</div>` : ''}</article>`).join('') : '<div class="arch-card"><div class="arch-empty-inline">No differences are recorded for the current snapshot.</div></div>'}</section>
+    <aside class="arch-card"><div class="arch-card-head"><div class="arch-card-title">Snapshot timeline</div><span class="arch-section-note">newest first</span></div><div class="arch-card-body">${snapshots.length ? snapshots.map((s,i) => `<div class="arch-snapshot-line"><div class="arch-snapshot-name">${esc(s.name || s.title || `${String(s.status || 'Snapshot')} ${snapshots.length - i}`)}</div><div class="arch-snapshot-meta">${esc(fmtDate(s.generated_at || s.created_at))} · ${esc(s.model || 'model not recorded')} · ${Math.round(archPercent(s.evidence_coverage))}% evidence</div></div>`).join('') : '<div class="arch-empty-inline">No previous snapshots.</div>'}</div></aside></div></div></div>`;
+}
+
+function archReportSections() {
+  const data = S.architecture || {}, snap = archSnapshot() || {};
+  const nodes = archArray(data.nodes), edges = archArray(data.edges), flows = archArray(data.flows);
+  const decisions = archArray(data.decisions), findings = archArray(data.findings);
+  const narrativeSections = archArray(data.report && data.report.sections);
+  const map = Object.fromEntries(nodes.map(n => [String(n.id),n]));
+  const summary = snap.summary || data.summary || 'No executive summary is recorded for this snapshot.';
+  return `<div class="arch-document"><header class="arch-doc-hero"><div class="arch-kicker">${esc(S.project)} · Architecture</div><div class="arch-doc-title">Current architecture report</div><div class="arch-doc-meta"><span>${esc(String(snap.status || 'unpublished'))}</span><span>${esc(fmtDate(snap.generated_at))}</span><span>${esc(S.archEnvironment)}</span><span>${Math.round(archPercent(snap.evidence_coverage))}% evidence coverage</span><span>${esc(snap.model || 'model not recorded')}</span></div></header>
+    <section class="arch-doc-section"><h2>Executive overview</h2><p>${esc(summary)}</p></section>
+    ${narrativeSections.map((section, i) => {
+      const title = section && section.title ? section.title : `Architecture narrative ${i + 1}`;
+      const content = section && section.content_md != null ? String(section.content_md) : '';
+      return `<section class="arch-doc-section"><h2>${esc(title)}</h2>${content ? renderMd(content) : '<p>No narrative content recorded.</p>'}</section>`;
+    }).join('')}
+    <section class="arch-doc-section"><h2>Systems and components</h2>${nodes.length ? `<div class="arch-table-wrap"><table class="arch-table"><thead><tr><th>Element</th><th>Type</th><th>Technology</th><th>Owner</th><th>Trust</th></tr></thead><tbody>${nodes.map(n => `<tr><td><b>${esc(n.name || n.title || 'Untitled')}</b><br>${esc(archShort(n.description || '',120))}</td><td>${esc(archKindLabel(archKind(n)))}</td><td>${esc(n.technology || '—')}</td><td>${esc(n.owner || '—')}</td><td>${Math.round(archPercent(n.confidence))}%<br>${esc(archFreshness(n.last_verified).label)}</td></tr>`).join('')}</tbody></table></div>` : '<p>No model elements recorded.</p>'}</section>
+    <section class="arch-doc-section"><h2>Relationships</h2>${edges.length ? `<div class="arch-table-wrap"><table class="arch-table"><thead><tr><th>Source</th><th>Relationship</th><th>Target</th><th>Protocol</th></tr></thead><tbody>${edges.map(e => `<tr><td>${esc(map[String(e.source)]?.name || e.source || 'Unknown')}</td><td>${esc(e.description || e.kind || 'relates to')}</td><td>${esc(map[String(e.target)]?.name || e.target || 'Unknown')}</td><td>${esc(e.protocol || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<p>No relationships recorded.</p>'}</section>
+    <section class="arch-doc-section"><h2>Dynamic flows</h2>${flows.length ? flows.map((f,i) => `<div class="arch-decision-card"><div class="arch-decision-title">${esc(f.name || f.title || `Flow ${i + 1}`)}</div><div class="arch-decision-meta">${archFlowSteps(f).length} steps</div><div class="arch-decision-body">${esc(f.description || 'No description recorded.')}</div></div>`).join('') : '<p>No flows recorded.</p>'}</section>
+    <section class="arch-doc-section"><h2>Architecture decisions</h2>${decisions.length ? decisions.map(d => `<div class="arch-decision-card"><div class="arch-decision-top"><div class="arch-decision-title">${esc(d.title || 'Untitled decision')}</div><span class="arch-tone ${esc(archTone(d.status))}">${esc(d.status || 'current')}</span></div><div class="arch-decision-body">${esc(d.content_md || d.content || d.summary || '')}</div></div>`).join('') : '<p>No decisions recorded.</p>'}</section>
+    <section class="arch-doc-section"><h2>Known gaps and contradictions</h2>${findings.length ? findings.map(f => `<div class="arch-change-card"><div class="arch-change-top"><div class="arch-change-title">${esc(f.title || f.name || f.kind || 'Finding')}</div><span class="arch-tone ${esc(archTone(f.severity || f.kind))}">${esc(f.severity || f.kind || 'open')}</span></div><div class="arch-change-body">${esc(f.description || f.summary || f.detail || '')}</div></div>`).join('') : '<p>No open findings recorded.</p>'}</section>
+    <section class="arch-doc-section"><h2>Evidence appendix</h2><p>This report was generated from structured Zikra architecture data. ${nodes.reduce((n,x) => n + archArray(x.evidence).length,0)} evidence links are attached to model elements; the snapshot reports ${Math.round(archPercent(snap.evidence_coverage))}% coverage.</p></section></div>`;
+}
+
+function renderArchitectureReport() {
+  const stage = document.getElementById('arch-stage');
+  stage.innerHTML = `<div class="arch-scroll"><div class="arch-page"><div class="arch-section-head"><div><div class="arch-kicker">Generated document</div><div class="arch-section-title">One model, readable as a report</div></div><div style="display:flex;gap:6px"><button class="arch-icon-btn" id="arch-download-html">Download HTML</button><button class="arch-icon-btn" id="arch-print-report">Print / PDF</button></div></div>${archReportSections()}</div></div>`;
+  document.getElementById('arch-download-html').addEventListener('click', downloadArchitectureHTML);
+  document.getElementById('arch-print-report').addEventListener('click', printArchitectureReport);
+}
+
+function archDownload(blob, filename) {
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportArchitectureJSON() {
+  if (!archDataHasContent(S.architecture)) return;
+  const payload = { ...S.architecture, exported_at: new Date().toISOString(), environment: S.archEnvironment };
+  archDownload(new Blob([JSON.stringify(payload,null,2)], { type: 'application/json' }), `${S.project}-architecture.json`);
+}
+
+function architecturePrintableHTML() {
+  const body = archReportSections();
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(S.project)} Architecture</title><style>
+  :root{color-scheme:light}*{box-sizing:border-box}body{margin:0;padding:42px;color:#17171a;background:#fff;font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}.arch-document{max-width:980px;margin:auto}.arch-kicker{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#5b52ad}.arch-doc-hero{border-bottom:1px solid #ddd;padding-bottom:18px;margin-bottom:25px}.arch-doc-title{font-size:30px;font-weight:700;letter-spacing:-.03em;margin:5px 0}.arch-doc-meta{display:flex;gap:14px;flex-wrap:wrap;color:#666;font-size:11px}.arch-doc-section{margin:0 0 30px;break-inside:avoid}.arch-doc-section h2{font-size:18px;border-bottom:1px solid #ddd;padding-bottom:7px}.arch-table-wrap{border:1px solid #ddd;border-radius:8px;overflow:hidden}.arch-table{width:100%;border-collapse:collapse;font-size:12px}.arch-table th{text-align:left;background:#f5f5f7;color:#666;font-size:10px;text-transform:uppercase;letter-spacing:.06em;padding:8px}.arch-table td{border-top:1px solid #e5e5e5;padding:8px;vertical-align:top}.arch-decision-card,.arch-change-card{border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:8px;break-inside:avoid}.arch-decision-top,.arch-change-top{display:flex;justify-content:space-between;gap:10px}.arch-decision-title,.arch-change-title{font-weight:700}.arch-decision-meta{color:#777;font-size:11px}.arch-decision-body,.arch-change-body{margin-top:7px;color:#333}.arch-tone{border:1px solid #bbb;border-radius:999px;padding:2px 7px;font-size:9px;text-transform:uppercase;height:max-content}@media print{body{padding:0}.arch-doc-section{break-inside:auto}.arch-decision-card,.arch-change-card,.arch-table tr{break-inside:avoid}}
+  </style></head><body>${body}</body></html>`;
+}
+
+function downloadArchitectureHTML() {
+  archDownload(new Blob([architecturePrintableHTML()], { type: 'text/html' }), `${S.project}-architecture-report.html`);
+}
+
+function printArchitectureReport() {
+  const win = window.open('', '_blank');
+  if (!win) { showBanner('Allow pop-ups to print the architecture report.'); return; }
+  win.opener = null; win.document.open(); win.document.write(architecturePrintableHTML()); win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 250);
+}
+
 // ── Activity Tab ──────────────────────────────────────────────────
 // Three 30-day sparkline charts (runs / tokens / memories+errors), the
 // latest-memories feed with quick actions, recent errors, and the per-token
@@ -2947,6 +4122,12 @@ document.getElementById('s-clear').addEventListener('click', () => {
   document.getElementById('act-feed-list').innerHTML    = '<div class="empty-msg">Connect to load the feed.</div>';
   document.getElementById('act-err-list').innerHTML     = '<div class="empty-msg">Connect to load errors.</div>';
   document.getElementById('act-tokens').innerHTML       = '';
+  S.architecture = null; S.archProject = null; S.archError = ''; S.archLoading = false; S.archAction = null; S.archPollToken++;
+  if (S.archFeedbackTimer) { clearTimeout(S.archFeedbackTimer); S.archFeedbackTimer = null; }
+  const archFeedback = document.getElementById('arch-feedback');
+  if (archFeedback) { archFeedback.className = 'arch-feedback'; archFeedback.textContent = ''; }
+  S.archSelectedNodeId = null; S.archScopeId = null; S.archSelectedFlowId = null; S.archFlowStep = 0;
+  renderArchitecture();
   S.gNodes = []; S.gEdges = [];
   stopGraphSim();
 });
@@ -2960,6 +4141,27 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     switchTab(btn.dataset.tab);
     if (S.connected) reloadActiveTab();
   });
+});
+
+// Architecture controls
+document.querySelectorAll('.arch-subtab').forEach(btn => {
+  btn.addEventListener('click', () => switchArchitectureView(btn.dataset.archView));
+});
+document.getElementById('arch-environment').addEventListener('change', e => {
+  S.archEnvironment = e.target.value;
+  saveUIPref('archEnvironment', S.archEnvironment);
+  S.archScopeId = null; S.archSelectedNodeId = null;
+  loadArchitecture(true);
+});
+document.getElementById('arch-refresh').addEventListener('click', () => loadArchitecture(true));
+document.getElementById('arch-export-json').addEventListener('click', exportArchitectureJSON);
+document.getElementById('arch-generate').addEventListener('click', generateArchitectureDraft);
+document.getElementById('arch-publish').addEventListener('click', publishArchitectureSnapshot);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && S.activeTab === 'architecture' && S.archSelectedNodeId) {
+    S.archSelectedNodeId = null;
+    renderArchitecture();
+  }
 });
 
 // Search
@@ -3079,6 +4281,10 @@ window.addEventListener('resize', () => {
   setVal('prompts-sort',  prefs.promptSort);
   setVal('req-status',    prefs.reqStatus);
   setVal('req-sort',      prefs.reqSort);
+  setVal('arch-environment', prefs.archEnvironment);
+  if (['all','prod','dev'].includes(prefs.archEnvironment)) S.archEnvironment = prefs.archEnvironment;
+  if (['overview','model','runtime','flows','decisions','changes','report'].includes(prefs.archView)) S.archView = prefs.archView;
+  document.querySelectorAll('.arch-subtab').forEach(b => b.classList.toggle('active', b.dataset.archView === S.archView));
   if (prefs.promptSort)   S.promptSort   = prefs.promptSort;
   if (prefs.promptFilter) {
     S.promptFilter = prefs.promptFilter;
@@ -3089,7 +4295,7 @@ window.addEventListener('resize', () => {
 
   // Restore active tab
   const savedTab = localStorage.getItem(K_ACTIVE_TAB);
-  if (savedTab && ['search','graph','activity','prompts','requirements'].includes(savedTab)) {
+  if (savedTab && ['search','graph','architecture','activity','prompts','requirements'].includes(savedTab)) {
     switchTab(savedTab);
   }
 
