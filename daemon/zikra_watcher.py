@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-zikra_watcher.py v7
+zikra_watcher.py v8
 Session capture daemon for Zikra persistent memory.
 
 Polls Claude Code transcript JSONL files for mtime changes.
@@ -18,6 +18,8 @@ import glob
 import socket
 import urllib.request
 import sys
+import subprocess
+import re
 
 # ── Configuration (patched by install.sh) ────────────────────────────────────
 ZIKRA_URL        = "ZIKRA_URL_PLACEHOLDER"
@@ -54,6 +56,87 @@ if "PLACEHOLDER" in DEFAULT_PROJECT:
 DEBOUNCE         = 30          # seconds of mtime stability before firing
 POLL_INTERVAL    = 5           # seconds between polls
 TRANSCRIPT_GLOB  = os.path.expanduser("~/.claude/projects/**/*.jsonl")
+
+
+# Inferred projects are intentionally closed-set. Explicit projects.map entries
+# are the extensibility point for future projects. Unknown cwd/repo names are
+# skipped instead of creating miscellaneous projects or polluting global memory.
+CANONICAL_PROJECTS = {"d2strategy", "forgenexus", "global", "veltisai", "zikra"}
+PROJECT_MAP = os.path.expanduser("~/.zikra/projects.map")
+PROJECT_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+
+
+def _known_project(value: str):
+    candidate = (value or "").strip().lower()
+    return candidate if candidate in CANONICAL_PROJECTS else None
+
+
+def _configured_project(value: str):
+    candidate = (value or "").strip().lower()
+    return candidate if PROJECT_NAME.fullmatch(candidate) else None
+
+
+def _project_from_map(cwd: str):
+    matches = []
+    try:
+        with open(PROJECT_MAP, encoding="utf-8") as handle:
+            for raw in handle:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                prefix, project = (part.strip() for part in line.split("=", 1))
+                prefix = os.path.realpath(os.path.expanduser(prefix))
+                if cwd == prefix or cwd.startswith(prefix.rstrip(os.sep) + os.sep):
+                    matches.append((len(prefix), project))
+    except OSError:
+        return None
+    if not matches:
+        return None
+    return _configured_project(max(matches)[1])
+
+
+def _git_output(cwd: str, *args: str):
+    try:
+        return subprocess.check_output(
+            ["git", "-C", cwd, *args],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+        ).strip()
+    except Exception:
+        return ""
+
+
+def detect_project(cwd: str):
+    """Return (canonical project, evidence source), or (None, 'unmapped')."""
+    if not cwd:
+        return None, "missing-cwd"
+    cwd = os.path.realpath(os.path.expanduser(cwd))
+    mapped = _project_from_map(cwd)
+    if mapped:
+        return mapped, "projects.map"
+
+    remote = _git_output(cwd, "remote", "get-url", "origin")
+    if remote:
+        repo = remote.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+        if repo.lower().endswith(".git"):
+            repo = repo[:-4]
+        known = _known_project(repo)
+        if known:
+            return known, "git-remote"
+
+    top = _git_output(cwd, "rev-parse", "--show-toplevel")
+    if top:
+        known = _known_project(os.path.basename(top))
+        if known:
+            return known, "git-toplevel"
+
+    home = os.path.realpath(os.path.expanduser("~"))
+    if cwd not in {home, os.path.sep}:
+        known = _known_project(os.path.basename(cwd))
+        if known:
+            return known, "cwd-basename"
+    return None, "unmapped"
 
 # ── Portable state dir — use ~/.claude/ to avoid /tmp assumptions ─────────────
 _ZIKRA_STATE_DIR = os.path.expanduser("~/.claude")
@@ -109,7 +192,7 @@ def zikra_post(payload: dict) -> bool:
 def extract_session_info(path: str) -> dict:
     """
     Parse a JSONL transcript and return:
-      session_id, token counts, last assistant text (max 300 chars).
+      session_id, cwd, token counts, last assistant text (max 300 chars).
     """
     session_id            = ""
     tokens_input          = 0
@@ -117,6 +200,7 @@ def extract_session_info(path: str) -> dict:
     tokens_cache_read     = 0
     tokens_cache_creation = 0
     last_assistant        = ""
+    cwd                   = ""
 
     try:
         with open(path, "r", errors="replace") as f:
@@ -128,6 +212,11 @@ def extract_session_info(path: str) -> dict:
                     entry = json.loads(raw)
                 except Exception:
                     continue
+
+                # Working directory (the latest non-empty value wins).
+                entry_cwd = entry.get("cwd") or entry.get("message", {}).get("cwd") or ""
+                if isinstance(entry_cwd, str) and entry_cwd:
+                    cwd = entry_cwd
 
                 # Session ID
                 if not session_id:
@@ -166,6 +255,7 @@ def extract_session_info(path: str) -> dict:
 
     return {
         "session_id":            session_id,
+        "cwd":                   cwd,
         "tokens_input":          tokens_input,
         "tokens_output":         tokens_output,
         "tokens_cache_read":     tokens_cache_read,
@@ -220,9 +310,16 @@ def main() -> None:
 
             prev = seen.get(path)
 
-            # First time seeing this file
+            # First time seeing this file. Do not replay every historical
+            # transcript after a watcher restart; only a currently-recent file is
+            # eligible to fire once it becomes stable. A later mtime change still
+            # resets fired=False in the normal branch below.
             if prev is None:
-                seen[path] = {"mtime": mtime, "stable_since": now, "fired": False}
+                seen[path] = {
+                    "mtime": mtime,
+                    "stable_since": now,
+                    "fired": (now - mtime) >= DEBOUNCE,
+                }
                 continue
 
             # File changed — reset
@@ -258,9 +355,17 @@ def main() -> None:
                 else "Session ended"
             )
 
+            project, project_source = detect_project(info["cwd"])
+            if not project:
+                _log(
+                    f"unmapped cwd; skipping log_run — {info['cwd'] or '[missing]'} "
+                    f"({os.path.basename(path)})"
+                )
+                continue
+
             payload: dict = {
                 "command":               "log_run",
-                "project":               DEFAULT_PROJECT,
+                "project":               project,
                 "runner":                runner,
                 "status":                "success",
                 "output_summary":        output_summary,
@@ -279,7 +384,7 @@ def main() -> None:
             ok = zikra_post(payload)
             _log(
                 f"log_run {'OK' if ok else 'FAIL'} — "
-                f"{os.path.basename(path)} "
+                f"{os.path.basename(path)} project={project} source={project_source} "
                 f"(in={info['tokens_input']} out={info['tokens_output']})"
             )
 
@@ -296,6 +401,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--detect-project":
+        detected, source = detect_project(sys.argv[2])
+        print(json.dumps({"cwd": os.path.realpath(sys.argv[2]), "project": detected, "source": source}))
+        sys.exit(0 if detected else 2)
     try:
         main()
     except KeyboardInterrupt:

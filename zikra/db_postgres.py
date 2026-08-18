@@ -124,6 +124,111 @@ CREATE INDEX IF NOT EXISTS idx_memories_embedding
 ON memories USING hnsw (embedding halfvec_cosine_ops);
 """
 
+_PG_ARCHITECTURE_DDL = (
+    "ALTER TABLE memories ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'current'",
+    "ALTER TABLE memories ADD COLUMN IF NOT EXISTS supersedes_id TEXT NULL",
+    "ALTER TABLE memories ADD COLUMN IF NOT EXISTS environment TEXT NULL",
+    "ALTER TABLE memories ADD COLUMN IF NOT EXISTS evidence TEXT NULL",
+    "ALTER TABLE memories ADD COLUMN IF NOT EXISTS decision_kind TEXT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_memories_arch_kind ON memories (project, module, status, memory_type, decision_kind)",
+    """CREATE TABLE IF NOT EXISTS repo_sync_state (
+        project TEXT NOT NULL, repo_path TEXT NOT NULL,
+        last_synced_commit TEXT, synced_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (project, repo_path)
+    )""",
+    """CREATE TABLE IF NOT EXISTS architecture_snapshots (
+        id TEXT PRIMARY KEY,
+        project TEXT NOT NULL,
+        environment TEXT NOT NULL DEFAULT 'all'
+            CHECK (environment IN ('all', 'dev', 'prod')),
+        status TEXT NOT NULL DEFAULT 'draft'
+            CHECK (status IN ('draft', 'published', 'archived')),
+        model TEXT, prompt_version TEXT, summary TEXT,
+        document_json JSONB NOT NULL,
+        source_digest TEXT,
+        source_count INTEGER NOT NULL DEFAULT 0 CHECK (source_count >= 0),
+        evidence_coverage REAL NOT NULL DEFAULT 0
+            CHECK (evidence_coverage >= 0 AND evidence_coverage <= 1),
+        generated_at TIMESTAMPTZ DEFAULT NOW(),
+        published_at TIMESTAMPTZ,
+        created_by TEXT
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_architecture_snapshots_project ON architecture_snapshots (project, environment, status, generated_at DESC)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_architecture_one_published ON architecture_snapshots (project, environment) WHERE status = 'published'",
+    """CREATE TABLE IF NOT EXISTS architecture_project_state (
+        project TEXT PRIMARY KEY,
+        last_run_at TIMESTAMPTZ,
+        last_status TEXT,
+        last_error TEXT,
+        last_snapshot_id TEXT
+    )""",
+    """CREATE TABLE IF NOT EXISTS architecture_generation_state (
+        project TEXT NOT NULL,
+        environment TEXT NOT NULL CHECK (environment IN ('all', 'dev', 'prod')),
+        local_run_date DATE NOT NULL,
+        source_digest TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN
+            ('running', 'success', 'failed', 'cancelled', 'skipped')),
+        attempt_id TEXT NOT NULL,
+        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        finished_at TIMESTAMPTZ,
+        lease_expires_at TIMESTAMPTZ,
+        snapshot_id TEXT,
+        last_error TEXT,
+        PRIMARY KEY (project, environment)
+    )""",
+)
+
+
+async def verify_architecture_schema_pg(conn) -> None:
+    """Fail closed if the additive architecture migration is incomplete."""
+    required_columns = {
+        'memories': {'status', 'supersedes_id', 'environment', 'evidence', 'decision_kind'},
+        'architecture_snapshots': {
+            'id', 'project', 'environment', 'status', 'document_json',
+            'source_digest', 'source_count', 'evidence_coverage',
+        },
+        'architecture_project_state': {
+            'project', 'last_run_at', 'last_status', 'last_error', 'last_snapshot_id',
+        },
+        'architecture_generation_state': {
+            'project', 'environment', 'local_run_date', 'source_digest', 'status',
+            'attempt_id', 'lease_expires_at', 'snapshot_id',
+        },
+    }
+    rows = await conn.fetch("""
+        SELECT table_name, column_name
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = ANY($1::text[])
+    """, list(required_columns))
+    found = {}
+    for row in rows:
+        found.setdefault(row['table_name'], set()).add(row['column_name'])
+    missing = {
+        table: sorted(columns - found.get(table, set()))
+        for table, columns in required_columns.items()
+        if columns - found.get(table, set())
+    }
+    index_rows = await conn.fetch("""
+        SELECT indexname FROM pg_indexes
+        WHERE schemaname = current_schema()
+          AND indexname = ANY($1::text[])
+    """, ['idx_memories_arch_kind', 'idx_architecture_snapshots_project',
+          'idx_architecture_one_published'])
+    indexes = {row['indexname'] for row in index_rows}
+    missing_indexes = sorted({
+        'idx_memories_arch_kind', 'idx_architecture_snapshots_project',
+        'idx_architecture_one_published',
+    } - indexes)
+    if missing or missing_indexes:
+        details = []
+        if missing:
+            details.append('columns=' + json.dumps(missing, sort_keys=True))
+        if missing_indexes:
+            details.append('indexes=' + ','.join(missing_indexes))
+        raise RuntimeError('architecture schema verification failed: ' + '; '.join(details))
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -245,6 +350,7 @@ async def init_pg() -> 'asyncpg.Pool':
             )""",
             "CREATE INDEX IF NOT EXISTS idx_session_ingests_status ON session_ingests (status, created_at)",
             "CREATE INDEX IF NOT EXISTS idx_session_ingests_session ON session_ingests (runner, session_id)",
+            # v1.2.0: architecture decisions — supersedes chains on memories + repo sync state
         ]
         for stmt in _migrations:
             try:
@@ -255,6 +361,17 @@ async def init_pg() -> 'asyncpg.Pool':
             await conn.execute(_PG_VEC_INDEX)
         except Exception as e:
             logger.warning(f'Vector index creation skipped, falling back to FTS: {e}')
+
+        # Architecture generation can transmit project memories to an external
+        # model, so this migration is fail-closed rather than best-effort.
+        try:
+            async with conn.transaction():
+                for stmt in _PG_ARCHITECTURE_DDL:
+                    await conn.execute(stmt)
+                await verify_architecture_schema_pg(conn)
+        except Exception as exc:
+            logger.error('architecture schema migration failed; startup aborted')
+            raise RuntimeError('architecture schema migration failed') from exc
 
     return _pg_pool
 
@@ -1309,3 +1426,432 @@ async def log_token_hit_pg(pool, label: str, command: str) -> None:
             "INSERT INTO token_hits (id, label, command) VALUES ($1, $2, $3)",
             str(_uuid.uuid4()), label, command,
         )
+
+
+# ── Architecture decisions (v1.2.0) ───────────────────────────────────────────
+# Decisions live in memories (memory_type='decision') with status/supersedes_id/
+# environment/evidence columns. Reuses the existing table so search, wikilinks,
+# and the web UI see decisions without any parallel plumbing.
+
+_DECISION_COLS = """id, title, content_md, project, module, memory_type, decision_kind,
+                    status, supersedes_id, environment, evidence,
+                    tags, created_by, created_at, updated_at"""
+
+
+async def save_decision_pg(pool, data: dict, embedding: list) -> str:
+    """Upsert a decision row; atomically mark supersedes_id as superseded.
+
+    Identity is (title, memory_type='decision', project) — same as save_memory —
+    so re-saving the same titled decision updates it in place instead of
+    violating the UNIQUE constraint. A supersedes_id equal to the resolved row
+    (self-reference after an upsert) is ignored.
+    """
+    from zikra.db import new_id
+    memory_id = new_id()
+    vec = _vec_str(embedding)
+    project = data['project']
+    module = data['module']
+    title = data['title']
+    content = data.get('content_md') or data.get('content', '')
+    supersedes_id = data.get('supersedes_id')
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            existing = await conn.fetchrow("""
+                SELECT id, module, status, decision_kind
+                FROM memories
+                WHERE title = $1 AND memory_type = 'decision' AND project = $2
+                FOR UPDATE
+            """, title, project)
+            if existing:
+                if existing['decision_kind'] != 'architecture':
+                    raise ValueError('a non-architecture decision already uses this title')
+                if existing['module'] != module:
+                    raise ValueError('an architecture decision title cannot move between modules')
+                if existing['status'] != 'current':
+                    raise ValueError('a superseded decision is immutable; save a new titled revision')
+                if supersedes_id:
+                    raise ValueError('supersedes_id is only valid when creating a new titled revision')
+
+            if supersedes_id:
+                target = await conn.fetchrow("""
+                    SELECT id FROM memories
+                    WHERE id = $1 AND project = $2 AND module = $3
+                      AND memory_type = 'decision'
+                      AND decision_kind = 'architecture'
+                      AND status = 'current'
+                    FOR UPDATE
+                """, supersedes_id, project, module)
+                if not target:
+                    raise ValueError('supersedes_id must reference a current architecture decision in the same project and module')
+                child = await conn.fetchval("""
+                    SELECT id FROM memories
+                    WHERE supersedes_id = $1 AND decision_kind = 'architecture'
+                    LIMIT 1
+                """, supersedes_id)
+                if child:
+                    raise ValueError('supersedes_id already has a successor')
+
+            base_cols = """(id, project, module, memory_type, title, content_md,
+                            tags, created_by, searchable,
+                            status, supersedes_id, environment, evidence, decision_kind"""
+            base_vals = """($1,$2,$3,'decision',$4,$5,$6,$7,1,
+                            'current',$8,$9,$10,'architecture'"""
+            conflict = """
+                ON CONFLICT (title, memory_type, project) DO UPDATE SET
+                    content_md    = EXCLUDED.content_md,
+                    tags          = EXCLUDED.tags,
+                    environment   = EXCLUDED.environment,
+                    evidence      = EXCLUDED.evidence,
+                    decision_kind = 'architecture',
+                    updated_at    = NOW()
+            """
+            params = [
+                memory_id, project, module, title, content,
+                json.dumps(data.get('tags') or []), data.get('created_by'),
+                supersedes_id, data.get('environment'), data.get('evidence'),
+            ]
+            if vec is not None:
+                row = await conn.fetchrow(
+                    f"INSERT INTO memories {base_cols}, embedding) "
+                    f"VALUES {base_vals}, $11::halfvec) {conflict} "
+                    "RETURNING id",
+                    *params, vec,
+                )
+            else:
+                row = await conn.fetchrow(
+                    f"INSERT INTO memories {base_cols}) "
+                    f"VALUES {base_vals}) {conflict} "
+                    "RETURNING id",
+                    *params,
+                )
+            resolved_id = row['id'] if row else memory_id
+
+            if supersedes_id:
+                result = await conn.execute("""
+                    UPDATE memories SET status = 'superseded', updated_at = NOW()
+                    WHERE id = $1 AND project = $2 AND module = $3
+                      AND memory_type = 'decision'
+                      AND decision_kind = 'architecture'
+                      AND status = 'current'
+                """, supersedes_id, project, module)
+                if result != 'UPDATE 1':
+                    raise ValueError('supersedes_id could not be superseded safely')
+
+            await _store_wikilinks_pg(conn, resolved_id, content, project)
+    return resolved_id
+
+
+async def list_decisions_pg(pool, project: str, module: str = None,
+                            environment: str = None,
+                            current_only: bool = True) -> list:
+    """Decisions for one project (strict scope — never cross-project),
+    newest first. environment filter matches that env plus env-agnostic
+    (NULL) rows, since those apply everywhere."""
+    sql = f"""SELECT {_DECISION_COLS} FROM memories
+              WHERE memory_type = 'decision'
+                AND decision_kind = 'architecture'
+                AND project = $1"""
+    params: list = [project]
+    if current_only:
+        sql += " AND status = 'current'"
+    if module:
+        params.append(module)
+        sql += f" AND module = ${len(params)}"
+    if environment:
+        params.append(environment)
+        sql += f" AND (environment = ${len(params)} OR environment IS NULL)"
+    sql += " ORDER BY created_at DESC"
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(sql, *params)
+    return [_row_to_dict(r) for r in rows]
+
+
+async def get_sync_state_pg(pool, project: str, repo_path: str) -> Optional[dict]:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT project, repo_path, last_synced_commit, synced_at
+            FROM repo_sync_state WHERE project = $1 AND repo_path = $2
+        """, project, repo_path)
+    if not row:
+        return None
+    d = dict(row)
+    d['synced_at'] = _iso(d.get('synced_at'))
+    return d
+
+
+async def set_sync_state_pg(pool, project: str, repo_path: str,
+                            last_synced_commit: str) -> dict:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            INSERT INTO repo_sync_state (project, repo_path, last_synced_commit, synced_at)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (project, repo_path) DO UPDATE SET
+                last_synced_commit = EXCLUDED.last_synced_commit,
+                synced_at          = NOW()
+            RETURNING project, repo_path, last_synced_commit, synced_at
+        """, project, repo_path, last_synced_commit)
+    d = dict(row)
+    d['synced_at'] = _iso(d.get('synced_at'))
+    return d
+
+
+# -- Generated architecture snapshots ----------------------------------------
+
+async def list_architecture_sources_pg(pool, project: str, limit: int = 300) -> list[dict]:
+    types = [
+        'architecture', 'module', 'stack', 'design_doc', 'index', 'reference',
+        'audit', 'investigation', 'implementation', 'requirement', 'bug',
+        'mockup', 'feedback', 'decision', 'change_log', 'summary', 'note',
+        'diary', 'conversation',
+    ]
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT id, title, content_md, memory_type, project, module, tags,
+                   confidence_score, pinned, status, decision_kind, environment,
+                   evidence, created_at, updated_at
+            FROM memories
+            WHERE project = $1 AND searchable = 1
+              AND memory_type = ANY($2::text[])
+              AND (memory_type <> 'decision' OR status = 'current')
+            ORDER BY
+              CASE memory_type
+                WHEN 'architecture' THEN 0 WHEN 'module' THEN 1
+                WHEN 'stack' THEN 2 WHEN 'design_doc' THEN 3
+                WHEN 'index' THEN 4 WHEN 'reference' THEN 5
+                WHEN 'audit' THEN 6 WHEN 'investigation' THEN 7
+                WHEN 'implementation' THEN 8 WHEN 'requirement' THEN 9
+                WHEN 'bug' THEN 10 WHEN 'mockup' THEN 11
+                WHEN 'feedback' THEN 12 WHEN 'decision' THEN 13
+                WHEN 'change_log' THEN 14 WHEN 'summary' THEN 15
+                WHEN 'note' THEN 16 WHEN 'diary' THEN 17 ELSE 18
+              END,
+              pinned DESC, COALESCE(updated_at, created_at) DESC
+            LIMIT $3
+        """, project, types, limit)
+    return [_row_to_dict(row) for row in rows]
+
+
+def _snapshot_pg_dict(row) -> Optional[dict]:
+    if not row:
+        return None
+    item = dict(row)
+    document = item.pop('document_json', {}) or {}
+    if isinstance(document, str):
+        try:
+            document = json.loads(document)
+        except json.JSONDecodeError:
+            document = {}
+    item['document'] = document
+    for key in ('generated_at', 'published_at'):
+        item[key] = _iso(item.get(key))
+    return item
+
+
+async def save_architecture_snapshot_pg(pool, data: dict) -> dict:
+    import uuid as _uuid
+    snapshot_id = data.get('id') or str(_uuid.uuid4())
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            INSERT INTO architecture_snapshots
+                (id, project, environment, status, model, prompt_version,
+                 summary, document_json, source_digest, source_count,
+                 evidence_coverage, created_by)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12)
+            RETURNING *
+        """, snapshot_id, data['project'], data.get('environment', 'all'),
+            data.get('status', 'draft'), data.get('model'), data.get('prompt_version'),
+            data.get('summary'), json.dumps(data.get('document') or {}),
+            data.get('source_digest'), int(data.get('source_count') or 0),
+            float(data.get('evidence_coverage') or 0), data.get('created_by'))
+    return _snapshot_pg_dict(row)
+
+
+async def get_architecture_snapshot_pg(pool, project: str,
+                                       environment: str = None,
+                                       snapshot_id: str = None,
+                                       status: str = None) -> Optional[dict]:
+    sql = "SELECT * FROM architecture_snapshots WHERE project = $1"
+    params: list = [project]
+    order_sql = ''
+    if snapshot_id:
+        params.append(snapshot_id)
+        sql += f" AND id = ${len(params)}"
+    elif environment == 'all':
+        sql += " AND environment = 'all'"
+    elif environment:
+        params.append(environment)
+        sql += f" AND environment IN (${len(params)}, 'all')"
+        order_sql = f'CASE WHEN environment = ${len(params)} THEN 0 ELSE 1 END, '
+    if status:
+        params.append(status)
+        sql += f" AND status = ${len(params)}"
+    sql += f" ORDER BY {order_sql}generated_at DESC LIMIT 1"
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(sql, *params)
+    return _snapshot_pg_dict(row)
+
+
+async def list_architecture_snapshots_pg(pool, project: str, limit: int = 30) -> list[dict]:
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT id, project, environment, status, model, prompt_version,
+                   summary, source_count, evidence_coverage, generated_at,
+                   published_at, created_by
+            FROM architecture_snapshots
+            WHERE project = $1
+            ORDER BY generated_at DESC LIMIT $2
+        """, project, limit)
+    out = []
+    for row in rows:
+        item = dict(row)
+        item['generated_at'] = _iso(item.get('generated_at'))
+        item['published_at'] = _iso(item.get('published_at'))
+        out.append(item)
+    return out
+
+
+async def publish_architecture_snapshot_pg(pool, project: str,
+                                           snapshot_id: str) -> Optional[dict]:
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            target = await conn.fetchrow("""
+                SELECT environment FROM architecture_snapshots
+                WHERE id = $1 AND project = $2 AND status = 'draft' FOR UPDATE
+            """, snapshot_id, project)
+            if not target:
+                return None
+            await conn.execute("""
+                UPDATE architecture_snapshots SET status = 'archived'
+                WHERE project = $1 AND environment = $2 AND status = 'published'
+            """, project, target['environment'])
+            row = await conn.fetchrow("""
+                UPDATE architecture_snapshots
+                SET status = 'published', published_at = NOW()
+                WHERE id = $1 AND project = $2 RETURNING *
+            """, snapshot_id, project)
+    return _snapshot_pg_dict(row)
+
+
+async def prune_architecture_snapshots_pg(pool, project: str,
+                                          environment: str,
+                                          keep_drafts: int) -> int:
+    async with pool.acquire() as conn:
+        result = await conn.execute("""
+            DELETE FROM architecture_snapshots
+            WHERE project = $1 AND environment = $2 AND status = 'draft'
+              AND id NOT IN (
+                  SELECT id FROM architecture_snapshots
+                  WHERE project = $1 AND environment = $2 AND status = 'draft'
+                  ORDER BY generated_at DESC LIMIT $3
+              )
+        """, project, environment, keep_drafts)
+    return int(result.rsplit(' ', 1)[-1])
+
+
+async def claim_architecture_generation_pg(pool, project: str,
+                                           environment: str,
+                                           local_run_date: str,
+                                           source_digest: str,
+                                           force: bool = False,
+                                           lease_seconds: int = 900) -> dict:
+    import uuid as _uuid
+    attempt_id = str(_uuid.uuid4())
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Serializes even the first insert, where FOR UPDATE has no row.
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtext($1))",
+                f'{project}:{environment}')
+            row = await conn.fetchrow("""
+                SELECT local_run_date, status,
+                       COALESCE(lease_expires_at > NOW(), FALSE) AS lease_active
+                FROM architecture_generation_state
+                WHERE project = $1 AND environment = $2
+                FOR UPDATE
+            """, project, environment)
+            if row and row['status'] == 'running' and row['lease_active']:
+                return {'claimed': False, 'reason': 'running'}
+            if (row and str(row['local_run_date']) == local_run_date
+                    and not force):
+                return {'claimed': False, 'reason': 'daily_limit'}
+            await conn.execute("""
+                INSERT INTO architecture_generation_state
+                    (project, environment, local_run_date, source_digest,
+                     status, attempt_id, started_at, finished_at,
+                     lease_expires_at, snapshot_id, last_error)
+                VALUES ($1, $2, $3::date, $4, 'running', $5, NOW(), NULL,
+                        NOW() + ($6 * INTERVAL '1 second'), NULL, NULL)
+                ON CONFLICT(project, environment) DO UPDATE SET
+                    local_run_date = EXCLUDED.local_run_date,
+                    source_digest = EXCLUDED.source_digest,
+                    status = 'running', attempt_id = EXCLUDED.attempt_id,
+                    started_at = NOW(), finished_at = NULL,
+                    lease_expires_at = EXCLUDED.lease_expires_at,
+                    snapshot_id = NULL, last_error = NULL
+            """, project, environment, local_run_date, source_digest,
+                attempt_id, lease_seconds)
+    return {'claimed': True, 'attempt_id': attempt_id}
+
+
+async def finish_architecture_generation_pg(pool, project: str,
+                                            environment: str,
+                                            attempt_id: str, status: str,
+                                            snapshot_id: str = None,
+                                            error: str = None) -> bool:
+    async with pool.acquire() as conn:
+        result = await conn.execute("""
+            UPDATE architecture_generation_state
+            SET status = $1, finished_at = NOW(), lease_expires_at = NULL,
+                snapshot_id = COALESCE($2, snapshot_id), last_error = $3
+            WHERE project = $4 AND environment = $5 AND attempt_id = $6
+        """, status, snapshot_id, error, project, environment, attempt_id)
+    return result != 'UPDATE 0'
+
+
+async def get_architecture_generation_state_pg(pool, project: str,
+                                               environment: str) -> Optional[dict]:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT project, environment, local_run_date, source_digest, status,
+                   attempt_id, started_at, finished_at, lease_expires_at,
+                   snapshot_id, last_error
+            FROM architecture_generation_state
+            WHERE project = $1 AND environment = $2
+        """, project, environment)
+    if not row:
+        return None
+    item = dict(row)
+    item['local_run_date'] = str(item.get('local_run_date') or '')
+    for key in ('started_at', 'finished_at', 'lease_expires_at'):
+        item[key] = _iso(item.get(key))
+    return item
+
+
+async def set_architecture_run_state_pg(pool, project: str, status: str,
+                                        snapshot_id: str = None,
+                                        error: str = None) -> None:
+    async with pool.acquire() as conn:
+        await conn.execute("""
+            INSERT INTO architecture_project_state
+                (project, last_run_at, last_status, last_error, last_snapshot_id)
+            VALUES ($1, NOW(), $2, $3, $4)
+            ON CONFLICT(project) DO UPDATE SET
+                last_run_at = NOW(), last_status = EXCLUDED.last_status,
+                last_error = EXCLUDED.last_error,
+                last_snapshot_id = COALESCE(EXCLUDED.last_snapshot_id,
+                                            architecture_project_state.last_snapshot_id)
+        """, project, status, error, snapshot_id)
+
+
+async def get_architecture_run_state_pg(pool, project: str) -> Optional[dict]:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT project, last_run_at, last_status, last_error, last_snapshot_id
+            FROM architecture_project_state WHERE project = $1
+        """, project)
+    if not row:
+        return None
+    item = dict(row)
+    item['last_run_at'] = _iso(item.get('last_run_at'))
+    return item

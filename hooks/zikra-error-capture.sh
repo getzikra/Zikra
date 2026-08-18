@@ -40,9 +40,15 @@ HOOK_CWD="$(printf '%s' "$PAYLOAD" | python3 -c \
 for _pd in "$HOME/.claude/zikra-project.sh" "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/zikra-project.sh"; do
   [[ -f "$_pd" ]] && { source "$_pd"; break; }
 done
-if [[ -n "$HOOK_CWD" ]] && declare -f zikra_detect_project >/dev/null; then
-  DEFAULT_PROJECT="$(zikra_detect_project "$HOOK_CWD" "$DEFAULT_PROJECT")"
+if ! declare -f zikra_detect_project >/dev/null; then
+  echo "[zikra-error-capture] project detector unavailable; skipping" >&2
+  exit 0
 fi
+if ! DETECTED_PROJECT="$(zikra_detect_project "$HOOK_CWD")" || [[ -z "$DETECTED_PROJECT" ]]; then
+  echo "[zikra-error-capture] unmapped or missing cwd; skipping: ${HOOK_CWD:-[missing]}" >&2
+  exit 0
+fi
+DEFAULT_PROJECT="$DETECTED_PROJECT"
 
 ERRDIR="$HOME/.zikra/errcache"
 mkdir -p "$ERRDIR" 2>/dev/null

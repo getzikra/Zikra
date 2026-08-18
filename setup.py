@@ -5,7 +5,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='zikra',
-    version='1.0.14',
+    version='1.2.0',
     description='Persistent memory for AI agents — FastAPI + SQLite + sqlite-vec, with optional PostgreSQL',
     long_description=long_description,
     long_description_content_type='text/markdown',
@@ -20,7 +20,7 @@ setup(
         'sqlite-vec>=0.1.1',
         'aiosqlite>=0.19.0',
         'python-dotenv>=1.0.0',
-        'mcp[cli]>=1.0.0',
+        'mcp[cli]>=1.0.0,<2.0.0',
         'starlette>=0.37.0',
     ],
     extras_require={

@@ -8,6 +8,13 @@ import os
 def _flag(name, default):
     return os.getenv(name, default) not in ('0', 'false', 'False', 'no', '')
 
+
+def _bounded_int(name, default, minimum, maximum):
+    value = int(os.getenv(name, str(default)))
+    if value < minimum or value > maximum:
+        raise ValueError(f'{name} must be between {minimum} and {maximum}')
+    return value
+
 # Token budget per result slot (chars / CHARS_PER_TOKEN applied in search.py)
 SNIPPET_LENGTHS = [500, 300, 200, 150, 150]
 
@@ -52,3 +59,25 @@ CONSOLIDATE_INTERVAL_HOURS = int(os.getenv('ZIKRA_CONSOLIDATE_INTERVAL_HOURS', '
 CONSOLIDATE_MIN_AGE_DAYS = int(os.getenv('ZIKRA_CONSOLIDATE_MIN_AGE_DAYS', '14'))
 CONSOLIDATE_BATCH = int(os.getenv('ZIKRA_CONSOLIDATE_BATCH', '200'))
 CONSOLIDATE_MAX_CLUSTER_CHARS = int(os.getenv('ZIKRA_CONSOLIDATE_MAX_CLUSTER_CHARS', '60000'))
+
+# Nightly, project-scoped architecture snapshots. This intentionally has a
+# separate model knob so memory distillation can stay on a small inexpensive
+# model while architecture synthesis uses a long-context reviewer such as Kimi.
+ARCHITECTURE_ENABLED = _flag('ZIKRA_ARCHITECTURE_ENABLED', '0')
+ARCHITECTURE_MODEL = os.getenv('ZIKRA_ARCHITECTURE_MODEL', 'kimi-for-coding')
+ARCHITECTURE_PROJECTS = tuple(
+    p.strip().lower() for p in os.getenv('ZIKRA_ARCHITECTURE_PROJECTS', '').split(',')
+    if p.strip()
+)
+ARCHITECTURE_HOUR = _bounded_int('ZIKRA_ARCHITECTURE_HOUR', 2, 0, 23)
+ARCHITECTURE_TIMEZONE = os.getenv('ZIKRA_ARCHITECTURE_TIMEZONE', 'America/New_York')
+ARCHITECTURE_SOURCE_LIMIT = _bounded_int('ZIKRA_ARCHITECTURE_SOURCE_LIMIT', 300, 1, 2000)
+ARCHITECTURE_MAX_SOURCE_CHARS = _bounded_int(
+    'ZIKRA_ARCHITECTURE_MAX_SOURCE_CHARS', 180000, 10000, 1000000)
+ARCHITECTURE_MAX_COMPLETION_TOKENS = _bounded_int(
+    'ZIKRA_ARCHITECTURE_MAX_COMPLETION_TOKENS', 12000, 1000, 64000)
+ARCHITECTURE_DRAFT_RETENTION = _bounded_int(
+    'ZIKRA_ARCHITECTURE_DRAFT_RETENTION', 30, 1, 500)
+ARCHITECTURE_LEASE_SECONDS = _bounded_int(
+    'ZIKRA_ARCHITECTURE_LEASE_SECONDS', 900, 120, 7200)
+ARCHITECTURE_PROMPT_VERSION = 'architecture-twin-v1'

@@ -19,16 +19,19 @@ HOOK_CWD="$(printf '%s' "$PAYLOAD" | python3 -c \
   2>/dev/null || echo "")"
 
 # Detect project from CWD so the memory-count query can be scoped to the
-# current project. Uses the shared helper (projects.map + git remote) when
-# installed; otherwise falls back to the configured default.
+# current project. Explicit map entries or built-in inference are required.
 for _pd in "$HOME/.claude/zikra-project.sh" "$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)/zikra-project.sh"; do
   [[ -f "$_pd" ]] && { source "$_pd"; break; }
 done
-if declare -f zikra_detect_project >/dev/null; then
-  PROJECT="$(zikra_detect_project "$HOOK_CWD" "${ZIKRA_PROJECT:-global}")"
-else
-  PROJECT="${ZIKRA_PROJECT:-global}"
+if ! declare -f zikra_detect_project >/dev/null; then
+  echo "[zikra-stats] project detector unavailable; skipping" >&2
+  exit 0
 fi
+if ! DETECTED_PROJECT="$(zikra_detect_project "$HOOK_CWD")" || [[ -z "$DETECTED_PROJECT" ]]; then
+  echo "[zikra-stats] unmapped or missing cwd; skipping: ${HOOK_CWD:-[missing]}" >&2
+  exit 0
+fi
+PROJECT="$DETECTED_PROJECT"
 
 # Fetch live memory count from Zikra, scoped to the current project so the
 # '187 memories' tag actually reflects what's visible in this project. When

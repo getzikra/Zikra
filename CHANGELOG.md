@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.2.0] — 2026-08-13
+
+### Added — architecture memory
+
+Zikra becomes the architecture memory for your projects: typed, per-module
+architecture decisions with supersedes chains, plus sync-state tracking so
+external repos can push decisions from files/sessions and pull "current truth"
+back into generated docs.
+
+- **Decision columns on `memories`** (migration 011, Postgres startup guards).
+  New nullable/additive columns: `status` ('current' | 'superseded', default
+  'current'), `supersedes_id`, `environment` ('dev' | 'prod' | null), and
+  `evidence` (file:line, commit hash, or transcript quote). Decisions reuse the
+  existing `memories` table (`memory_type='decision'` + the existing `module`
+  column) so search, wikilinks, and the web UI see them with no parallel
+  plumbing.
+
+- **`save_decision`** (`{project, module, title, content_md, environment?,
+  evidence?, supersedes_id?}`). Upserts by (title, decision, project); saving
+  with `supersedes_id` atomically marks that older row `status='superseded'`.
+  Returns the new decision id.
+
+- **`get_architecture`** (`{project, module?, environment?}`) — all
+  `status='current'` decisions, newest first, full content; grouped by module
+  when no module is given. Strictly project-scoped; an environment filter also
+  matches env-agnostic (null) decisions.
+
+- **`module_history`** (`{project, module}`) — the full chain including
+  superseded rows, ordered so each supersedes link is adjacent.
+
+- **`repo_sync_state` table + `get_sync_state` / `set_sync_state`** — per
+  (project, repo_path) `last_synced_commit` / `synced_at` so external repos can
+  incremental-sync decisions from files.
+
+- Roles: `save_decision` / `set_sync_state` require developer;
+  `get_architecture` / `module_history` / `get_sync_state` are viewer-readable.
+  All five commands are also exposed as MCP tools.
+
+### Fixed
+
+- Pinned `mcp[cli]>=1.0.0,<2.0.0` — mcp 2.0.0 removed the `Server.list_tools` /
+  `call_tool` decorators the legacy SSE transport uses, breaking fresh installs
+  and rebuilds. (Migration to the 2.x API is future work.)
+
 ## [1.1.0] — 2026-07-11
 
 ### Added — automatic memory: distill, recall, capture

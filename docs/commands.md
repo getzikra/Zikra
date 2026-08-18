@@ -519,3 +519,84 @@ weekly).
 Alias: `consolidate`. Minimum role: admin.
 
 **Response:** `{ "status", "dry_run", "projects": [{ "project", "candidates", "weeks", "memories_created", "diaries_archived" }] }`
+
+---
+
+## save_decision
+
+*(v1.2.0)* Save a per-module architecture decision (`memory_type='decision'`).
+Identity is (title, decision, project) — re-saving the same title updates it in
+place. Saving with `supersedes_id` atomically marks that older decision
+`status='superseded'` in the same transaction.
+
+**Required fields:**
+- `command` — `"save_decision"`
+- `title` — string
+- `module` — string, the code area this decision governs
+
+**Optional fields:**
+- `project` — string (default: `"global"`)
+- `content_md` — string, the decision rationale
+- `environment` — `"dev"` | `"prod"` | null (default: null = applies everywhere)
+- `evidence` — string, file:line, commit hash, or transcript quote
+- `supersedes_id` — UUID of the decision this one replaces
+- `tags`, `created_by`
+
+Aliases: `record_decision`, `save_architecture_decision`. Minimum role: developer.
+
+**Response:** `{ "id", "title", "module", "status": "saved", "superseded"? }`
+
+---
+
+## get_architecture
+
+*(v1.2.0)* All `status='current'` decisions for a project, newest first, full
+content. Strictly project-scoped — never returns cross-project rows. An
+`environment` filter matches that environment plus env-agnostic (null)
+decisions, since those apply everywhere.
+
+**Optional fields:**
+- `project` — string (default: `"global"`)
+- `module` — string; omit to get all modules grouped by module name
+- `environment` — `"dev"` | `"prod"`
+
+Aliases: `architecture`, `get_arch`. Minimum role: viewer.
+
+**Response (module given):** `{ "project", "module", "decisions": [...], "count" }`
+**Response (no module):** `{ "project", "modules": { "<module>": [...] }, "count" }`
+
+---
+
+## module_history
+
+*(v1.2.0)* The full decision chain for a module, including superseded rows,
+ordered so each supersedes link is adjacent (chain tip first, walking
+`supersedes_id` back to the oldest).
+
+**Required fields:**
+- `command` — `"module_history"`
+- `module` — string
+
+**Optional fields:**
+- `project` — string (default: `"global"`)
+
+Alias: `decision_history`. Minimum role: viewer.
+
+**Response:** `{ "project", "module", "history": [...], "count" }`
+
+---
+
+## get_sync_state / set_sync_state
+
+*(v1.2.0)* Read/write the `repo_sync_state` table: per (project, repo_path)
+`last_synced_commit` + `synced_at`, so external repos can incrementally sync
+decisions from files (diff since the last synced commit, push, pull, then
+record the new head).
+
+**get_sync_state required:** `repo_path`. Optional: `project`.
+**set_sync_state required:** `repo_path`, `last_synced_commit`. Optional: `project`.
+
+Minimum role: viewer for get, developer for set.
+
+**get response:** `{ "project", "repo_path", "last_synced_commit", "synced_at", "status": "ok" | "not_found" }`
+**set response:** same row with `"status": "saved"`

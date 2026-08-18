@@ -59,6 +59,10 @@ from zikra.commands.create_token import cmd_create_token
 from zikra.commands.save_prompt import cmd_save_prompt
 from zikra.commands.list_prompts import cmd_list_prompts
 from zikra.commands.zikra_help import cmd_zikra_help
+from zikra.commands.save_decision import cmd_save_decision
+from zikra.commands.get_architecture import cmd_get_architecture
+from zikra.commands.module_history import cmd_module_history
+from zikra.commands.sync_state import cmd_get_sync_state, cmd_set_sync_state
 from zikra.auth import verify_auth, ROLE_PERMISSIONS
 from zikra.version import __version__
 
@@ -93,6 +97,11 @@ _PROJECT_SCOPED_TOOLS = {
     'zikra_save_prompt',
     'zikra_list_prompts',
     'zikra_hygiene_report',
+    'zikra_save_decision',
+    'zikra_get_architecture',
+    'zikra_module_history',
+    'zikra_get_sync_state',
+    'zikra_set_sync_state',
     'zikra_get_context',
 }
 
@@ -341,6 +350,83 @@ _TOOLS: list[types.Tool] = [
             'required': ['project'],
         },
     ),
+    types.Tool(
+        name='zikra_save_decision',
+        description=(
+            'Save a per-module architecture decision. With supersedes_id, the '
+            'older decision is atomically marked superseded. Returns the new id.'
+        ),
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'title':        {'type': 'string'},
+                'module':       {'type': 'string'},
+                'content_md':   {'type': 'string'},
+                'project':      {'type': 'string'},
+                'environment':  {'type': 'string', 'enum': ['dev', 'prod']},
+                'evidence':     {'type': 'string', 'description': 'file:line, commit hash, or transcript quote'},
+                'supersedes_id': {'type': 'string', 'description': 'UUID of the decision this one replaces'},
+                'tags':         {'type': 'array', 'items': {'type': 'string'}},
+                'created_by':   {'type': 'string'},
+            },
+            'required': ['title', 'module'],
+        },
+    ),
+    types.Tool(
+        name='zikra_get_architecture',
+        description=(
+            "Return all status='current' decisions for a project, newest "
+            'first, full content. Without module, grouped by module.'
+        ),
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'project':     {'type': 'string'},
+                'module':      {'type': 'string'},
+                'environment': {'type': 'string', 'enum': ['dev', 'prod']},
+            },
+        },
+    ),
+    types.Tool(
+        name='zikra_module_history',
+        description=(
+            'Full decision chain for a module including superseded rows, '
+            'ordered so each supersedes link is adjacent.'
+        ),
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'project': {'type': 'string'},
+                'module':  {'type': 'string'},
+            },
+            'required': ['module'],
+        },
+    ),
+    types.Tool(
+        name='zikra_get_sync_state',
+        description='Read repo sync state for a (project, repo_path) pair',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'project':   {'type': 'string'},
+                'repo_path': {'type': 'string'},
+            },
+            'required': ['repo_path'],
+        },
+    ),
+    types.Tool(
+        name='zikra_set_sync_state',
+        description='Write repo sync state for a (project, repo_path) pair after a sync pass',
+        inputSchema={
+            'type': 'object',
+            'properties': {
+                'project':            {'type': 'string'},
+                'repo_path':          {'type': 'string'},
+                'last_synced_commit': {'type': 'string'},
+            },
+            'required': ['repo_path', 'last_synced_commit'],
+        },
+    ),
 ]
 
 _MCP_DISPATCH = {
@@ -361,6 +447,11 @@ _MCP_DISPATCH = {
     'zikra_help':                 cmd_zikra_help,
     'zikra_hygiene_report':       cmd_hygiene,
     'zikra_get_context':          cmd_get_context,
+    'zikra_save_decision':        cmd_save_decision,
+    'zikra_get_architecture':     cmd_get_architecture,
+    'zikra_module_history':       cmd_module_history,
+    'zikra_get_sync_state':       cmd_get_sync_state,
+    'zikra_set_sync_state':       cmd_set_sync_state,
 }
 
 
