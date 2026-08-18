@@ -639,6 +639,10 @@ async def ui_architecture_generate(request: Request):
         return JSONResponse(status_code=400, content={'error': 'invalid environment'})
     job_key = f'{project}:{environment}'
     force = body.get('force') is True
+    if force and auth_info.get('role') != 'owner':
+        return JSONResponse(status_code=403, content={
+            'error': 'owner role required for a forced architecture retry',
+        })
     running = _architecture_jobs.get(job_key)
     from zikra.architecture import generation_running
     if (running and not running.done()) or generation_running(project):

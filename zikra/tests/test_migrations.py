@@ -2,10 +2,12 @@
 Migration system tests.
 Run with: python -m pytest zikra/tests/test_migrations.py -v
 """
+import shutil
 import sqlite3
-import sqlite_vec
 import tempfile
 from pathlib import Path
+
+import sqlite_vec
 
 from zikra.migrate import run_migrations
 
@@ -104,4 +106,48 @@ def test_schema_versions_rows_correct():
 
     assert rows[1]['version'] == 2
     assert 'schema_versions' in rows[1]['description'].lower()
+    conn.close()
+
+
+def test_old_v12_upgrades_architecture_generation_guards():
+    """A database that already recorded v12 must still receive v13 guards."""
+    conn = _make_in_memory_conn()
+    real_dir = Path(__file__).parent.parent / 'migrations'
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        old_dir = Path(tmpdir)
+        for path in real_dir.glob('[0-9][0-9][0-9]_*.py'):
+            if int(path.name.split('_', 1)[0]) <= 12:
+                shutil.copy2(path, old_dir / path.name)
+        run_migrations(conn, migrations_dir=old_dir)
+
+    assert conn.execute(
+        'SELECT MAX(version) FROM schema_versions').fetchone()[0] == 12
+    assert not _table_exists(conn, 'architecture_generation_state')
+
+    run_migrations(conn, migrations_dir=real_dir)
+
+    assert _table_exists(conn, 'architecture_generation_state')
+    assert conn.execute(
+        'SELECT MAX(version) FROM schema_versions').fetchone()[0] == 13
+    index = conn.execute("""
+        SELECT 1 FROM sqlite_master
+        WHERE type = 'index' AND name = 'idx_architecture_one_published'
+    """).fetchone()
+    assert index is not None
+    triggers = conn.execute("""
+        SELECT COUNT(*) FROM sqlite_master
+        WHERE type = 'trigger' AND name LIKE 'trg_architecture_snapshot_validate_%'
+    """).fetchone()[0]
+    assert triggers == 2
+
+    try:
+        conn.execute("""
+            INSERT INTO architecture_snapshots
+                (id, project, environment, status, document_json)
+            VALUES ('invalid-env', 'p', 'staging', 'draft', '{}')
+        """)
+        assert False, 'v13 must reject invalid snapshot metadata'
+    except sqlite3.IntegrityError:
+        pass
     conn.close()

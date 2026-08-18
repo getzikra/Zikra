@@ -1721,7 +1721,7 @@ async def list_architecture_sources(project: str, limit: int = 300) -> list[dict
             WHEN 'change_log' THEN 14 WHEN 'summary' THEN 15
             WHEN 'note' THEN 16 WHEN 'diary' THEN 17 ELSE 18
           END,
-          pinned DESC, COALESCE(updated_at, created_at) DESC
+          pinned DESC, COALESCE(updated_at, created_at) DESC, id ASC
         LIMIT ?
     """
     params = [project, *_ARCH_SOURCE_TYPES, limit]

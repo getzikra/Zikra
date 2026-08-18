@@ -141,7 +141,7 @@ def _llm_config() -> dict:
                     or os.getenv('OPENAI_API_KEY')
                     or config.LLM_API_KEY),
         'model': os.getenv('ZIKRA_ARCHITECTURE_MODEL') or config.ARCHITECTURE_MODEL,
-        'timeout': int(os.getenv('ZIKRA_ARCHITECTURE_TIMEOUT_S', '600')),
+        'timeout': config.ARCHITECTURE_TIMEOUT_S,
     }
 
 
@@ -189,8 +189,11 @@ def _secret_categories(text: str) -> list[str]:
         if '<redacted' not in match.group(2).lower():
             categories.add('sensitive-query')
             break
+    for match in _AUTH_HEADER_RE.finditer(text):
+        if '<redacted' not in match.group(0).lower():
+            categories.add('authorization')
+            break
     checks = (
-        ('authorization', _AUTH_HEADER_RE),
         ('authorization', _AUTH_SCHEME_RE),
         ('credential-url', _CREDENTIAL_URI_RE),
         ('private-key', _PRIVATE_KEY_RE),
@@ -441,21 +444,27 @@ async def generate_architecture_snapshot(project: str, environment: str = 'all',
     lock = _locks.setdefault(project, asyncio.Lock())
     async with lock:
         attempt_id = None
+        claim_reason = None
         try:
             sources = await list_architecture_sources(project, config.ARCHITECTURE_SOURCE_LIMIT)
             packed, selected = _pack_sources(sources, config.ARCHITECTURE_MAX_SOURCE_CHARS)
             if not selected:
                 raise ValueError(f'project {project!r} has no architecture source memories')
             _assert_no_secrets(packed)
-            source_digest = hashlib.sha256(packed.encode('utf-8')).hexdigest()
+            digest_basis = json.dumps({
+                'environment': environment,
+                'model': config.ARCHITECTURE_MODEL,
+                'prompt_version': config.ARCHITECTURE_PROMPT_VERSION,
+            }, sort_keys=True) + '\n' + packed
+            source_digest = hashlib.sha256(digest_basis.encode('utf-8')).hexdigest()
             run_date = datetime.now(ZoneInfo(config.ARCHITECTURE_TIMEZONE)).date().isoformat()
             claim = await claim_architecture_generation(
                 project, environment, run_date, source_digest,
                 force=force, lease_seconds=config.ARCHITECTURE_LEASE_SECONDS,
             )
             if not claim.get('claimed'):
-                reason = claim.get('reason') or 'budget unavailable'
-                if reason == 'running':
+                claim_reason = claim.get('reason') or 'budget unavailable'
+                if claim_reason == 'running':
                     raise RuntimeError('architecture generation is already running')
                 await set_architecture_run_state(
                     project, 'rate_limited',
@@ -539,7 +548,8 @@ async def generate_architecture_snapshot(project: str, environment: str = 'all',
                 await finish_architecture_generation(
                     project, environment, attempt_id, 'failed', error=safe_error)
             state = await get_architecture_run_state(project)
-            if (state or {}).get('last_status') != 'rate_limited':
+            if (claim_reason != 'running'
+                    and (state or {}).get('last_status') != 'rate_limited'):
                 await set_architecture_run_state(project, 'failed', error=safe_error)
             raise
 
@@ -600,6 +610,10 @@ def validate_architecture_config() -> ZoneInfo:
         ) from exc
     for project in config.ARCHITECTURE_PROJECTS:
         canonical_project(project)
+    if config.ARCHITECTURE_LEASE_SECONDS <= config.ARCHITECTURE_TIMEOUT_S + 60:
+        raise ValueError(
+            'ZIKRA_ARCHITECTURE_LEASE_SECONDS must exceed '
+            'ZIKRA_ARCHITECTURE_TIMEOUT_S by more than 60 seconds')
     return timezone
 
 
@@ -618,10 +632,6 @@ async def scheduler_loop() -> None:
                     project = canonical_project(configured_project)
                     state = await get_architecture_generation_state(project, 'all')
                     if str((state or {}).get('local_run_date') or '') == now.date().isoformat():
-                        continue
-                    latest = await get_architecture_snapshot(project, environment='all')
-                    latest_at = str((latest or {}).get('generated_at') or '')
-                    if latest_at[:10] == now.date().isoformat() and state:
                         continue
                     try:
                         await generate_architecture_snapshot(project)

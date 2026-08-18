@@ -1626,7 +1626,7 @@ async def list_architecture_sources_pg(pool, project: str, limit: int = 300) -> 
                 WHEN 'change_log' THEN 14 WHEN 'summary' THEN 15
                 WHEN 'note' THEN 16 WHEN 'diary' THEN 17 ELSE 18
               END,
-              pinned DESC, COALESCE(updated_at, created_at) DESC
+              pinned DESC, COALESCE(updated_at, created_at) DESC, id ASC
             LIMIT $3
         """, project, types, limit)
     return [_row_to_dict(row) for row in rows]
@@ -1755,8 +1755,10 @@ async def claim_architecture_generation_pg(pool, project: str,
                                            source_digest: str,
                                            force: bool = False,
                                            lease_seconds: int = 900) -> dict:
+    from datetime import date as _date
     import uuid as _uuid
     attempt_id = str(_uuid.uuid4())
+    run_date = _date.fromisoformat(local_run_date)
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Serializes even the first insert, where FOR UPDATE has no row.
@@ -1780,7 +1782,7 @@ async def claim_architecture_generation_pg(pool, project: str,
                     (project, environment, local_run_date, source_digest,
                      status, attempt_id, started_at, finished_at,
                      lease_expires_at, snapshot_id, last_error)
-                VALUES ($1, $2, $3::date, $4, 'running', $5, NOW(), NULL,
+                VALUES ($1, $2, $3, $4, 'running', $5, NOW(), NULL,
                         NOW() + ($6 * INTERVAL '1 second'), NULL, NULL)
                 ON CONFLICT(project, environment) DO UPDATE SET
                     local_run_date = EXCLUDED.local_run_date,
@@ -1789,7 +1791,7 @@ async def claim_architecture_generation_pg(pool, project: str,
                     started_at = NOW(), finished_at = NULL,
                     lease_expires_at = EXCLUDED.lease_expires_at,
                     snapshot_id = NULL, last_error = NULL
-            """, project, environment, local_run_date, source_digest,
+            """, project, environment, run_date, source_digest,
                 attempt_id, lease_seconds)
     return {'claimed': True, 'attempt_id': attempt_id}
 

@@ -51,6 +51,7 @@ ZIKRA_ARCHITECTURE_TIMEZONE=America/New_York
 ZIKRA_ARCHITECTURE_SOURCE_LIMIT=300
 ZIKRA_ARCHITECTURE_MAX_SOURCE_CHARS=180000
 ZIKRA_ARCHITECTURE_MAX_COMPLETION_TOKENS=12000
+ZIKRA_ARCHITECTURE_TIMEOUT_S=600
 ZIKRA_ARCHITECTURE_DRAFT_RETENTION=30
 ZIKRA_ARCHITECTURE_LEASE_SECONDS=900
 ```
@@ -62,13 +63,16 @@ distillation keep its existing model while architecture synthesis selects the
 direct `kimi-for-coding` LiteLLM route.
 
 Kimi's coding membership endpoint currently requires `temperature=1`; the
-worker sets that explicitly and requests a JSON object response.
+worker sets that explicitly and requests a JSON object response. The lease
+must exceed the request timeout by more than 60 seconds; startup rejects an
+unsafe combination.
 
 Generation has a database-backed project/environment lease and a one-run-per-
-local-day budget. Concurrent workers cannot duplicate a model call, unchanged
-source material reuses the existing snapshot, and only the newest configured
-number of drafts is retained. An owner can deliberately bypass the daily
-budget with `force: true`; the normal dashboard does not do so.
+local-day budget. Concurrent workers cannot duplicate a model call; unchanged
+source, model, and prompt inputs reuse the existing snapshot; and only the
+newest configured number of drafts is retained. An owner can deliberately
+bypass the daily budget with `force: true`; the normal dashboard does not do
+so.
 
 ## Dashboard API
 

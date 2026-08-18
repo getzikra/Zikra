@@ -282,7 +282,11 @@ async def _run_snapshot_tests(db_path):
         """, [source_id])
         await aio.commit()
 
+        model_calls = 0
+
         async def fake_call(_content):
+            nonlocal model_calls
+            model_calls += 1
             return 'kimi-for-coding', '''{
               "summary":"Memory-derived current state.",
               "nodes":[
@@ -325,6 +329,26 @@ async def _run_snapshot_tests(db_path):
         assert published['published_at']
         visible = await architecture_payload('multi-project', include_drafts=False)
         assert visible['snapshot']['id'] == snapshot['id']
+
+        # On a later local day, unchanged redacted sources reuse the existing
+        # snapshot without spending another model call.
+        await aio.execute("""
+            UPDATE architecture_generation_state
+            SET local_run_date = '2000-01-01'
+            WHERE project = 'multi-project' AND environment = 'all'
+        """)
+        await aio.commit()
+        unchanged = await generate_architecture_snapshot('multi-project')
+        assert unchanged['id'] == snapshot['id'] and model_calls == 1
+        unchanged_state = await db.get_architecture_run_state('multi-project')
+        assert unchanged_state['last_status'] == 'skipped'
+
+        # Environment is part of generation identity. A dev request may read
+        # all as its prior baseline, but must still create a dev-specific draft.
+        dev_specific = await generate_architecture_snapshot(
+            'multi-project', environment='dev')
+        assert dev_specific['environment'] == 'dev'
+        assert dev_specific['id'] != snapshot['id'] and model_calls == 2
 
         # A published snapshot remains visible after more than the UI history
         # window of newer drafts.
