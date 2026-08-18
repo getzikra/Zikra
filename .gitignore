@@ -23,6 +23,7 @@ dist/
 build/
 .eggs/
 .venv/
+.vscode/
 venv/
 env/
 Thumbs.db
