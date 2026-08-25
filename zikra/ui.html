@@ -1145,6 +1145,7 @@ button.arch-crumb:hover { color: var(--text); background: var(--bgsec); }
                 <option value="dev">Development</option>
               </select>
               <button class="arch-icon-btn arch-generate" id="arch-generate" style="display:none">Generate draft</button>
+              <button class="arch-icon-btn" id="arch-force-generate" style="display:none" title="Bypass the daily generation budget and regenerate even when sources are unchanged">Force regenerate</button>
               <button class="arch-icon-btn arch-publish" id="arch-publish" style="display:none">Publish</button>
               <button class="arch-icon-btn" id="arch-refresh" title="Refresh architecture">Refresh</button>
               <button class="arch-icon-btn" id="arch-export-json" title="Download structured architecture JSON">Export JSON</button>
@@ -2828,6 +2829,7 @@ function updateArchitectureHeader() {
   const trustText = document.getElementById('arch-trust-text');
   const exportBtn = document.getElementById('arch-export-json');
   const generateBtn = document.getElementById('arch-generate');
+  const forceGenerateBtn = document.getElementById('arch-force-generate');
   const publishBtn = document.getElementById('arch-publish');
   const refreshBtn = document.getElementById('arch-refresh');
   const environment = document.getElementById('arch-environment');
@@ -2843,6 +2845,11 @@ function updateArchitectureHeader() {
     generateBtn.style.display = canAuthor ? 'inline-flex' : 'none';
     generateBtn.disabled = busy || S.archLoading || !S.connected;
     generateBtn.textContent = S.archAction === 'generating' ? 'Generating…' : 'Generate draft';
+  }
+  if (forceGenerateBtn) {
+    forceGenerateBtn.style.display = S.role === 'owner' ? 'inline-flex' : 'none';
+    forceGenerateBtn.disabled = busy || S.archLoading || !S.connected;
+    forceGenerateBtn.textContent = S.archAction === 'force-generating' ? 'Regenerating…' : 'Force regenerate';
   }
   if (publishBtn) {
     publishBtn.style.display = canAuthor && isDraft ? 'inline-flex' : 'none';
@@ -2977,14 +2984,19 @@ async function loadArchitecture(force = false) {
   renderArchitecture();
 }
 
-async function generateArchitectureDraft() {
+async function generateArchitectureDraft(force = false) {
   if (!archCanAuthor() || !S.connected || S.archAction) return;
+  if (force && S.role !== 'owner') return;
   const project = S.project;
   const environment = S.archEnvironment;
+  if (force && !window.confirm(
+    `Force architecture regeneration for "${project}"?\n\n` +
+    'This bypasses the daily generation budget and unchanged-source check, and will create another model call.'
+  )) return;
   const pollToken = ++S.archPollToken;
-  S.archAction = 'generating';
+  S.archAction = force ? 'force-generating' : 'generating';
   updateArchitectureHeader();
-  const result = await architectureApiPost('/api/ui/architecture/generate', { project, environment });
+  const result = await architectureApiPost('/api/ui/architecture/generate', { project, environment, force });
   if (!result.ok) {
     S.archAction = null;
     updateArchitectureHeader();
@@ -4163,7 +4175,8 @@ document.getElementById('arch-environment').addEventListener('change', e => {
 });
 document.getElementById('arch-refresh').addEventListener('click', () => loadArchitecture(true));
 document.getElementById('arch-export-json').addEventListener('click', exportArchitectureJSON);
-document.getElementById('arch-generate').addEventListener('click', generateArchitectureDraft);
+document.getElementById('arch-generate').addEventListener('click', () => generateArchitectureDraft(false));
+document.getElementById('arch-force-generate').addEventListener('click', () => generateArchitectureDraft(true));
 document.getElementById('arch-publish').addEventListener('click', publishArchitectureSnapshot);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && S.activeTab === 'architecture' && S.archSelectedNodeId) {
