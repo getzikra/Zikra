@@ -64,6 +64,7 @@ CONSOLIDATE_MAX_CLUSTER_CHARS = int(os.getenv('ZIKRA_CONSOLIDATE_MAX_CLUSTER_CHA
 # separate model knob so memory distillation can stay on a small inexpensive
 # model while architecture synthesis uses a long-context reviewer such as Kimi.
 ARCHITECTURE_ENABLED = _flag('ZIKRA_ARCHITECTURE_ENABLED', '0')
+ARCHITECTURE_FORCE_ENABLED = _flag('ZIKRA_ARCHITECTURE_FORCE_ENABLED', '0')
 ARCHITECTURE_MODEL = os.getenv('ZIKRA_ARCHITECTURE_MODEL', 'kimi-for-coding')
 ARCHITECTURE_PROJECTS = tuple(
     p.strip().lower() for p in os.getenv('ZIKRA_ARCHITECTURE_PROJECTS', '').split(',')

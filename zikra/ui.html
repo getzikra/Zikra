@@ -1348,6 +1348,7 @@ const PROJ_COLORS = {
 const S = {
   token: '', url: DEFAULT_URL, project: 'global',
   role: 'viewer', projects: [], connected: false,
+  architectureForceEnabled: false,
   activeTab: 'search',
 
   // search
@@ -1889,6 +1890,7 @@ async function connect() {
 
   S.role     = info.role     || 'viewer';
   S.projects = info.projects || [];
+  S.architectureForceEnabled = info.architecture_force_enabled === true;
   S.memoryTypes = info.memory_types || [];
   populateTypeFilter(S.memoryTypes);
   if (info.project_scope) {
@@ -2847,7 +2849,7 @@ function updateArchitectureHeader() {
     generateBtn.textContent = S.archAction === 'generating' ? 'Generating…' : 'Generate draft';
   }
   if (forceGenerateBtn) {
-    forceGenerateBtn.style.display = S.role === 'owner' ? 'inline-flex' : 'none';
+    forceGenerateBtn.style.display = S.architectureForceEnabled && S.role === 'owner' ? 'inline-flex' : 'none';
     forceGenerateBtn.disabled = busy || S.archLoading || !S.connected;
     forceGenerateBtn.textContent = S.archAction === 'force-generating' ? 'Regenerating…' : 'Force regenerate';
   }
@@ -2986,7 +2988,7 @@ async function loadArchitecture(force = false) {
 
 async function generateArchitectureDraft(force = false) {
   if (!archCanAuthor() || !S.connected || S.archAction) return;
-  if (force && S.role !== 'owner') return;
+  if (force && (!S.architectureForceEnabled || S.role !== 'owner')) return;
   const project = S.project;
   const environment = S.archEnvironment;
   if (force && !window.confirm(
