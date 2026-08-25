@@ -19,6 +19,23 @@ from zikra.architecture import architecture_payload, generate_architecture_snaps
 from zikra.db import publish_architecture_snapshot
 
 
+def test_scheduled_architecture_projects_expands_all():
+    old_projects = architecture_mod.config.ARCHITECTURE_PROJECTS
+    old_list_projects = architecture_mod.list_projects
+
+    async def fake_list_projects():
+        return ['jaluri', 'mwdata', 'zikra', 'jaluri']
+
+    try:
+        architecture_mod.config.ARCHITECTURE_PROJECTS = ('all', 'explicit')
+        architecture_mod.list_projects = fake_list_projects
+        projects = asyncio.run(architecture_mod.scheduled_architecture_projects())
+        assert projects == ('explicit', 'jaluri', 'mwdata', 'zikra')
+    finally:
+        architecture_mod.config.ARCHITECTURE_PROJECTS = old_projects
+        architecture_mod.list_projects = old_list_projects
+
+
 def test_architecture_source_redaction():
     text = (
         'api_key: sk-live-secretvalue123456 password=hunter2 service=postgres '

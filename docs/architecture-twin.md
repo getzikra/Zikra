@@ -44,7 +44,7 @@ projects to the comma-separated configuration value; no code change is needed.
 
 ```dotenv
 ZIKRA_ARCHITECTURE_ENABLED=1
-ZIKRA_ARCHITECTURE_PROJECTS=veltisai
+ZIKRA_ARCHITECTURE_PROJECTS=all
 ZIKRA_ARCHITECTURE_MODEL=kimi-for-coding
 ZIKRA_ARCHITECTURE_HOUR=2
 ZIKRA_ARCHITECTURE_TIMEZONE=America/New_York
@@ -55,6 +55,11 @@ ZIKRA_ARCHITECTURE_TIMEOUT_S=600
 ZIKRA_ARCHITECTURE_DRAFT_RETENTION=30
 ZIKRA_ARCHITECTURE_LEASE_SECONDS=900
 ```
+
+Set `ZIKRA_ARCHITECTURE_PROJECTS=all` to discover every project currently
+stored in Zikra on each scheduler pass. Newly created projects are then picked
+up automatically. A comma-separated explicit allowlist such as
+`jaluri,mwdata,zikra` remains supported when only selected projects should run.
 
 The worker uses `ZIKRA_ARCHITECTURE_BASE_URL` and
 `ZIKRA_ARCHITECTURE_API_KEY` when set. Otherwise it falls back to the existing

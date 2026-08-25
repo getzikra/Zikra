@@ -24,6 +24,7 @@ from zikra.db import (
     get_architecture_snapshot,
     get_architecture_generation_state,
     get_architecture_run_state,
+    list_projects,
     list_architecture_sources,
     list_architecture_snapshots,
     list_decisions,
@@ -609,12 +610,22 @@ def validate_architecture_config() -> ZoneInfo:
             f'invalid ZIKRA_ARCHITECTURE_TIMEZONE: {config.ARCHITECTURE_TIMEZONE!r}'
         ) from exc
     for project in config.ARCHITECTURE_PROJECTS:
-        canonical_project(project)
+        if project != 'all':
+            canonical_project(project)
     if config.ARCHITECTURE_LEASE_SECONDS <= config.ARCHITECTURE_TIMEOUT_S + 60:
         raise ValueError(
             'ZIKRA_ARCHITECTURE_LEASE_SECONDS must exceed '
             'ZIKRA_ARCHITECTURE_TIMEOUT_S by more than 60 seconds')
     return timezone
+
+
+async def scheduled_architecture_projects() -> tuple[str, ...]:
+    """Expand the reserved ``all`` scheduler target from current DB projects."""
+    configured = config.ARCHITECTURE_PROJECTS
+    discovered = await list_projects() if 'all' in configured else []
+    projects = [project for project in configured if project != 'all']
+    projects.extend(discovered)
+    return tuple(dict.fromkeys(canonical_project(project) for project in projects))
 
 
 async def scheduler_loop() -> None:
@@ -628,8 +639,7 @@ async def scheduler_loop() -> None:
             # Run any time after the configured hour. This catches service
             # downtime and daylight-saving transitions that skip the hour.
             if now.hour >= config.ARCHITECTURE_HOUR:
-                for configured_project in config.ARCHITECTURE_PROJECTS:
-                    project = canonical_project(configured_project)
+                for project in await scheduled_architecture_projects():
                     state = await get_architecture_generation_state(project, 'all')
                     if str((state or {}).get('local_run_date') or '') == now.date().isoformat():
                         continue
