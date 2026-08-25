@@ -19,6 +19,25 @@ from zikra.architecture import architecture_payload, generate_architecture_snaps
 from zikra.db import publish_architecture_snapshot
 
 
+def test_architecture_ui_exposes_owner_force_regeneration():
+    ui = (Path(__file__).resolve().parents[1] / 'ui.html').read_text()
+    assert 'id="arch-force-generate"' in ui
+    assert 'S.architectureForceEnabled && S.role === \'owner\'' in ui
+    assert 'info.architecture_force_enabled === true' in ui
+    assert "generateArchitectureDraft(true)" in ui
+    assert "generateArchitectureDraft(false)" in ui
+    assert "{ project, environment, force }" in ui
+    assert 'bypasses the daily generation budget' in ui
+
+
+def test_force_regeneration_has_default_off_server_gate():
+    config_source = (Path(__file__).resolve().parents[1] / 'config.py').read_text()
+    server_source = (Path(__file__).resolve().parents[1] / 'server.py').read_text()
+    assert "_flag('ZIKRA_ARCHITECTURE_FORCE_ENABLED', '0')" in config_source
+    assert 'if force and not config.ARCHITECTURE_FORCE_ENABLED:' in server_source
+    assert "'architecture_force_enabled': config.ARCHITECTURE_FORCE_ENABLED" in server_source
+
+
 def test_architecture_source_redaction():
     text = (
         'api_key: sk-live-secretvalue123456 password=hunter2 service=postgres '

@@ -552,6 +552,7 @@ async def ui_bootstrap(request: Request):
         'projects': await list_projects(),
         'memory_types': await list_memory_types(),
         'memory_total': await debug_memory_count(),
+        'architecture_force_enabled': config.ARCHITECTURE_FORCE_ENABLED,
         'recent_prompts': prompts,
         'recent_requirements': requirements,
     }
@@ -639,6 +640,10 @@ async def ui_architecture_generate(request: Request):
         return JSONResponse(status_code=400, content={'error': 'invalid environment'})
     job_key = f'{project}:{environment}'
     force = body.get('force') is True
+    if force and not config.ARCHITECTURE_FORCE_ENABLED:
+        return JSONResponse(status_code=403, content={
+            'error': 'forced architecture regeneration is disabled by server configuration',
+        })
     if force and auth_info.get('role') != 'owner':
         return JSONResponse(status_code=403, content={
             'error': 'owner role required for a forced architecture retry',

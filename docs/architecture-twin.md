@@ -44,6 +44,7 @@ projects to the comma-separated configuration value; no code change is needed.
 
 ```dotenv
 ZIKRA_ARCHITECTURE_ENABLED=1
+ZIKRA_ARCHITECTURE_FORCE_ENABLED=0
 ZIKRA_ARCHITECTURE_PROJECTS=veltisai
 ZIKRA_ARCHITECTURE_MODEL=kimi-for-coding
 ZIKRA_ARCHITECTURE_HOUR=2
@@ -70,9 +71,11 @@ unsafe combination.
 Generation has a database-backed project/environment lease and a one-run-per-
 local-day budget. Concurrent workers cannot duplicate a model call; unchanged
 source, model, and prompt inputs reuse the existing snapshot; and only the
-newest configured number of drafts is retained. An owner can deliberately
-bypass the daily budget with `force: true`; the normal dashboard does not do
-so.
+newest configured number of drafts is retained. Set
+`ZIKRA_ARCHITECTURE_FORCE_ENABLED=1` to expose an owner-only dashboard action
+that deliberately bypasses the daily budget and unchanged-source check. The
+server rejects `force: true` while this setting is disabled, regardless of
+role. It defaults to disabled to prevent accidental model spend.
 
 ## Dashboard API
 
